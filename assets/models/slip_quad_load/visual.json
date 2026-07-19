@@ -1,0 +1,1 @@
+{"schema_version":"1.0","dimension":2,"camera":{"xlim":[-3,4],"ylim":[-0.1,2]},"ground":{"y":0},"primitives":[{"id":"body","type":"capsule","frame":"body","length":1,"width":0.2},{"id":"rope","type":"rope","from":"body","to":"load"},{"id":"load","type":"box","frame":"load","size":[0.4,0.25]}]}

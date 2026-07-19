@@ -1,0 +1,23 @@
+classdef PseudoArclengthContinuation
+    methods
+        function branch=run(~,problem,seed1,seed2,options)
+            if nargin<5,options=lmz.continuation.ContinuationOptions();end;z0=localDecision(seed1);z1=localDecision(seed2);schema=problem.decisionSchema();s=schema.scales();n=numel(z1);e=problem.evaluate(z1,struct());m=numel(e.scaledEquality());if m~=n-1,error('lmz:ContinuationDimension','Pseudo-arclength requires n decisions and n-1 active residuals; got %d and %d.',n,m);end
+            branch=lmz.core.SolutionBranch();meta=problem.metadata();branch.ModelId=meta.model_id;branch.ProblemId=meta.id;arc=0;ds=options.InitialStep*sign(options.Direction);prevTau=[];branch.addPoint(point(z0,zeros(n,1),0,0,'seed'));arc=arc+norm((z1-z0)./s);tau=oriented(z1-z0,prevTau,s);branch.addPoint(point(z1,tau,arc,abs(ds),'seed'));failures=0;
+            while numel(branch.Points)<options.MaxPoints
+                if cancelled(options),branch.Metadata.stop_reason='cancelled';break;end;predict=z1+ds*tau;accepted=false;
+                for retry=0:options.MaxRetries,[zc,info]=correct(problem,predict,tau,s,options);evc=problem.evaluate(zc,struct());rn=norm(evc.scaledEquality(),inf);inBounds=all(zc>=schema.lowerBounds()&zc<=schema.upperBounds());if info.exitflag>0&&rn<=options.FunctionTolerance&&evc.IsValid&&evc.IsPhysicallyValid&&inBounds,accepted=true;break;end;branch.Attempts(end+1)=struct('predictor',predict,'corrected',zc,'step_size',abs(ds),'exit_flag',info.exitflag,'residual_norm',rn);ds=ds*options.ShrinkFactor;if abs(ds)<options.MinimumStep,break;end;predict=z1+ds*tau;end
+                if ~accepted,failures=failures+1;if abs(ds)<options.MinimumStep,branch.Metadata.stop_reason='minimum_step';else,branch.Metadata.stop_reason='corrector_failure';end;if failures>=1,break;end;end
+                newTau=oriented(zc-z1,tau,s);arc=arc+norm((zc-z1)./s);p=point(zc,newTau,arc,abs(ds),'accepted');if ~isempty(options.ParameterIndex)&&tau(options.ParameterIndex)*newTau(options.ParameterIndex)<0,p.fold_candidate=true;else,p.fold_candidate=false;end;p.singular_candidate=info.singular_candidate;branch.addPoint(p);if loopDetected(branch,s,options.LoopTolerance),branch.Metadata.stop_reason='loop_closure';break;end;z0=z1;z1=zc;tau=newTau;if info.iterations<5,ds=sign(ds)*min(options.MaximumStep,abs(ds)*options.GrowthFactor);end;if ~isempty(options.ProgressCallback),options.ProgressCallback(struct('type','accepted','point',p,'count',numel(branch.Points)));end
+            end
+            if ~isfield(branch.Metadata,'stop_reason'),branch.Metadata.stop_reason='maximum_points';end
+            function p=point(z,t,a,h,status),evp=problem.evaluate(z,struct());p=struct('id',sprintf('point-%04d',numel(branch.Points)+1),'arclength',a,'decision',z(:),'decoded',schema.decode(z),'tangent',t(:),'step_size',h,'residual_norm',norm(evp.scaledEquality(),inf),'residual_blocks',evp.ResidualBlocks,'solver_status',status,'iterations',0,'observables',localObservables(evp),'classification',struct(),'warnings',{{}},'provenance',lmz.io.Provenance.capture(),'fold_candidate',false,'singular_candidate',false);end
+        end
+    end
+end
+function z=localDecision(seed),if isa(seed,'lmz.core.Solution'),z=seed.Decision(:);else,z=seed(:);end,end
+function t=oriented(d,old,s),t=d(:)/norm(d(:)./s(:));if ~isempty(old)&&dot(t./s,old./s)<0,t=-t;end,end
+function [z,info]=correct(problem,predict,tau,s,options),W2=1./(s(:).^2);fun=@(q)[problem.evaluate(q,struct()).scaledEquality();tau(:).'*(W2.*(q(:)-predict(:)))];if exist('fsolve','file')==2,op=optimoptions('fsolve','Display','off','FunctionTolerance',options.FunctionTolerance,'MaxIterations',options.CorrectorMaxIterations);[z,~,flag,out]=fsolve(fun,predict,op);iterations=out.iterations;else,op=optimset('Display','off','TolFun',options.FunctionTolerance^2,'MaxIter',options.CorrectorMaxIterations);[z,~,flag,out]=fminsearch(@(q)sum(fun(q).^2),predict,op);iterations=out.iterations;end;J=finiteJacobian(fun,z);sv=svd(J);info=struct('exitflag',flag,'iterations',iterations,'singular_candidate',isempty(sv)||min(sv)<1e-7*max(sv));end
+function J=finiteJacobian(fun,z),f=fun(z);J=zeros(numel(f),numel(z));for i=1:numel(z),h=sqrt(eps)*max(1,abs(z(i)));q=z;q(i)=q(i)+h;J(:,i)=(fun(q)-f)/h;end,end
+function yes=cancelled(o),yes=~isempty(o.CancellationCallback)&&o.CancellationCallback();end
+function yes=loopDetected(branch,s,tol),yes=false;if numel(branch.Points)>5,z=branch.Points(end).decision;for i=1:numel(branch.Points)-3,if norm((z-branch.Points(i).decision)./s)<tol,yes=true;return;end,end,end,end
+function o=localObservables(e),o=struct();if ~isempty(e.Simulation)&&isfield(e.Simulation,'observables'),o=e.Simulation.observables;end,end

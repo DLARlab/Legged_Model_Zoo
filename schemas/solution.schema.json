@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"LMZ solution","type":"object","required":["schema_version","ModelId","ProblemId","Decision","Provenance"],"properties":{"schema_version":{"const":"1.0"},"ModelId":{"type":"string"},"ProblemId":{"type":"string"},"Decision":{"type":"array"},"Provenance":{"type":"object"}}}

@@ -1,0 +1,1 @@
+startup; registry=lmz.core.ModelRegistry(); disp(registry.ids()); model=registry.create('slip_quadruped'); problem=model.createProblem('periodic_orbit',struct()); result=model.simulate(struct('decision',problem.decisionSchema().defaults())); fprintf('Simulated %d samples and %d scheduled events.\n',numel(result.time),numel(result.event_log));

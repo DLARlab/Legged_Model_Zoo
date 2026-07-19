@@ -1,0 +1,1 @@
+{"schema_version":"1.0","dimension":2,"camera":{"xlim":[-1,1],"ylim":[0,2]},"ground":{"y":0},"primitives":[{"id":"body","type":"ellipse","frame":"body","size":[0.2,0.2]}]}

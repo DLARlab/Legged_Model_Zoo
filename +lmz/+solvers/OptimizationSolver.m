@@ -1,0 +1,6 @@
+classdef OptimizationSolver
+    methods
+        function [solution,report]=solve(~,problem,initial,options),if nargin<4,options=struct();end;schema=problem.decisionSchema();lb=schema.lowerBounds();ub=schema.upperBounds();objective=@(z)localObjective(problem,z);if exist('fmincon','file')==2,op=optimoptions('fmincon','Display','off');[z,fval,flag,out]=fmincon(objective,initial,[],[],[],[],lb,ub,@constraints,op);tool='fmincon';else,[z,fval,flag,out]=fminsearch(@(q)objective(min(max(q,lb),ub)),initial,optimset('Display','off'));z=min(max(z,lb),ub);tool='fminsearch';end;ev=problem.evaluate(z,struct());m=problem.metadata();solution=lmz.core.Solution(struct('ModelId',m.model_id,'ProblemId',m.id,'Decision',z,'Decoded',schema.decode(z),'Evaluation',ev));report=struct('converged',flag>0&&ev.IsValid,'exit_flag',flag,'tool',tool,'objective',fval,'iterations',out.iterations);function [c,ceq]=constraints(zq),e=problem.evaluate(zq,struct());c=e.InequalityResidual(:);ceq=e.EqualityResidual(:);end;end
+    end
+end
+function f=localObjective(problem,z),e=problem.evaluate(z,struct());if isempty(e.ObjectiveResidual),f=e.Objective;else,f=sum(e.ObjectiveResidual.^2);end;if ~isfinite(f),f=realmax('double')^.25;end,end
