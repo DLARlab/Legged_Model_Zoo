@@ -1,4 +1,4 @@
-function results=run_all_tests
-root=fileparts(fileparts(mfilename('fullpath'))); startup;
-addpath(fullfile(root,'tools')); results=runtests(fullfile(root,'tests'),'IncludeSubfolders',true);
+function results = run_all_tests
+% Backward-compatible test entry point.
+results = run_tests();
 end

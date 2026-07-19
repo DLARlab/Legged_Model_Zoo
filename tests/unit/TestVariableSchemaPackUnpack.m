@@ -7,7 +7,8 @@ classdef TestVariableSchemaPackUnpack < matlab.unittest.TestCase
         end
         function rejectsDuplicate(testCase)
             specs=[lmz.schema.VariableSpec('x');lmz.schema.VariableSpec('x')];
-            testCase.verifyError(@()lmz.schema.VariableSchema(specs),'lmz:DuplicateVariable');
+            testCase.verifyError(@()lmz.schema.VariableSchema(specs), ...
+                'lmz:Schema:DuplicateVariable');
         end
     end
 end

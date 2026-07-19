@@ -1,34 +1,133 @@
 classdef VariableSpec
+    %VARIABLESPEC Metadata and numerical topology for one named variable.
     properties (SetAccess=private)
-        Name; Label; LatexLabel; Group; Unit; Note; DefaultValue
-        LowerBound; UpperBound; Scale; Topology; PeriodSource
+        Name
+        Label
+        LatexLabel
+        Group
+        Unit
+        Note
+        DefaultValue
+        LowerBound
+        UpperBound
+        Scale
+        Topology
+        PeriodSource
     end
+
     methods
         function obj = VariableSpec(name, varargin)
-            p = inputParser;
-            addRequired(p, 'name', @(x)ischar(x) && ~isempty(x));
-            addParameter(p, 'Label', name, @ischar); addParameter(p, 'LatexLabel', name, @ischar);
-            addParameter(p, 'Group', 'general', @ischar); addParameter(p, 'Unit', '', @ischar);
-            addParameter(p, 'Note', '', @ischar); addParameter(p, 'DefaultValue', 0, @(x)isnumeric(x)&&isscalar(x));
-            addParameter(p, 'LowerBound', -Inf, @(x)isnumeric(x)&&isscalar(x));
-            addParameter(p, 'UpperBound', Inf, @(x)isnumeric(x)&&isscalar(x));
-            addParameter(p, 'Scale', 1, @(x)isnumeric(x)&&isscalar(x));
-            addParameter(p, 'Topology', 'euclidean', @ischar); addParameter(p, 'PeriodSource', '', @ischar);
-            parse(p, name, varargin{:}); r = p.Results;
-            valid = {'euclidean','positive','bounded','angle','cyclic_time'};
-            if r.LowerBound >= r.UpperBound, error('lmz:InvalidBounds','Lower bound must be below upper bound.'); end
-            if ~isfinite(r.Scale) || r.Scale <= 0, error('lmz:InvalidScale','Scale must be positive and finite.'); end
-            if ~any(strcmp(r.Topology, valid)), error('lmz:InvalidTopology','Unknown topology.'); end
-            if strcmp(r.Topology,'positive') && r.LowerBound < 0, error('lmz:InvalidBounds','Positive variables require a nonnegative lower bound.'); end
-            if strcmp(r.Topology,'cyclic_time') && isempty(r.PeriodSource), error('lmz:MissingPeriod','Cyclic time requires PeriodSource.'); end
-            obj.Name=r.name; obj.Label=r.Label; obj.LatexLabel=r.LatexLabel; obj.Group=r.Group;
-            obj.Unit=r.Unit; obj.Note=r.Note; obj.DefaultValue=r.DefaultValue;
-            obj.LowerBound=r.LowerBound; obj.UpperBound=r.UpperBound; obj.Scale=r.Scale;
-            obj.Topology=r.Topology; obj.PeriodSource=r.PeriodSource;
+            parser = inputParser;
+            addRequired(parser, 'name', @lmz.schema.VariableSpec.isName);
+            addParameter(parser, 'Label', name, @ischar);
+            addParameter(parser, 'LatexLabel', name, @ischar);
+            addParameter(parser, 'Group', 'general', @ischar);
+            addParameter(parser, 'Unit', '', @ischar);
+            addParameter(parser, 'Note', '', @ischar);
+            addParameter(parser, 'DefaultValue', 0, ...
+                @lmz.schema.VariableSpec.isScalarReal);
+            addParameter(parser, 'LowerBound', -Inf, ...
+                @lmz.schema.VariableSpec.isScalarReal);
+            addParameter(parser, 'UpperBound', Inf, ...
+                @lmz.schema.VariableSpec.isScalarReal);
+            addParameter(parser, 'Scale', 1, ...
+                @lmz.schema.VariableSpec.isScalarReal);
+            addParameter(parser, 'Topology', 'euclidean', @ischar);
+            addParameter(parser, 'PeriodSource', '', @ischar);
+            parse(parser, name, varargin{:});
+            values = parser.Results;
+
+            if values.LowerBound >= values.UpperBound
+                error('lmz:Schema:InvalidBounds', ...
+                    'LowerBound must be below UpperBound for %s.', name);
+            end
+            if ~isfinite(values.Scale) || values.Scale <= 0
+                error('lmz:Schema:InvalidScale', ...
+                    'Scale must be positive and finite for %s.', name);
+            end
+            validTopologies = {'euclidean', 'positive', 'bounded', ...
+                'angle', 'cyclic_time'};
+            if ~any(strcmp(values.Topology, validTopologies))
+                error('lmz:Schema:InvalidTopology', ...
+                    'Unknown topology %s for %s.', values.Topology, name);
+            end
+            if strcmp(values.Topology, 'positive') && values.LowerBound < 0
+                error('lmz:Schema:InvalidPositiveBounds', ...
+                    'Positive variable %s requires LowerBound >= 0.', name);
+            end
+            if strcmp(values.Topology, 'bounded') && ...
+                    (~isfinite(values.LowerBound) || ~isfinite(values.UpperBound))
+                error('lmz:Schema:UnboundedBoundedVariable', ...
+                    'Bounded variable %s requires finite bounds.', name);
+            end
+            if strcmp(values.Topology, 'cyclic_time') && ...
+                    isempty(values.PeriodSource)
+                error('lmz:Schema:MissingPeriodSource', ...
+                    'Cyclic time %s requires PeriodSource.', name);
+            end
+            if ~isfinite(values.DefaultValue) || ...
+                    values.DefaultValue < values.LowerBound || ...
+                    values.DefaultValue > values.UpperBound
+                error('lmz:Schema:InvalidDefault', ...
+                    'DefaultValue is invalid for %s.', name);
+            end
+
+            obj.Name = values.name;
+            obj.Label = values.Label;
+            obj.LatexLabel = values.LatexLabel;
+            obj.Group = values.Group;
+            obj.Unit = values.Unit;
+            obj.Note = values.Note;
+            obj.DefaultValue = values.DefaultValue;
+            obj.LowerBound = values.LowerBound;
+            obj.UpperBound = values.UpperBound;
+            obj.Scale = values.Scale;
+            obj.Topology = values.Topology;
+            obj.PeriodSource = values.PeriodSource;
         end
-        function s = toStruct(obj)
-            props = properties(obj); s = struct();
-            for k=1:numel(props), s.(props{k}) = obj.(props{k}); end
+
+        function value = toStruct(obj)
+            value = struct( ...
+                'Name', obj.Name, ...
+                'Label', obj.Label, ...
+                'LatexLabel', obj.LatexLabel, ...
+                'Group', obj.Group, ...
+                'Unit', obj.Unit, ...
+                'Note', obj.Note, ...
+                'DefaultValue', obj.DefaultValue, ...
+                'LowerBound', obj.LowerBound, ...
+                'UpperBound', obj.UpperBound, ...
+                'Scale', obj.Scale, ...
+                'Topology', obj.Topology, ...
+                'PeriodSource', obj.PeriodSource);
+        end
+    end
+
+    methods (Static)
+        function obj = fromStruct(value)
+            obj = lmz.schema.VariableSpec(value.Name, ...
+                'Label', value.Label, ...
+                'LatexLabel', value.LatexLabel, ...
+                'Group', value.Group, ...
+                'Unit', value.Unit, ...
+                'Note', value.Note, ...
+                'DefaultValue', value.DefaultValue, ...
+                'LowerBound', value.LowerBound, ...
+                'UpperBound', value.UpperBound, ...
+                'Scale', value.Scale, ...
+                'Topology', value.Topology, ...
+                'PeriodSource', value.PeriodSource);
+        end
+    end
+
+    methods (Static, Access=private)
+        function valid = isName(value)
+            valid = ischar(value) && ~isempty(regexp(value, ...
+                '^[A-Za-z][A-Za-z0-9_]*$', 'once'));
+        end
+
+        function valid = isScalarReal(value)
+            valid = isnumeric(value) && isreal(value) && isscalar(value);
         end
     end
 end

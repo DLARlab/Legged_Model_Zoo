@@ -2,6 +2,6 @@
   "schemaVersion": "1.0.0",
   "id": "periodic_apex",
   "kind": "nonlinear_equation",
-  "implementationId": "slipquadruped.periodic_apex.v1",
+  "implementationId": "jerboabiped.periodic_apex.v1",
   "implemented": false
 }

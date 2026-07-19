@@ -1,13 +1,27 @@
 classdef Model < lmz.api.LeggedModel
     methods
-        function v=getManifest(~), v=struct('id','slip.quadruped.load','version','1.0.0'); end
-        function v=getCapabilities(~), v=struct('simulate',false,'solve',false,'optimize',false); end
-        function v=getPhysicalStateSchema(~), v=[]; end
-        function v=getParameterSchema(~), v=[]; end
-        function v=listProblems(~), v={'single_stride_periodic','multi_stride_fit'}; end
-        function v=createProblem(~,id,c), v=struct('id',id,'configuration',c,'status','not-migrated'); end
-        function v=simulate(~,~,~), error('lmz:NotMigrated','Load simulation is not migrated.'); end
-        function v=kinematics(~,f), v=f; end
-        function v=getPlotDescriptors(~), v=struct([]); end
+        function value = getManifest(~)
+            value = struct('id', 'slip.quadruped.load', 'version', '1.0.0');
+        end
+        function value = getCapabilities(~)
+            value = struct('simulate', false, 'solve', false, ...
+                'continue', false, 'optimize', false, 'visualize', false);
+        end
+        function value = getPhysicalStateSchema(~), value = []; end
+        function value = getParameterSchema(~), value = []; end
+        function value = listProblems(~)
+            value = {'single_stride_periodic', 'multi_stride_fit'};
+        end
+        function value = createProblem(~, problemId, configuration)
+            value = struct('id', problemId, 'configuration', configuration, ...
+                'status', 'not-implemented');
+        end
+        function value = simulate(~, ~, ~)
+            error('lmz:QuadLoad:Unavailable', ...
+                'Load-pulling simulation is not migrated.');
+            value = []; %#ok<UNRCH>
+        end
+        function value = kinematics(~, frame), value = frame; end
+        function value = getPlotDescriptors(~), value = struct([]); end
     end
 end

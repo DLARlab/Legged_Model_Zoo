@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
-  "id": "periodic_apex",
+  "id": "single_stride_periodic",
   "kind": "nonlinear_equation",
-  "implementationId": "slipquadruped.periodic_apex.v1",
+  "implementationId": "quadload.single_stride.v1",
   "implemented": false
 }

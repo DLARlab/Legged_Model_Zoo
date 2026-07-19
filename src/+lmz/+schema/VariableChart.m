@@ -1,21 +1,69 @@
 classdef VariableChart
-    properties (SetAccess=private), Schema; end
+    %VARIABLECHART Product-chart operations over a VariableSchema.
+    properties (SetAccess=private)
+        Schema
+    end
+
     methods
-        function obj=VariableChart(schema), obj.Schema=schema; end
-        function d=difference(obj,a,b)
-            obj.Schema.validateVector(a); obj.Schema.validateVector(b); a=a(:); b=b(:); d=a-b;
-            periods=obj.Schema.resolvePeriods(b);
-            for k=1:obj.Schema.count()
-                if isfinite(periods(k)), T=periods(k); d(k)=mod(d(k)+T/2,T)-T/2; end
+        function obj = VariableChart(schema)
+            obj.Schema = schema;
+        end
+
+        function difference = difference(obj, first, second)
+            obj.Schema.validateVector(first);
+            obj.Schema.validateVector(second);
+            difference = first(:) - second(:);
+            periods = obj.Schema.resolvePeriods(second);
+            for index = 1:obj.Schema.count()
+                if isfinite(periods(index))
+                    period = periods(index);
+                    difference(index) = mod( ...
+                        difference(index) + period / 2, period) - period / 2;
+                end
             end
         end
-        function u=retract(obj,base,delta)
-            base=base(:); u=base+delta(:); periods=obj.Schema.resolvePeriods(base);
-            for k=1:obj.Schema.count()
-                if isfinite(periods(k)), u(k)=mod(u(k),periods(k)); end
+
+        function candidate = retract(obj, base, delta)
+            base = base(:);
+            delta = delta(:);
+            if numel(base) ~= obj.Schema.count() || ...
+                    numel(delta) ~= obj.Schema.count()
+                error('lmz:Schema:InvalidRetractionSize', ...
+                    'Base and delta must match the schema size.');
             end
-            obj.Schema.validateVector(u);
+            candidate = base + delta;
+            % Period variables may change in this step. Resolve cyclic periods
+            % from the candidate, not from the base point.
+            periods = obj.Schema.resolvePeriods(candidate);
+            candidate = obj.wrap(candidate, periods);
+            obj.Schema.validateVector(candidate);
         end
-        function u=canonicalize(obj,u), u=obj.retract(u,zeros(size(u))); end
+
+        function candidate = canonicalize(obj, candidate)
+            candidate = candidate(:);
+            periods = obj.Schema.resolvePeriods(candidate);
+            candidate = obj.wrap(candidate, periods);
+            obj.Schema.validateVector(candidate);
+        end
+    end
+
+    methods (Access=private)
+        function candidate = wrap(obj, candidate, periods)
+            for index = 1:obj.Schema.count()
+                if ~isfinite(periods(index))
+                    continue
+                end
+                spec = obj.Schema.Specs(index);
+                period = periods(index);
+                if strcmp(spec.Topology, 'angle') && ...
+                        isfinite(spec.LowerBound)
+                    origin = spec.LowerBound;
+                else
+                    origin = 0;
+                end
+                candidate(index) = origin + ...
+                    mod(candidate(index) - origin, period);
+            end
+        end
     end
 end

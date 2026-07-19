@@ -9,3 +9,5 @@ Selected candidates and SHA-256 hashes:
 | Load pulling | `Section2_Single_Stride_Replication/P3_Individual_1_TR.mat` | `56736cc33ab31a0ab40b3de6783b625a07ebd54f1ae6a561b47aea5e04cd6abe` |
 
 Numerical capture remains unexecuted. MATLAB is not installed in the current environment, so no residual, event, trajectory, force, classification or objective value is claimed.
+
+Static MAT inspection on 2026-07-19 confirmed `results` is 29-by-891 for the quadruped, `results` is 14-by-215 for Jerboa, and the load fixture contains `X_accum` 44-by-1 plus `gait_data`, `gait_type`, and `term_weights`. `tools/regenerate_regression_inputs.m` reproducibly extracts minimal inputs without adding legacy code to the MATLAB path. The regeneration script has not been executed in MATLAB.

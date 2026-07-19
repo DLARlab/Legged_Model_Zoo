@@ -1,13 +1,52 @@
 classdef Model < lmz.api.LeggedModel
+    %MODEL SLIP quadruped integration boundary.
+    % Numerical capabilities remain disabled until the legacy evaluator and
+    % regression baselines are available inside this project.
     methods
-        function v=getManifest(~), v=struct('id','slip.quadruped.planar.v2','version','2.0.0'); end
-        function v=getCapabilities(~), v=struct('simulate',true,'solve',true,'continue',true,'visualize',true); end
-        function v=getPhysicalStateSchema(~), v=[]; end
-        function v=getParameterSchema(~), v=[]; end
-        function v=listProblems(~), v={'periodic_apex'}; end
-        function v=createProblem(~,id,configuration), v=struct('id',id,'configuration',configuration,'status','legacy-adapter-pending'); end
-        function v=simulate(~,request,context), context.check(); error('lmz:LegacyUnavailable','Legacy evaluator has not yet been vendored.'); end
-        function v=kinematics(~,frame), v=frame; end
-        function v=getPlotDescriptors(~), v=struct([]); end
+        function value = getManifest(~)
+            value = struct('id', 'slip.quadruped.planar.v2', ...
+                'version', '2.0.0');
+        end
+
+        function value = getCapabilities(~)
+            value = struct('simulate', false, 'solve', false, ...
+                'continue', false, 'optimize', false, 'visualize', false);
+        end
+
+        function value = getPhysicalStateSchema(~)
+            value = [];
+        end
+
+        function value = getParameterSchema(~)
+            value = [];
+        end
+
+        function value = listProblems(~)
+            value = {'periodic_apex'};
+        end
+
+        function value = createProblem(~, problemId, configuration)
+            if ~strcmp(problemId, 'periodic_apex')
+                error('lmz:SlipQuadruped:UnknownProblem', ...
+                    'Unknown problem: %s', problemId);
+            end
+            value = struct('id', problemId, 'configuration', configuration, ...
+                'status', 'not-implemented');
+        end
+
+        function value = simulate(~, ~, context)
+            context.check();
+            error('lmz:SlipQuadruped:Unavailable', ...
+                'The quadruped evaluator has not yet been vendored.');
+            value = []; %#ok<UNRCH>
+        end
+
+        function value = kinematics(~, frame)
+            value = frame;
+        end
+
+        function value = getPlotDescriptors(~)
+            value = struct([]);
+        end
     end
 end
