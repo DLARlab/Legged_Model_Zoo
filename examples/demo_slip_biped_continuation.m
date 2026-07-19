@@ -1,2 +1,21 @@
-projectRoot=fileparts(fileparts(mfilename('fullpath')));originalDirectory=pwd;cleanup=onCleanup(@()cd(originalDirectory));cd(projectRoot);startup;cd(originalDirectory);
-registry=lmz.registry.ModelRegistry.discover();problem=registry.createModel('slip_biped').createProblem('periodic_apex',struct());u=problem.getDecisionSchema().defaults();p=problem.getParameterSchema().defaults();first=problem.makeSolution(u,p,problem.evaluate(u,p,lmz.api.RunContext.synchronous(0),false));pair=lmz.services.SeedService().makeSecondSeed(problem,first,0.03,struct(),lmz.api.RunContext.synchronous(22));continuationResult=lmz.services.ContinuationService().run(problem,pair,struct('MaximumPoints',8,'BothDirections',true),lmz.api.RunContext.synchronous(22));clear cleanup
+projectRoot=fileparts(fileparts(mfilename('fullpath')));
+originalDirectory=pwd;directoryCleanup=onCleanup(@()cd(originalDirectory));
+cd(projectRoot);startup;cd(originalDirectory);
+registry=lmz.registry.ModelRegistry.discover();
+problem=registry.createModel('slip_biped').createProblem('periodic_apex',struct());
+catalog=lmzmodels.slip_biped.GaitMapCatalog.default();
+branch=lmz.services.BranchService().loadGaitMapBranch(problem,catalog.defaultBranchPath());
+seedIndex=catalog.recommendedSeedIndex(catalog.defaultBranchPath());
+pair=lmz.services.SeedService().adjacentBranchPair(problem,branch,seedIndex,1, ...
+    struct(),lmz.api.RunContext.synchronous(22));
+continuationOptions=struct('MaximumPoints',3,'BothDirections',false, ...
+    'InitialStep',pair.AchievedRadius,'MaximumStep',pair.AchievedRadius);
+continuationResult=lmz.services.ContinuationService().run(problem,pair, ...
+    continuationOptions,lmz.api.RunContext.synchronous(22));
+output=struct('SeedIndex',seedIndex,'Pair',pair, ...
+    'ContinuationResult',continuationResult, ...
+    'PointCount',continuationResult.Branch.pointCount(), ...
+    'SuccessMarker','LMZ_BIPED_CONTINUATION_OK');
+fprintf('%s points=%d reason=%s\n',output.SuccessMarker,output.PointCount, ...
+    continuationResult.TerminationReason);
+clear directoryCleanup

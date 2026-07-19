@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0.0",
+  "datasetId": "slip_biped_gaitmap",
+  "modelId": "slip_biped",
+  "modelVersion": "2.0.0",
+  "problemId": "periodic_apex",
+  "defaultBranch": "W1.mat",
+  "defaultSeedIndex": 30,
+  "sourceRepository": "https://github.com/DLARlab/2022_A_Template_Model_Explains_Jerboa_Gait_Transitions.git",
+  "sourceCommit": "4595146c5881a5313bc8fe92de85099193ef9be9",
+  "sourcePath": "Section2_solution_examples",
+  "copiedAt": "2026-07-19T00:00:00-04:00",
+  "license": {
+    "upstream": "CC BY-NC 4.0 (stated in READMEDing2021JerboaFrontier.txt)",
+    "authorization": "Copied and migrated under the user's Round 6 implementation request.",
+    "notice": "Noncommercial attribution terms apply; release redistribution still requires owner review."
+  },
+  "legacyLayout": {
+    "variable": "results",
+    "rows": 14,
+    "decisionRows": [1, 12],
+    "parameterRows": [13, 14]
+  },
+  "defaultView": {
+    "x": "dx",
+    "y": "alphaL",
+    "z": "y",
+    "source": "Main.m Figure 4 branch axes"
+  },
+  "fixedConfiguration": {"k_leg": 20, "omega_swing": 6.5},
+  "totalBranchPoints": 2967,
+  "files": [
+    {"name":"W1.mat","relativePath":"W1.mat","sha256":"52a6243833851ab9e498b0eb60e5489ab78747a3f9ff05c9be02d5c66e61d6dc","bytes":18440,"rowCount":14,"pointCount":215,"gait":"walking","sourceVariable":"results","recommendedDefaultIndex":30,"nativeArtifactPath":"native/W1.lmz.mat"},
+    {"name":"R1.mat","relativePath":"R1.mat","sha256":"d8f891a0a6da9d3a99a6e202aac1d725a53e47714aed3cf998bdd14b05b2cfd0","bytes":95756,"rowCount":14,"pointCount":1121,"gait":"running","sourceVariable":"results","recommendedDefaultIndex":30,"nativeArtifactPath":"native/R1.lmz.mat"},
+    {"name":"HP1.mat","relativePath":"HP1.mat","sha256":"9003caa634b68401b1b0b91b4fef50515d41088a3685cd52db84cd0dfc3adf3e","bytes":79447,"rowCount":14,"pointCount":1015,"gait":"hopping","sourceVariable":"results","recommendedDefaultIndex":50,"nativeArtifactPath":"native/HP1.lmz.mat"},
+    {"name":"SK1.mat","relativePath":"SK1.mat","sha256":"8898f7d209cefc8f80b700701d5a9331201cedaf2ed205af001272b934712c55","bytes":4552,"rowCount":14,"pointCount":51,"gait":"skipping","sourceVariable":"results","recommendedDefaultIndex":30,"nativeArtifactPath":"native/SK1.lmz.mat"},
+    {"name":"SK2.mat","relativePath":"SK2.mat","sha256":"bb17a9799ec8f407295b40a0d799f64ad793a1a90faedbc571e875b26a617eb7","bytes":6381,"rowCount":14,"pointCount":73,"gait":"skipping","sourceVariable":"results","recommendedDefaultIndex":30,"nativeArtifactPath":"native/SK2.lmz.mat"},
+    {"name":"AR1.mat","relativePath":"AR1.mat","sha256":"a39312da6db1f7119b7ccd941b6d4c7ac8e7251fb7700431a58b6ec5544df5fa","bytes":41909,"rowCount":14,"pointCount":492,"gait":"asymmetric running","sourceVariable":"results","recommendedDefaultIndex":50,"nativeArtifactPath":"native/AR1.lmz.mat"}
+  ]
+}

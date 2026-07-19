@@ -13,6 +13,7 @@ classdef VariableSpec
         Scale
         Topology
         PeriodSource
+        Activity
     end
 
     methods
@@ -34,6 +35,7 @@ classdef VariableSpec
                 @lmz.schema.VariableSpec.isScalarReal);
             addParameter(parser, 'Topology', 'euclidean', @ischar);
             addParameter(parser, 'PeriodSource', '', @ischar);
+            addParameter(parser, 'Activity', 'active', @ischar);
             parse(parser, name, varargin{:});
             values = parser.Results;
 
@@ -65,6 +67,11 @@ classdef VariableSpec
                 error('lmz:Schema:MissingPeriodSource', ...
                     'Cyclic time %s requires PeriodSource.', name);
             end
+            validActivities = {'active', 'inactive', 'derived'};
+            if ~any(strcmp(values.Activity, validActivities))
+                error('lmz:Schema:InvalidActivity', ...
+                    'Unknown activity %s for %s.', values.Activity, name);
+            end
             if ~isfinite(values.DefaultValue) || ...
                     values.DefaultValue < values.LowerBound || ...
                     values.DefaultValue > values.UpperBound
@@ -84,6 +91,7 @@ classdef VariableSpec
             obj.Scale = values.Scale;
             obj.Topology = values.Topology;
             obj.PeriodSource = values.PeriodSource;
+            obj.Activity = values.Activity;
         end
 
         function value = toStruct(obj)
@@ -99,12 +107,17 @@ classdef VariableSpec
                 'UpperBound', obj.UpperBound, ...
                 'Scale', obj.Scale, ...
                 'Topology', obj.Topology, ...
-                'PeriodSource', obj.PeriodSource);
+                'PeriodSource', obj.PeriodSource, ...
+                'Activity', obj.Activity);
         end
     end
 
     methods (Static)
         function obj = fromStruct(value)
+            activity = 'active';
+            if isfield(value, 'Activity')
+                activity = value.Activity;
+            end
             obj = lmz.schema.VariableSpec(value.Name, ...
                 'Label', value.Label, ...
                 'LatexLabel', value.LatexLabel, ...
@@ -116,7 +129,8 @@ classdef VariableSpec
                 'UpperBound', value.UpperBound, ...
                 'Scale', value.Scale, ...
                 'Topology', value.Topology, ...
-                'PeriodSource', value.PeriodSource);
+                'PeriodSource', value.PeriodSource, ...
+                'Activity', activity);
         end
     end
 

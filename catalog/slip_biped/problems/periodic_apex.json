@@ -1,1 +1,24 @@
-{"schemaVersion":"1.0.0","id":"periodic_apex","kind":"nonlinear_equation","implementationId":"slip_biped.periodic_apex.native.v1","implemented":true}
+{
+  "schemaVersion": "1.0.0",
+  "id": "periodic_apex",
+  "kind": "nonlinear_equation",
+  "implementationId": "slip_biped.periodic_apex.source.v2",
+  "implemented": true,
+  "maturity": "validated",
+  "validationStatus": "source-equivalent",
+  "provenance": {
+    "sourceRepository": "https://github.com/DLARlab/2022_A_Template_Model_Explains_Jerboa_Gait_Transitions.git",
+    "sourceCommit": "4595146c5881a5313bc8fe92de85099193ef9be9",
+    "baseline": "tests/fixtures/baselines/slip_biped/source_equivalence.mat"
+  },
+  "capabilities": {
+    "simulate": true,
+    "solve": true,
+    "continue": true,
+    "optimize": false,
+    "visualize": true,
+    "animate": true,
+    "parameterHomotopy": false,
+    "branchFamilyScan": false
+  }
+}

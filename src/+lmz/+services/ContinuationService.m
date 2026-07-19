@@ -40,6 +40,11 @@ classdef ContinuationService
             checkpoint=combined.toArtifact();checkpoint.artifactType='checkpoint';checkpoint.checkpointState=struct( ...
                 'BranchId',combined.Id,'PointCount',combined.pointCount(),'StepSize',resumed.Diagnostics.finalStep,'SavedAt',datestr(now,30));
             checkpoint.algorithmOptions=lmz.continuation.ContinuationOptions(base).toStruct();checkpoint.terminationReason=resumed.TerminationReason;checkpoint.diagnostics=diagnostics;
+            snapshotValues=cell(numel(resumed.Snapshots),1);
+            for snapshotIndex=1:numel(resumed.Snapshots)
+                snapshotValues{snapshotIndex}=resumed.Snapshots(snapshotIndex).toStruct();
+            end
+            checkpoint.continuationSnapshots=snapshotValues;
             lmz.io.ArtifactStore.save(path,checkpoint);
         end
     end

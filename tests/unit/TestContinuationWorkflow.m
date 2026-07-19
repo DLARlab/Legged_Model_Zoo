@@ -1,7 +1,7 @@
 classdef TestContinuationWorkflow < matlab.unittest.TestCase
     methods (Test)
         function secondSeedAndBranch(testCase)
-            registry=lmz.registry.ModelRegistry.discover();problem=registry.createModel('slip_biped').createProblem('periodic_apex',struct());u=problem.getDecisionSchema().defaults();p=problem.getParameterSchema().defaults();first=problem.makeSolution(u,p,problem.evaluate(u,p,lmz.api.RunContext.synchronous(0),false));context=lmz.api.RunContext.synchronous(4);
+            registry=lmz.registry.ModelRegistry.discover();problem=registry.createModel('slip_biped').createProblem('periodic_apex',struct());catalog=lmzmodels.slip_biped.GaitMapCatalog.default();branch=catalog.loadBranch(catalog.defaultBranchPath(),problem);source=branch.point(catalog.recommendedSeedIndex(catalog.defaultBranchPath()));p=source.ParameterValues;first=problem.makeSolution(source.DecisionValues,p,problem.evaluate(source.DecisionValues,p,lmz.api.RunContext.synchronous(0),false));context=lmz.api.RunContext.synchronous(4);
             pair=lmz.services.SeedService().makeSecondSeed(problem,first,0.03,struct(),context);testCase.verifyEqual(pair.AchievedRadius,0.03,'AbsTol',2e-5);
             result=lmz.services.ContinuationService().run(problem,pair,struct('MaximumPoints',8,'BothDirections',false),context);testCase.verifyEqual(result.Branch.pointCount(),8);for k=1:8,testCase.verifyLessThan(norm(problem.residual(result.Branch.point(k).DecisionValues,p,context)),1e-8);end
         end

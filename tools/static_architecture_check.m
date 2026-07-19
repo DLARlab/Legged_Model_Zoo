@@ -35,7 +35,10 @@ if exist(adapterPath,'file')==2
     end
 end
 modelFiles=dir(fullfile(root,'models','+lmzmodels','**','*.m'));
-rawResultsAllow={adapterPath,fullfile(root,'models','+lmzmodels','+slip_quadruped','Results29Layout.m')};
+rawResultsAllow={adapterPath, ...
+    fullfile(root,'models','+lmzmodels','+slip_quadruped','Results29Layout.m'), ...
+    fullfile(root,'models','+lmzmodels','+slip_biped','Results14Adapter.m'), ...
+    fullfile(root,'models','+lmzmodels','+slip_biped','Results14Layout.m')};
 for k=1:numel(modelFiles)
     path=fullfile(modelFiles(k).folder,modelFiles(k).name);
     if contains(path,[filesep '+legacy' filesep])||any(strcmp(path,rawResultsAllow)),continue,end

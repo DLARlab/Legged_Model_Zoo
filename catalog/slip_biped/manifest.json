@@ -1,1 +1,18 @@
-{"schemaVersion":"1.0.0","id":"slip_biped","version":"1.0.0","name":"SLIP Biped","implementationClass":"lmzmodels.slip_biped.Model","problems":["demo_stride","periodic_apex","trajectory_fit"],"capabilities":{"simulate":true,"solve":true,"continue":true,"optimize":true,"visualize":true,"animate":true,"parameterHomotopy":false,"branchFamilyScan":false}}
+{
+  "schemaVersion": "1.0.0",
+  "id": "slip_biped",
+  "version": "2.0.0",
+  "name": "SLIP Biped",
+  "implementationClass": "lmzmodels.slip_biped.Model",
+  "problems": ["periodic_apex", "trajectory_fit", "demo_stride"],
+  "capabilities": {
+    "simulate": true,
+    "solve": true,
+    "continue": true,
+    "optimize": true,
+    "visualize": true,
+    "animate": true,
+    "parameterHomotopy": false,
+    "branchFamilyScan": false
+  }
+}

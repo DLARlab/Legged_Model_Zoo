@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0.0",
+  "datasetId": "slip_biped_exp_1802_j30",
+  "modelId": "slip_biped",
+  "problemId": "trajectory_fit",
+  "sourceRepository": "https://github.com/DLARlab/2022_A_Template_Model_Explains_Jerboa_Gait_Transitions.git",
+  "sourceCommit": "4595146c5881a5313bc8fe92de85099193ef9be9",
+  "sourcePath": "Section3_optimization",
+  "copiedAt": "2026-07-19T00:00:00-04:00",
+  "license": "CC BY-NC 4.0 (stated in READMEDing2021JerboaFrontier.txt)",
+  "files": [
+    {
+      "name": "exp_1802_j30.mat",
+      "sha256": "4b16bfc041cc386e9768d035716a0dedb1ff38b7fb7efe70fbf749ce3c5596cc",
+      "bytes": 7276,
+      "fields": ["Source_Video", "To", "footsequence", "ob_data"],
+      "sampleCount": 101,
+      "stateColumnCount": 8
+    },
+    {
+      "name": "sim_1802_j30.mat",
+      "sha256": "303aeca45c7717d5745f1c0e436442d2b083edb9162ecbfc69277b1abfe35e23",
+      "bytes": 309,
+      "fields": ["X"],
+      "decisionCount": 16
+    }
+  ]
+}

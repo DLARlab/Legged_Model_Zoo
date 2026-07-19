@@ -24,9 +24,51 @@ classdef AppController < handle
             obj.State.ContinuationPreview=[];obj.State.ContinuationResult=[];
             obj.State.OptimizationResult=[];obj.State.CurrentRun=[];obj.State.RecordingState=struct();
             obj.State.Status=['Selected ' manifest.id];
-            if strcmp(modelId,'slip_quadruped'),obj.loadRoadMap();else,obj.loadBuiltInBranch();end
+            switch modelId
+                case 'slip_quadruped'
+                    obj.loadRoadMap();
+                case 'slip_biped'
+                    obj.loadGaitMap();
+                case 'slip_quad_load'
+                    obj.loadScientificLoadDataset();
+                otherwise
+                    obj.loadBuiltInBranch();
+            end
         end
         function ids=problemIds(obj),ids=obj.Registry.createModel(obj.State.ModelId).listProblems();end
+        function solution=selectProblem(obj,problemId)
+            model=obj.Registry.createModel(obj.State.ModelId);
+            problemIds=model.listProblems();
+            if ~any(strcmp(problemId,problemIds))
+                error('lmz:GUI:UnknownProblem', ...
+                    'Unknown problem %s for selected model %s.', ...
+                    problemId,obj.State.ModelId);
+            end
+            problem=model.createProblem(problemId,struct());
+            obj.invalidateDerived();
+            obj.State.ProblemId=problemId;
+            obj.State.HoverSelection=[];
+
+            [dataset,index]=obj.problemDataset(problemId);
+            if ~isempty(dataset)
+                solution=obj.lockBranchPoint(dataset.Id,index);
+                obj.State.Status=sprintf('Selected %s using %s point %d.', ...
+                    problemId,dataset.Name,index);
+                return
+            end
+
+            obj.State.Selection=[];
+            obj.State.LockedSelection=[];
+            if isa(problem,'lmz.api.SimulationProblem')
+                solution=obj.makeTutorialSolution(problemId);
+            else
+                solution=problem.makeSolution( ...
+                    problem.getDecisionSchema().defaults(), ...
+                    problem.getParameterSchema().defaults(),[]);
+            end
+            obj.State.WorkingSolution=solution;
+            obj.State.Status=sprintf('Selected %s.',problemId);
+        end
         function examples=builtInExamples(obj),examples=lmz.services.DataService().listBuiltInExamples(obj.State.ModelId);end
         function result=simulate(obj,options)
             dataService=lmz.services.DataService();example=dataService.loadBuiltInExample(obj.State.ModelId,obj.State.ExampleId);
@@ -35,12 +77,116 @@ classdef AppController < handle
             result=lmz.services.SimulationService().simulate(problem,struct(),options,obj.Context);
             obj.State.Simulation=result;obj.State.Status='Demonstration simulation complete';
         end
-        function capabilities=capabilities(obj),capabilities=obj.Registry.createModel(obj.State.ModelId).getCapabilities();end
+        function capabilities=capabilities(obj)
+            capabilities=obj.problemCapabilities();
+        end
+        function capabilities=problemCapabilities(obj,problemId)
+            if nargin<2||isempty(problemId),problemId=obj.State.ProblemId;end
+            descriptor=obj.Registry.getProblemDescriptor(obj.State.ModelId,problemId);
+            capabilities=descriptor.capabilities;
+        end
+        function names=homotopyParameterNames(obj)
+            solution=obj.State.WorkingSolution;
+            if isempty(solution),names={};return,end
+            schema=solution.ParameterSchema;
+            selectable=arrayfun(@(spec)strcmp(spec.Activity,'active'),schema.Specs);
+            names=schema.names();names=names(selectable);
+        end
 
         function dataset=loadBuiltInBranch(obj)
             branch=lmz.services.BranchService().loadBuiltInBranch(obj.Registry,obj.State.ModelId);
             dataset=lmz.data.BranchDataset([obj.State.ModelId ' built-in'],branch,'ReadOnly',true);
             obj.State.Datasets={dataset};obj.State.ActiveDatasetId=dataset.Id;obj.lockBranchPoint(dataset.Id,1);
+        end
+        function dataset=loadGaitMap(obj,file)
+            if ~strcmp(obj.State.ModelId,'slip_biped')
+                error('lmz:GUI:GaitMapModel','GaitMap is available for slip_biped.');
+            end
+            catalog=lmzmodels.slip_biped.GaitMapCatalog.default();
+            obj.State.RoadMapCatalog=catalog;
+            if nargin<2||isempty(file),file=catalog.defaultBranchPath();end
+            problem=obj.problem('periodic_apex');
+            branch=lmz.services.BranchService().loadGaitMapBranch(problem,file);
+            record=catalog.record(file);index=catalog.recommendedSeedIndex(file);
+            gait=branch.Classifications{index};style=struct('Color',gait.Color, ...
+                'LineStyle',gait.LineStyle,'Marker','none');
+            metadata=struct('PointCount',branch.pointCount(), ...
+                'ParameterSummary','offset_left/offset_right', ...
+                'GaitSummary',record.gait,'SourceHash',record.sha256, ...
+                'NativePath',catalog.nativePath(file),'Status','built-in/read-only');
+            dataset=lmz.data.BranchDataset(record.name,branch,'SourcePath',file, ...
+                'ReadOnly',true,'DisplayStyle',style,'Metadata',metadata);
+            retained=obj.writableDatasets();obj.State.Datasets=[{dataset} retained];
+            obj.State.ActiveDatasetId=dataset.Id;obj.State.AxisVariables={'dx','alphaL','y'};
+            obj.lockBranchPoint(dataset.Id,index);
+            obj.State.Status=sprintf('Biped GaitMap loaded: %s (%d points)', ...
+                dataset.Name,branch.pointCount());
+        end
+        function datasets=loadAllGaitMapBranches(obj)
+            if ~strcmp(obj.State.ModelId,'slip_biped')
+                error('lmz:GUI:GaitMapModel','GaitMap is available for slip_biped.');
+            end
+            datasets=lmz.services.BranchService().loadAllGaitMapBranches( ...
+                obj.problem('periodic_apex'));
+            obj.State.Datasets=[datasets obj.writableDatasets()];
+            obj.State.ActiveDatasetId=datasets{1}.Id;obj.State.AxisVariables={'dx','alphaL','y'};
+            catalog=lmzmodels.slip_biped.GaitMapCatalog.default();
+            obj.lockBranchPoint(datasets{1}.Id, ...
+                catalog.recommendedSeedIndex(datasets{1}.SourcePath));
+            obj.State.Status=sprintf('All %d biped GaitMap branches loaded.',numel(datasets));
+        end
+        function dataset=loadScientificLoadDataset(obj,file)
+            if ~strcmp(obj.State.ModelId,'slip_quad_load')
+                error('lmz:GUI:LoadDatasetModel', ...
+                    'Scientific load datasets are available for slip_quad_load.');
+            end
+            catalog=lmzmodels.slip_quad_load.ScientificDatasetCatalog.default();
+            obj.State.RoadMapCatalog=catalog;
+            if nargin<2||isempty(file),file=catalog.defaultMultiPath();end
+            problem=obj.problem('multi_stride_fit');
+            [branch,source]=lmz.services.BranchService().loadQuadLoadDataset(problem,file);
+            record=catalog.record(source.Name);style=struct('Color',[0.15 0.45 0.72], ...
+                'LineStyle','-','Marker','o');
+            metadata=struct('PointCount',1,'ParameterSummary', ...
+                sprintf('%d strides, 44+13(N-1) layout',source.StrideCount), ...
+                'GaitSummary',source.Kind,'SourceHash',record.sha256, ...
+                'NativePath',catalog.nativePath(record.id),'Status','built-in/read-only');
+            dataset=lmz.data.BranchDataset(source.Name,branch,'SourcePath',file, ...
+                'ReadOnly',true,'DisplayStyle',style,'Metadata',metadata);
+            retained=obj.writableDatasets();obj.State.Datasets=[{dataset} retained];
+            obj.State.ActiveDatasetId=dataset.Id;
+            obj.State.AxisVariables={'quad_dx','tAPEX','tugline_stiffness'};
+            obj.lockBranchPoint(dataset.Id,1);
+            obj.State.Status=sprintf('Scientific load dataset loaded: %s (%d strides)', ...
+                source.Name,source.StrideCount);
+        end
+        function datasets=loadAllScientificLoadDatasets(obj)
+            if ~strcmp(obj.State.ModelId,'slip_quad_load')
+                error('lmz:GUI:LoadDatasetModel', ...
+                    'Scientific load datasets are available for slip_quad_load.');
+            end
+            catalog=lmzmodels.slip_quad_load.ScientificDatasetCatalog.default();
+            records=catalog.records();datasets=cell(1,numel(records));
+            problem=obj.problem('multi_stride_fit');service=lmz.services.BranchService();
+            for index=1:numel(records)
+                file=catalog.pathFor(records(index).id);[branch,source]= ...
+                    service.loadQuadLoadDataset(problem,file);
+                style=struct('Color',linesColor(index),'LineStyle','-', ...
+                    'Marker','o');
+                metadata=struct('PointCount',1,'ParameterSummary', ...
+                    sprintf('%d strides, 44+13(N-1) layout',source.StrideCount), ...
+                    'GaitSummary',source.Kind,'SourceHash',records(index).sha256, ...
+                    'NativePath',catalog.nativePath(records(index).id), ...
+                    'Status','built-in/read-only');
+                datasets{index}=lmz.data.BranchDataset(source.Name,branch, ...
+                    'SourcePath',file,'ReadOnly',true,'DisplayStyle',style, ...
+                    'Metadata',metadata);
+            end
+            obj.State.Datasets=[datasets obj.writableDatasets()];
+            obj.State.ActiveDatasetId=datasets{1}.Id;
+            obj.State.AxisVariables={'quad_dx','tAPEX','tugline_stiffness'};
+            obj.lockBranchPoint(datasets{1}.Id,1);
+            obj.State.Status=sprintf('All %d scientific load datasets loaded.',numel(datasets));
         end
         function dataset=loadRoadMap(obj,file)
             if ~strcmp(obj.State.ModelId,'slip_quadruped')
@@ -76,8 +222,27 @@ classdef AppController < handle
             if numel(names)==1&&strcmp(names{1},'artifact')
                 branch=service.loadNativeBranch(path);readOnly=false;
             elseif any(strcmp(names,'results'))
-                branch=lmzmodels.slip_quadruped.Results29Adapter.loadBranch(path,obj.problem('periodic_apex'));readOnly=true;
-            else,error('lmz:GUI:BranchFile','MAT file is neither a native artifact nor Results29 branch.');end
+                resultInfo=variables(strcmp(names,'results'));
+                if resultInfo.size(1)==14&&strcmp(obj.State.ModelId,'slip_biped')
+                    branch=lmzmodels.slip_biped.Results14Adapter.loadBranch( ...
+                        path,obj.problem('periodic_apex'));readOnly=true;
+                elseif resultInfo.size(1)==29&&strcmp(obj.State.ModelId,'slip_quadruped')
+                    branch=lmzmodels.slip_quadruped.Results29Adapter.loadBranch( ...
+                        path,obj.problem('periodic_apex'));readOnly=true;
+                else
+                    error('lmz:GUI:BranchModel', ...
+                        'The Results matrix does not match the selected model.');
+                end
+            elseif any(strcmp(names,'X_accum'))&&strcmp(obj.State.ModelId,'slip_quad_load')
+                [branch,~]=service.loadQuadLoadDataset( ...
+                    obj.problem('multi_stride_fit'),path);readOnly=true;
+            else,error('lmz:GUI:BranchFile', ...
+                    'MAT file is not a native, Results14/29, or X_accum dataset.');end
+            if ~strcmp(branch.ModelId,obj.State.ModelId)
+                error('lmz:GUI:BranchModel', ...
+                    'The branch belongs to %s, not selected model %s.', ...
+                    branch.ModelId,obj.State.ModelId);
+            end
             [~,name,extension]=fileparts(path);style=struct();classification=branch.Classifications{1};if isfield(classification,'Color'),style.Color=classification.Color;end;if isfield(classification,'LineStyle'),style.LineStyle=classification.LineStyle;end
             dataset=lmz.data.BranchDataset([name extension],branch,'SourcePath',path,'ReadOnly',readOnly,'DisplayStyle',style,'Metadata',struct('Status','user-loaded','PointCount',branch.pointCount()));
             obj.State.Datasets{end+1}=dataset;obj.State.ActiveDatasetId=dataset.Id;obj.lockBranchPoint(dataset.Id,1);
@@ -102,8 +267,8 @@ classdef AppController < handle
             dataset=obj.activeDataset();path=dataset.SourcePath;
             if isempty(path)||exist(path,'file')~=2,error('lmz:GUI:ReloadPath','The active dataset has no reloadable source file.');end
             variables=whos('-file',path);names={variables.name};service=lmz.services.BranchService();
-            if any(strcmp(names,'results'))
-                branch=service.reloadLegacySource(obj.problem('periodic_apex'),path);
+            if any(strcmp(names,'results'))||any(strcmp(names,'X_accum'))
+                branch=service.reloadLegacySource(obj.problem(dataset.Branch.ProblemId),path);
             elseif numel(names)==1&&strcmp(names{1},'artifact')
                 branch=service.loadNativeBranch(path);
             else
@@ -216,14 +381,47 @@ classdef AppController < handle
         function evaluation=evaluateWorkingSolution(obj,includeSimulation)
             if nargin<2,includeSimulation=false;end
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
-            evaluation=lmz.services.EvaluationService().evaluate(problem,obj.State.WorkingSolution,includeSimulation,obj.Context);
+            if isa(problem,'lmz.api.OptimizationProblem')
+                solution=obj.State.WorkingSolution;
+                [objective,terms,diagnostics]=problem.evaluateObjective( ...
+                    solution.DecisionValues,solution.ParameterValues,obj.Context);
+                values=objectiveValues(terms);blocks=lmz.data.ResidualBlock( ...
+                    'objective_terms',values,ones(size(values)));
+                diagnostics.Objective=objective;diagnostics.ObjectiveTerms=terms;
+                simulation=[];
+                if includeSimulation&&ismethod(problem,'simulateDecision')
+                    simulation=problem.simulateDecision(solution.DecisionValues,obj.Context);
+                end
+                evaluation=lmz.data.ProblemEvaluation(blocks,'Simulation',simulation, ...
+                    'Diagnostics',diagnostics,'Feasibility',struct('Valid',true));
+            else
+                evaluation=lmz.services.EvaluationService().evaluate( ...
+                    problem,obj.State.WorkingSolution,includeSimulation,obj.Context);
+            end
             obj.State.WorkingEvaluation=evaluation;obj.applyEvaluation(problem,evaluation);
             if includeSimulation,obj.State.CandidateSimulation=evaluation.Simulation;obj.State.Simulation=evaluation.Simulation;end
         end
         function simulation=simulateWorkingSolution(obj)
-            solution=obj.State.WorkingSolution;problem=obj.problem(solution.ProblemId);
-            simulation=lmz.services.SolutionService().simulate(problem,solution,obj.Context);
-            obj.State.CandidateSimulation=simulation;obj.State.Simulation=simulation;obj.State.Status='Selected RoadMap point simulated';
+            solution=obj.State.WorkingSolution;
+            if isempty(solution)||~strcmp(solution.ProblemId,obj.State.ProblemId)
+                error('lmz:GUI:WorkingProblemMismatch', ...
+                    'The working solution does not match selected problem %s.', ...
+                    obj.State.ProblemId);
+            end
+            problem=obj.problem(obj.State.ProblemId);
+            if isa(problem,'lmz.api.SimulationProblem')
+                dataService=lmz.services.DataService();
+                example=dataService.loadBuiltInExample( ...
+                    obj.State.ModelId,obj.State.ExampleId);
+                simulation=lmz.services.SimulationService().simulate( ...
+                    problem,solution,example.options,obj.Context);
+            else
+                simulation=lmz.services.SolutionService().simulate( ...
+                    problem,solution,obj.Context);
+            end
+            obj.State.CandidateSimulation=simulation;
+            obj.State.Simulation=simulation;
+            obj.State.Status=sprintf('%s simulation complete.',obj.State.ProblemId);
         end
         function [solution,diagnostics]=projectWorkingSolution(obj,options)
             if nargin<2,options=struct();end
@@ -292,9 +490,41 @@ classdef AppController < handle
             obj.State.Status='Branch-family scan complete';
         end
         function result=runOptimization(obj,options)
-            model=obj.Registry.createModel(obj.State.ModelId);problems=model.listProblems();if any(strcmp(problems,'trajectory_fit')),id='trajectory_fit';else,id='multi_stride_fit';end
-            problem=model.createProblem(id,struct());seed=problem.makeSolution(problem.getDecisionSchema().defaults(),[],[]);
-            result=lmz.services.OptimizationService().run(problem,seed,options,obj.Context);obj.State.OptimizationResult=result;obj.State.WorkingSolution=result.Solution;obj.State.Status='Optimization complete';
+            if nargin<2,options=struct();end
+            id=obj.State.ProblemId;
+            capabilities=obj.problemCapabilities(id);
+            if ~capabilities.optimize
+                error('lmz:GUI:UnsupportedOptimization', ...
+                    'Selected problem %s does not support optimization.',id);
+            end
+            model=obj.Registry.createModel(obj.State.ModelId);
+            if strcmp(id,'trajectory_fit')
+                problem=model.createProblem(id,struct('EnforceConstraints',false));
+                if isempty(fieldnames(options)),options=struct('Algorithm','sqp', ...
+                        'MaxIterations',3,'MaxFunctionEvaluations',150, ...
+                        'ConstraintTolerance',0.2,'OptimalityTolerance',1e-3, ...
+                        'StepTolerance',1e-3);end
+            elseif strcmp(id,'multi_stride_fit')
+                problem=model.createProblem(id,struct());
+                if isempty(fieldnames(options)),options=struct('Algorithm','sqp', ...
+                        'MaxIterations',1,'MaxFunctionEvaluations',30, ...
+                        'OptimalityTolerance',1e-5,'StepTolerance',1e-5);end
+            else
+                problem=model.createProblem(id,struct());
+            end
+            seed=obj.State.WorkingSolution;
+            if isempty(seed)||~strcmp(seed.ProblemId,id)
+                seed=problem.makeSolution(problem.getDecisionSchema().defaults(), ...
+                    problem.getParameterSchema().defaults(),[]);
+            end
+            if obj.Context.Cancellation.IsCancellationRequested
+                obj.Context=lmz.api.RunContext.synchronous(obj.Context.RandomSeed);
+            end
+            obj.Context.Pause.resume();obj.State.CurrentRun=struct('Kind','optimization','Context',obj.Context);
+            cleanup=onCleanup(@()obj.finishCurrentRun());
+            result=lmz.services.OptimizationService().run(problem,seed,options,obj.Context);
+            obj.State.OptimizationResult=result;obj.State.WorkingSolution=result.Solution;
+            obj.State.ProblemId=id;obj.State.Status='Optimization complete';clear cleanup
         end
         function saveBranch(~,path,branch),lmz.services.BranchService().saveNativeBranch(path,branch);end
         function exportLegacyBranch(~,path,branch),lmz.services.BranchService().exportLegacyBranch(path,branch);end
@@ -347,6 +577,62 @@ classdef AppController < handle
             if isempty(dataset),error('lmz:GUI:DatasetMissing','Dataset is missing.');end
         end
         function problem=problem(obj,id),problem=obj.Registry.createModel(obj.State.ModelId).createProblem(id,struct());end
+        function [dataset,index]=problemDataset(obj,problemId)
+            dataset=[];index=1;
+            if ~isempty(obj.State.LockedSelection)
+                try
+                    candidate=obj.findDataset(obj.State.LockedSelection.DatasetId);
+                    if strcmp(candidate.Branch.ProblemId,problemId)
+                        dataset=candidate;
+                        index=min(obj.State.LockedSelection.PointIndex, ...
+                            candidate.Branch.pointCount());
+                        return
+                    end
+                catch
+                end
+            end
+            order=1:numel(obj.State.Datasets);
+            if ~isempty(obj.State.ActiveDatasetId)
+                active=find(cellfun(@(item)strcmp(item.Id, ...
+                    obj.State.ActiveDatasetId),obj.State.Datasets),1);
+                if ~isempty(active),order=[active order(order~=active)];end
+            end
+            for candidateIndex=order
+                candidate=obj.State.Datasets{candidateIndex};
+                if strcmp(candidate.Branch.ModelId,obj.State.ModelId)&& ...
+                        strcmp(candidate.Branch.ProblemId,problemId)
+                    dataset=candidate;break
+                end
+            end
+            if isempty(dataset),return,end
+            if ~isempty(dataset.SourcePath)&&~isempty(obj.State.RoadMapCatalog)&& ...
+                    ismethod(obj.State.RoadMapCatalog,'recommendedSeedIndex')
+                try
+                    index=obj.State.RoadMapCatalog.recommendedSeedIndex( ...
+                        dataset.SourcePath);
+                catch
+                    index=1;
+                end
+            end
+            index=max(1,min(index,dataset.Branch.pointCount()));
+        end
+        function solution=makeTutorialSolution(obj,problemId)
+            schema=lmz.schema.VariableSchema();
+            manifest=obj.Registry.getManifest(obj.State.ModelId);
+            value=struct('Id',lmz.util.Ids.new('solution'), ...
+                'ModelId',obj.State.ModelId,'ModelVersion',manifest.version, ...
+                'ProblemId',problemId,'ProblemVersion','1.0.0', ...
+                'DecisionSchema',schema,'ParameterSchema',schema, ...
+                'DecisionValues',zeros(0,1),'ParameterValues',zeros(0,1), ...
+                'Observables',struct(), ...
+                'ResidualBlocks',lmz.data.ResidualBlock.empty(0,1), ...
+                'Diagnostics',struct('Status','tutorial'), ...
+                'Classification',struct(),'Feasibility',struct('Valid',true), ...
+                'Lineage',struct(), ...
+                'Provenance',struct('source','built-in-tutorial'), ...
+                'CreatedAt',datestr(now,30));
+            solution=lmz.data.Solution(value);
+        end
         function datasets=writableDatasets(obj)
             datasets={};for index=1:numel(obj.State.Datasets),if ~obj.State.Datasets{index}.ReadOnly,datasets{end+1}=obj.State.Datasets{index};end,end %#ok<AGROW>
         end
@@ -357,3 +643,23 @@ function value=fieldOr(source,name,fallback)
 if isfield(source,name),value=source.(name);else,value=fallback;end
 end
 function value=onOff(condition),if condition,value='on';else,value='off';end,end
+function value=linesColor(index)
+colors=[0.0000 0.4470 0.7410;0.8500 0.3250 0.0980; ...
+    0.9290 0.6940 0.1250;0.4940 0.1840 0.5560; ...
+    0.4660 0.6740 0.1880;0.3010 0.7450 0.9330];
+value=colors(1+mod(index-1,size(colors,1)),:);
+end
+function values=objectiveValues(terms)
+names=fieldnames(terms);values=zeros(numel(names),1);
+for index=1:numel(names)
+    item=terms.(names{index});
+    if isnumeric(item)&&isscalar(item)
+        values(index)=item;
+    elseif isstruct(item)&&isfield(item,'Value')&&isscalar(item.Value)
+        if isfield(item,'Weight'),values(index)=item.Value*item.Weight; ...
+        else,values(index)=item.Value;end
+    else
+        values(index)=0;
+    end
+end
+end

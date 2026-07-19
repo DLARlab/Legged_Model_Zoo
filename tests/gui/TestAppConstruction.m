@@ -12,6 +12,9 @@ classdef TestAppConstruction < matlab.unittest.TestCase
             app = lmz.gui.LeggedModelZooApp();
             cleanup = onCleanup(@()delete(app));
             testCase.verifyNotEmpty(app.Figure);
+            testCase.verifyTrue(isgraphics(app.OptimizationAxes));
+            testCase.verifyTrue(isgraphics(app.OptimizationSensitivityAxes));
+            testCase.verifyTrue(isgraphics(app.OptimizationR2Axes));
             clear cleanup
         end
     end

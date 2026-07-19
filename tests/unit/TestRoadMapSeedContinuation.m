@@ -19,8 +19,8 @@ classdef TestRoadMapSeedContinuation < matlab.unittest.TestCase
             testCase.verifyEqual(pair.AchievedRadius,0.005,'AbsTol',2e-6);testCase.verifyLessThan(pair.Diagnostics.ResidualNorm,1e-8);testCase.verifyGreaterThan(pair.Diagnostics.ExitFlag,0);
         end
         function namedHomotopyAndFamilyScan(testCase)
-            controller=lmz.gui.AppController();controller.selectModel('slip_quadruped');homotopy=controller.runParameterHomotopy('phi_neutral',[0 0.05],struct());testCase.verifyEqual(homotopy.Completed,2);testCase.verifyEqual(homotopy.Solutions(2).parameter('phi_neutral'),0.05,'AbsTol',1e-12);
-            options=struct('SecondSeedRadius',0.005,'ContinuationOptions',struct('MaximumPoints',3,'BothDirections',false,'InitialStep',0.005,'MaximumStep',0.005));report=controller.runBranchFamilyScan('phi_neutral',0,options);testCase.verifyEqual(report.Completed,1);testCase.verifyEqual(report.Failed,0);testCase.verifyEqual(report.Status,{'completed'});testCase.verifyEqual(report.Branches{1}.pointCount(),3);testCase.verifyNotEmpty(report.OutputArtifacts{1});
+            controller=lmz.gui.AppController();controller.selectModel('slip_quadruped');homotopy=controller.runParameterHomotopy('k_leg',[10 10.001],struct());testCase.verifyEqual(homotopy.Completed,2);testCase.verifyEqual(homotopy.Solutions(2).parameter('k_leg'),10.001,'AbsTol',1e-12);
+            options=struct('SecondSeedRadius',0.005,'ContinuationOptions',struct('MaximumPoints',3,'BothDirections',false,'InitialStep',0.005,'MaximumStep',0.005));report=controller.runBranchFamilyScan('k_leg',10,options);testCase.verifyEqual(report.Completed,1);testCase.verifyEqual(report.Failed,0);testCase.verifyEqual(report.Status,{'completed'});testCase.verifyEqual(report.Branches{1}.pointCount(),3);testCase.verifyNotEmpty(report.OutputArtifacts{1});
         end
     end
 end

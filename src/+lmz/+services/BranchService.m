@@ -9,25 +9,59 @@ classdef BranchService
                 branch=obj.loadRoadMapBranch(problem,catalog.defaultBranchPath());
                 return
             end
-            if any(strcmp('periodic_apex',model.listProblems()))
+            if strcmp(modelId,'slip_biped')
                 problem=model.createProblem('periodic_apex',struct());
-                p=problem.getParameterSchema().defaults();speeds=linspace(0.7,1.5,7);
-                solutions=lmz.data.Solution.empty(0,1);
-                for index=1:numel(speeds)
-                    u=[speeds(index);p(1)/speeds(index)];
-                    evaluation=problem.evaluate(u,p,lmz.api.RunContext.synchronous(0),false);
-                    solutions(index,1)=problem.makeSolution(u,p,evaluation);
-                end
-            else
+                catalog=lmzmodels.slip_biped.GaitMapCatalog.default();
+                branch=catalog.loadBranch(catalog.defaultBranchPath(),problem,true);
+                return
+            elseif strcmp(modelId,'slip_quad_load')
                 problem=model.createProblem('multi_stride_fit',struct());
-                p=problem.getParameterSchema().defaults();target=p(:);
-                defaults=problem.getDecisionSchema().defaults();solutions=lmz.data.Solution.empty(0,1);
-                for index=1:7
-                    u=defaults+(index-1)/6*(target-defaults);
-                    solutions(index,1)=problem.makeSolution(u,p,[]);
-                end
+                catalog=lmzmodels.slip_quad_load.ScientificDatasetCatalog.default();
+                dataset=lmzmodels.slip_quad_load.XAccumAdapter.loadDataset( ...
+                    catalog.defaultMultiPath());
+                solution=lmzmodels.slip_quad_load.XAccumAdapter.toSolution(problem,dataset);
+                branch=lmz.data.SolutionBranch.fromSolutions(solution);
+                return
+            else
+                error('lmz:Branch:BuiltInModel', ...
+                    'No built-in branch adapter is registered for %s.',modelId);
             end
-            branch=lmz.data.SolutionBranch.fromSolutions(solutions);
+        end
+
+        function branch=loadGaitMapBranch(~,problem,file)
+            catalog=lmzmodels.slip_biped.GaitMapCatalog.default();
+            if nargin<3||isempty(file),file=catalog.defaultBranchPath();end
+            if ~catalog.validateSourceHash(file)
+                error('lmz:GaitMap:HashMismatch', ...
+                    'Biped GaitMap source hash does not match its manifest.');
+            end
+            branch=catalog.loadBranch(file,problem,true);
+        end
+
+        function datasets=loadAllGaitMapBranches(obj,problem)
+            catalog=lmzmodels.slip_biped.GaitMapCatalog.default();
+            files=catalog.listBranches();datasets=cell(1,numel(files));
+            for index=1:numel(files)
+                branch=obj.loadGaitMapBranch(problem,files{index});
+                record=catalog.record(files{index});style=obj.styleFor(branch.Classifications{ ...
+                    min(record.recommendedDefaultIndex,branch.pointCount())});
+                metadata=struct('PointCount',branch.pointCount(), ...
+                    'ParameterSummary','offset_left/offset_right', ...
+                    'GaitSummary',record.gait,'SourceHash',record.sha256, ...
+                    'NativePath',catalog.nativePath(files{index}), ...
+                    'Status','built-in/read-only');
+                datasets{index}=lmz.data.BranchDataset(record.name,branch, ...
+                    'SourcePath',files{index},'ReadOnly',true, ...
+                    'DisplayStyle',style,'Metadata',metadata);
+            end
+        end
+
+        function [branch,dataset]=loadQuadLoadDataset(~,problem,file)
+            catalog=lmzmodels.slip_quad_load.ScientificDatasetCatalog.default();
+            if nargin<3||isempty(file),file=catalog.defaultMultiPath();end
+            dataset=lmzmodels.slip_quad_load.XAccumAdapter.loadDataset(file);
+            solution=lmzmodels.slip_quad_load.XAccumAdapter.toSolution(problem,dataset);
+            branch=lmz.data.SolutionBranch.fromSolutions(solution);
         end
         function files = listRoadMapBranches(~)
             files=lmzmodels.slip_quadruped.RoadMapCatalog.default().listBranches();
@@ -66,7 +100,16 @@ classdef BranchService
             end
         end
         function branch = reloadLegacySource(~,problem,file)
-            branch=lmzmodels.slip_quadruped.Results29Adapter.loadBranch(file,problem);
+            descriptor=problem.getDescriptor();variables=whos('-file',file);names={variables.name};
+            if any(strcmp(names,'X_accum'))
+                dataset=lmzmodels.slip_quad_load.XAccumAdapter.loadDataset(file);
+                solution=lmzmodels.slip_quad_load.XAccumAdapter.toSolution(problem,dataset);
+                branch=lmz.data.SolutionBranch.fromSolutions(solution);
+            elseif strcmp(descriptor.modelId,'slip_biped')
+                branch=lmzmodels.slip_biped.Results14Adapter.loadBranch(file,problem);
+            else
+                branch=lmzmodels.slip_quadruped.Results29Adapter.loadBranch(file,problem);
+            end
         end
         function matches = filterByFixedParameters(~,branches,name,value,tolerance)
             if nargin<5,tolerance=1e-10;end
@@ -88,8 +131,24 @@ classdef BranchService
         function saveNativeBranch(~,path,branch),lmz.io.ArtifactStore.save(path,branch.toArtifact());end
         function branch=loadNativeBranch(~,path),artifact=lmz.io.ArtifactStore.load(path);branch=lmz.data.SolutionBranch.fromArtifact(artifact);end
         function exportLegacyBranch(~,path,branch)
-            results=lmzmodels.slip_quadruped.Results29Adapter.encode(branch); %#ok<NASGU>
-            save(path,'results');
+            switch branch.ModelId
+                case 'slip_quadruped'
+                    results=lmzmodels.slip_quadruped.Results29Adapter.encode(branch); %#ok<NASGU>
+                    save(path,'results');
+                case 'slip_biped'
+                    results=lmzmodels.slip_biped.Results14Adapter.encode(branch); %#ok<NASGU>
+                    save(path,'results');
+                case 'slip_quad_load'
+                    if branch.pointCount()~=1
+                        error('lmz:QuadLoad:LegacyCardinality', ...
+                            'A load-pulling X_accum export requires exactly one point.');
+                    end
+                    X_accum=branch.DecisionValues(:,1); %#ok<NASGU>
+                    save(path,'X_accum');
+                otherwise
+                    error('lmz:Branch:LegacyModel', ...
+                        'No legacy exporter is registered for %s.',branch.ModelId);
+            end
         end
     end
     methods (Static, Access=private)

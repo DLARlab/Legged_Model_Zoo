@@ -22,15 +22,23 @@ classdef PseudoArclengthContinuation
                 'partialBranchPreserved',true);
             result=lmz.data.ContinuationResult(branch,snapshots,reason,options.toStruct(),diagnostics);
             if ~isempty(options.CheckpointPath)
-                saveCheckpoint(options.CheckpointPath,branch,options,stats.FinalStep,reason);
+                saveCheckpoint(options.CheckpointPath,branch,options, ...
+                    stats.FinalStep,reason,snapshots);
             end
 
             function [values,localSnapshots,termination,traceStats]=trace(first,second,count,directionSign)
                 values=[first,second];step=min(options.MaximumStep,max(options.MinimumStep,options.InitialStep));
                 lifted=initializeLiftedHistory(problem,first,second,options.HistoryDecisionValues);
                 localSnapshots=lmz.data.ContinuationSnapshot.empty(0,1);
-                localSnapshots(1,1)=lmz.data.ContinuationSnapshot(1,first,step,[],true,struct('Seed',true));
-                localSnapshots(2,1)=lmz.data.ContinuationSnapshot(2,second,step,[],true,struct('Seed',true));
+                seedDiagnostics=struct('Seed',true,'Direction',directionSign, ...
+                    'CheckpointPath',options.CheckpointPath, ...
+                    'Feasibility',first.Feasibility,'Gait',first.Classification);
+                localSnapshots(1,1)=lmz.data.ContinuationSnapshot( ...
+                    1,first,step,[],true,seedDiagnostics);
+                seedDiagnostics.Feasibility=second.Feasibility;
+                seedDiagnostics.Gait=second.Classification;
+                localSnapshots(2,1)=lmz.data.ContinuationSnapshot( ...
+                    2,second,step,[],true,seedDiagnostics);
                 rejected=0;backtracks=0;termination='maximum_points';previousTangent=[];
                 while numel(values)<count
                     try
@@ -45,7 +53,9 @@ classdef PseudoArclengthContinuation
                         'DecisionValues',prediction,'Tangent',tangent,'StepSize',step, ...
                         'Direction',directionSign);
                     notify(options.PredictionFcn,preview);
-                    accepted=false;exitFlag=-1;output=struct();residualNorm=Inf;corrected=[];failure='';
+                    accepted=false;exitFlag=-1;output=struct();residualNorm=Inf;
+                    corrected=[];failure='';solution=[];
+                    feasibility=struct('Status','not-evaluated');gait=struct();
                     try
                         [corrected,exitFlag,output,residualNorm]= ...
                             lmz.continuation.PseudoArclengthCorrector().correct( ...
@@ -53,25 +63,50 @@ classdef PseudoArclengthContinuation
                         accepted=exitFlag>0&&isfinite(residualNorm)&&residualNorm<=options.CorrectorTolerance*10;
                         if ~accepted,failure='corrector';end
                     catch exception
-                        if strcmp(exception.identifier,'lmz:Cancelled'),termination='controlled_stop';break,end
-                        failure=['exception:' exception.identifier];output=struct('message',exception.message);
+                        if strcmp(exception.identifier,'lmz:Cancelled')
+                            failure='controlled-stop';termination='controlled_stop';
+                        else
+                            failure=['exception:' exception.identifier];
+                        end
+                        output=struct('message',exception.message);
                     end
-                    if strcmp(termination,'controlled_stop'),break,end
                     if accepted
-                        evaluation=problem.evaluate(corrected,values(end).ParameterValues,context,false);
-                        solution=problem.makeSolution(corrected,values(end).ParameterValues,evaluation);
-                        if options.RequireFeasible&&isstruct(solution.Feasibility)&& ...
-                                isfield(solution.Feasibility,'Valid')&&~solution.Feasibility.Valid
-                            accepted=false;failure='feasibility';
+                        try
+                            evaluation=problem.evaluate(corrected,values(end).ParameterValues,context,false);
+                            solution=problem.makeSolution(corrected,values(end).ParameterValues,evaluation);
+                            feasibility=solution.Feasibility;gait=solution.Classification;
+                            if options.RequireFeasible&&isstruct(solution.Feasibility)&& ...
+                                    isfield(solution.Feasibility,'Valid')&&~solution.Feasibility.Valid
+                                accepted=false;failure='feasibility';
+                            end
+                            if accepted&&~isempty(options.AcceptanceFcn)
+                                accepted=logical(options.AcceptanceFcn(solution,values));
+                                if ~accepted,failure='acceptance-policy';end
+                            end
+                            if accepted&&isprop(problem,'Continuation')&&~isempty(problem.Continuation)
+                                [accepted,policyReason]=problem.Continuation.accepts(values(end),solution);
+                                if ~accepted,failure=['model-policy:' policyReason];end
+                            end
+                        catch exception
+                            accepted=false;
+                            if strcmp(exception.identifier,'lmz:Cancelled')
+                                failure='controlled-stop';termination='controlled_stop';
+                            else
+                                failure=['exception:' exception.identifier];
+                                output=struct('message',exception.message);
+                            end
                         end
-                        if accepted&&~isempty(options.AcceptanceFcn)
-                            accepted=logical(options.AcceptanceFcn(solution,values));
-                            if ~accepted,failure='acceptance-policy';end
-                        end
-                        if accepted&&isprop(problem,'Continuation')&&~isempty(problem.Continuation)
-                            [accepted,policyReason]=problem.Continuation.accepts(values(end),solution);
-                            if ~accepted,failure=['model-policy:' policyReason];end
-                        end
+                    end
+                    if strcmp(termination,'controlled_stop')
+                        rejected=rejected+1;
+                        diagnostics=attemptDiagnostics(prediction,corrected, ...
+                            residualNorm,NaN,output,backtracks,feasibility,gait, ...
+                            'controlled_stop',failure,directionSign,NaN,exitFlag);
+                        localSnapshots(end+1,1)=lmz.data.ContinuationSnapshot( ...
+                            numel(values)+1,values(end),step,tangent,false,diagnostics); %#ok<AGROW>
+                        notify(options.RejectedFcn,rejectedState(diagnostics, ...
+                            numel(values)+1,step,prediction,directionSign,failure));
+                        break
                     end
                     if accepted
                         metric=lmz.schema.DiagonalMetric(problem.scale(corrected));
@@ -79,48 +114,76 @@ classdef PseudoArclengthContinuation
                         distances=zeros(1,size(lifted,2));
                         for historyIndex=1:size(lifted,2),distances(historyIndex)=metric.norm(candidateLift-lifted(:,historyIndex));end
                         if any(distances<options.DuplicateTolerance)
-                            termination='duplicate';break
+                            termination='duplicate';rejected=rejected+1;
+                            diagnostics=attemptDiagnostics(prediction,corrected, ...
+                                residualNorm,NaN,output,backtracks,feasibility,gait, ...
+                                termination,'history-duplicate',directionSign,NaN,exitFlag);
+                            localSnapshots(end+1,1)=lmz.data.ContinuationSnapshot( ...
+                                numel(values)+1,solution,step,tangent,false,diagnostics); %#ok<AGROW>
+                            notify(options.RejectedFcn,rejectedState(diagnostics, ...
+                                numel(values)+1,step,prediction,directionSign, ...
+                                'history-duplicate'));
+                            break
                         end
                         segmentCount=size(lifted,2)-3;loopDistance=Inf;
                         for segmentIndex=1:segmentCount
                             loopDistance=min(loopDistance,segmentDistance(metric,candidateLift,lifted(:,segmentIndex),lifted(:,segmentIndex+1)));
                         end
+                        values(end+1)=solution;lifted(:,end+1)=candidateLift; %#ok<AGROW>
+                        terminationCandidate='';
                         if loopDistance<options.LoopClosureTolerance
-                            values(end+1)=solution;lifted(:,end+1)=candidateLift;termination='loop_closure'; %#ok<AGROW>
-                        else
-                            values(end+1)=solution;lifted(:,end+1)=candidateLift; %#ok<AGROW>
+                            termination='loop_closure';terminationCandidate=termination;
                         end
                         achieved=metric.norm(lifted(:,end)-lifted(:,end-1));
                         newTangent=(lifted(:,end)-lifted(:,end-1))/max(achieved,eps);
                         curvature=0;
                         if ~isempty(previousTangent),curvature=metric.norm(newTangent-previousTangent);end
-                        previousTangent=newTangent;backtracks=0;
-                        diagnostics=struct('ExitFlag',exitFlag,'Output',output,'ResidualNorm',residualNorm, ...
-                            'Prediction',prediction,'AchievedStep',achieved,'Curvature',curvature,'Direction',directionSign);
+                        previousTangent=newTangent;acceptedBacktracks=backtracks;backtracks=0;
+                        if isempty(terminationCandidate)&&size(lifted,2)>=options.StagnationWindow
+                            firstWindow=size(lifted,2)-options.StagnationWindow+1;
+                            net=metric.norm(lifted(:,end)-lifted(:,firstWindow));
+                            if net<options.DuplicateTolerance*options.StagnationWindow
+                                termination='stagnation';terminationCandidate=termination;
+                            end
+                        end
+                        if isempty(terminationCandidate)&&numel(values)>=count
+                            terminationCandidate='maximum_points';
+                        end
+                        diagnostics=attemptDiagnostics(prediction,corrected, ...
+                            residualNorm,curvature,output,acceptedBacktracks, ...
+                            feasibility,gait,terminationCandidate,'', ...
+                            directionSign,achieved,exitFlag);
                         localSnapshots(end+1,1)=lmz.data.ContinuationSnapshot(numel(values),solution,step,tangent,true,diagnostics); %#ok<AGROW>
                         notify(options.AcceptedFcn,struct('Kind','accepted','Solution',solution, ...
                             'PointIndex',numel(values),'StepSize',step,'ResidualNorm',residualNorm, ...
-                            'Tangent',tangent,'Prediction',prediction,'Direction',directionSign));
+                            'Tangent',tangent,'Prediction',prediction,'Direction',directionSign, ...
+                            'Curvature',curvature,'CorrectorIterations',diagnostics.CorrectorIterations, ...
+                            'BacktrackingCount',acceptedBacktracks, ...
+                            'TerminationCandidate',terminationCandidate));
                         if curvature>options.CurvatureThreshold,step=max(options.MinimumStep,step*options.ShrinkFactor);else,step=min(options.MaximumStep,step*options.GrowthFactor);end
                         context.progress(numel(values)/count,sprintf('Accepted continuation point %d',numel(values)));
                         checkpointState=struct('decision',corrected,'step',step,'output',output,'pointCount',numel(values));context.checkpoint(checkpointState);
-                        if ~isempty(options.CheckpointPath),saveCheckpoint(options.CheckpointPath,lmz.data.SolutionBranch.fromSolutions(values),options,step,'running');end
-                        if strcmp(termination,'loop_closure'),break,end
-                        if size(lifted,2)>=options.StagnationWindow
-                            firstWindow=size(lifted,2)-options.StagnationWindow+1;
-                            net=metric.norm(lifted(:,end)-lifted(:,firstWindow));
-                            if net<options.DuplicateTolerance*options.StagnationWindow,termination='stagnation';break,end
-                        end
+                        if ~isempty(options.CheckpointPath),saveCheckpoint( ...
+                                options.CheckpointPath,lmz.data.SolutionBranch.fromSolutions(values), ...
+                                options,step,'running',localSnapshots);end
+                        if any(strcmp(termination,{'loop_closure','stagnation'})),break,end
                     else
                         rejected=rejected+1;backtracks=backtracks+1;
-                        diagnostics=struct('ExitFlag',exitFlag,'Output',output,'ResidualNorm',residualNorm, ...
-                            'Prediction',prediction,'Failure',failure,'Backtrack',backtracks,'Direction',directionSign);
-                        localSnapshots(end+1,1)=lmz.data.ContinuationSnapshot(numel(values)+1,values(end),step,tangent,false,diagnostics); %#ok<AGROW>
-                        notify(options.RejectedFcn,struct('Kind','rejected','PointIndex',numel(values)+1, ...
-                            'StepSize',step,'ResidualNorm',residualNorm,'Reason',failure, ...
-                            'Prediction',prediction,'Direction',directionSign));
-                        step=step*options.ShrinkFactor;
-                        if step<options.MinimumStep||backtracks>=options.MaxBacktracks,termination='corrector_failure';break,end
+                        nextStep=step*options.ShrinkFactor;terminationCandidate='';
+                        if nextStep<options.MinimumStep
+                            termination='minimum_step';terminationCandidate=termination;
+                        elseif backtracks>=options.MaxBacktracks
+                            termination='maximum_backtracks';terminationCandidate=termination;
+                        end
+                        diagnostics=attemptDiagnostics(prediction,corrected, ...
+                            residualNorm,NaN,output,backtracks,feasibility,gait, ...
+                            terminationCandidate,failure,directionSign,NaN,exitFlag);
+                        snapshotSolution=values(end);if ~isempty(solution),snapshotSolution=solution;end
+                        localSnapshots(end+1,1)=lmz.data.ContinuationSnapshot(numel(values)+1,snapshotSolution,step,tangent,false,diagnostics); %#ok<AGROW>
+                        notify(options.RejectedFcn,rejectedState(diagnostics, ...
+                            numel(values)+1,step,prediction,directionSign,failure));
+                        step=nextStep;
+                        if ~isempty(terminationCandidate),break,end
                     end
                 end
                 traceStats=struct('Accepted',numel(values),'Rejected',rejected,'FinalStep',step,'Direction',directionSign);
@@ -129,6 +192,34 @@ classdef PseudoArclengthContinuation
             function notify(callback,state)
                 if isempty(callback)||~isa(callback,'function_handle'),return,end
                 try,callback(state);catch exception,context.log('warning',['Continuation callback failed: ' exception.message]);end
+            end
+
+            function value=attemptDiagnostics(prediction,corrected,residualNorm, ...
+                    curvature,output,backtrackCount,feasibility,gait, ...
+                    terminationCandidate,failure,directionSign,achieved,exitFlag)
+                value=struct('Predictor',prediction, ...
+                    'CorrectedDecision',corrected,'ResidualNorm',residualNorm, ...
+                    'Curvature',curvature, ...
+                    'CorrectorIterations',correctorIterations(output), ...
+                    'BacktrackingCount',backtrackCount, ...
+                    'Feasibility',feasibility,'Gait',gait, ...
+                    'TerminationCandidate',terminationCandidate, ...
+                    'CheckpointPath',options.CheckpointPath, ...
+                    'ExitFlag',exitFlag,'CorrectorOutput',output, ...
+                    'Failure',failure,'Direction',directionSign, ...
+                    'AchievedStep',achieved,'Seed',false);
+            end
+
+            function value=rejectedState(diagnostics,pointIndex,stepSize, ...
+                    prediction,directionSign,failure)
+                value=struct('Kind','rejected','PointIndex',pointIndex, ...
+                    'StepSize',stepSize,'ResidualNorm',diagnostics.ResidualNorm, ...
+                    'Reason',failure,'Prediction',prediction, ...
+                    'CorrectedDecision',diagnostics.CorrectedDecision, ...
+                    'CorrectorIterations',diagnostics.CorrectorIterations, ...
+                    'BacktrackingCount',diagnostics.BacktrackingCount, ...
+                    'TerminationCandidate',diagnostics.TerminationCandidate, ...
+                    'Direction',directionSign);
             end
         end
     end
@@ -153,10 +244,22 @@ if denominator<=eps,distance=metric.norm(point-first);return,end
 fraction=max(0,min(1,metric.inner(point-first,segment)/denominator));projection=first+fraction*segment;distance=metric.norm(point-projection);
 end
 
-function saveCheckpoint(path,branch,options,step,reason)
+function value=correctorIterations(output)
+value=NaN;
+if isstruct(output)&&isfield(output,'iterations')&& ...
+        isnumeric(output.iterations)&&isscalar(output.iterations)
+    value=output.iterations;
+end
+end
+
+function saveCheckpoint(path,branch,options,step,reason,snapshots)
 artifact=branch.toArtifact();artifact.artifactType='checkpoint';
 artifact.checkpointState=struct('BranchId',branch.Id,'PointCount',branch.pointCount(), ...
     'StepSize',step,'SavedAt',datestr(now,30));artifact.algorithmOptions=options.toStruct();
 artifact.terminationReason=reason;artifact.diagnostics=struct('TerminationReason',reason, ...
-    'PointCount',branch.pointCount(),'StepSize',step);lmz.io.ArtifactStore.save(path,artifact);
+    'PointCount',branch.pointCount(),'StepSize',step);
+snapshotValues=cell(numel(snapshots),1);
+for index=1:numel(snapshots),snapshotValues{index}=snapshots(index).toStruct();end
+artifact.continuationSnapshots=snapshotValues;
+lmz.io.ArtifactStore.save(path,artifact);
 end

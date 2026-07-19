@@ -1,1 +1,11 @@
-{"schemaVersion":"1.0.0","id":"demo_stride","kind":"simulation","implementationId":"slip_quad_load.demo_stride.v1","implemented":true}
+{
+  "schemaVersion": "1.0.0",
+  "id": "demo_stride",
+  "kind": "simulation",
+  "implementationId": "slip_quad_load.demo_stride.v2",
+  "implemented": true,
+  "maturity": "tutorial",
+  "provenance": {"source": "Legged Model Zoo analytic tutorial", "generated": true},
+  "validationStatus": "tested",
+  "capabilities": {"simulate": true, "solve": false, "continue": false, "optimize": false, "visualize": true, "animate": true}
+}

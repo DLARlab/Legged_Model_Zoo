@@ -1,1 +1,21 @@
-{"schemaVersion":"1.0.0","id":"demo_stride","kind":"simulation","implementationId":"slip_biped.demo_stride.v1","implemented":true}
+{
+  "schemaVersion": "1.0.0",
+  "id": "demo_stride",
+  "kind": "simulation",
+  "implementationId": "slip_biped.demo_stride.v1",
+  "implemented": true,
+  "maturity": "tutorial",
+  "validationStatus": "tested",
+  "provenance": {
+    "source": "Legged Model Zoo analytic demonstration",
+    "generated": true
+  },
+  "capabilities": {
+    "simulate": true,
+    "solve": false,
+    "continue": false,
+    "optimize": false,
+    "visualize": true,
+    "animate": true
+  }
+}

@@ -1,95 +1,104 @@
 classdef Model < lmz.api.LeggedModel
-    %MODEL Standalone analytic SLIP biped demonstration model.
+    %MODEL Scientific SLIP biped migration plus introductory demo.
     methods
-        function value = getManifest(~)
-            value = struct('id', 'slip_biped', 'version', '1.0.0');
+        function value=getManifest(~)
+            value=struct('id','slip_biped','version','2.0.0');
         end
-
-        function value = getCapabilities(~)
-            value = struct('simulate', true, 'solve', true, ...
-                'continue', true, 'optimize', true, 'visualize', true, ...
-                'animate', true, 'parameterHomotopy', false, ...
-                'branchFamilyScan', false);
+        function value=getCapabilities(~)
+            value=struct('simulate',true,'solve',true,'continue',true, ...
+                'optimize',true,'visualize',true,'animate',true, ...
+                'parameterHomotopy',false,'branchFamilyScan',false, ...
+                'scientificGaitMap',true,'legacyResults14',true, ...
+                'sourceEquivalentTrajectoryFit',true);
         end
-
-        function schema = getPhysicalStateSchema(~)
-            names = {'x', 'y', 'body_pitch', 'foot_left_x', ...
-                'foot_left_y', 'foot_right_x', 'foot_right_y'};
-            units = {'m', 'm', 'rad', 'm', 'm', 'm', 'm'};
-            schema = lmzmodels.slip_biped.Model.makeSchema(names, units);
+        function schema=getPhysicalStateSchema(~)
+            schema=lmzmodels.slip_biped.PhysicalStateSchema.create();
         end
-
-        function schema = getParameterSchema(~)
-            schema = lmz.schema.VariableSchema([ ...
-                lmz.schema.VariableSpec('speed', 'Unit', 'm/s', ...
-                    'DefaultValue', 1, 'Scale', 1); ...
-                lmz.schema.VariableSpec('stride_period', 'Unit', 's', ...
-                    'DefaultValue', 0.8, 'LowerBound', 0, ...
-                    'Topology', 'positive', 'Scale', 1)]);
+        function schema=getParameterSchema(~)
+            schema=lmzmodels.slip_biped.OffsetParameterSchema.create();
         end
-
-        function value = listProblems(~)
-            value = {'demo_stride','periodic_apex','trajectory_fit'};
+        function value=listProblems(~)
+            value={'periodic_apex','trajectory_fit','demo_stride'};
         end
-
-        function problem = createProblem(obj, problemId, configuration)
+        function problem=createProblem(obj,problemId,configuration)
+            if nargin<3,configuration=struct();end
             switch problemId
-                case 'demo_stride', problem=lmz.api.SimulationProblem(obj,problemId,configuration);
-                case 'periodic_apex', problem=lmzmodels.slip_biped.PeriodicApexProblem(obj,configuration);
-                case 'trajectory_fit', problem=lmzmodels.slip_biped.TrajectoryFitProblem(obj,configuration);
-                otherwise, error('lmz:slip_biped:UnknownProblem','Unknown problem: %s',problemId);
+                case 'periodic_apex'
+                    problem=lmzmodels.slip_biped.PeriodicApexProblem(obj,configuration);
+                case 'trajectory_fit'
+                    problem=lmzmodels.slip_biped.TrajectoryFitProblem(obj,configuration);
+                case 'demo_stride'
+                    problem=lmz.api.SimulationProblem(obj,problemId,configuration);
+                otherwise
+                    error('lmz:slip_biped:UnknownProblem','Unknown problem: %s',problemId);
             end
         end
-
-        function result = simulate(obj, request, context)
-            context.check();
-            parameters = lmzmodels.slip_biped.Model.parameters(request, 1, 0.8);
-            time = linspace(0, parameters.stride_period, 241)';
-            phase = 2 * pi * time / parameters.stride_period;
-            x = parameters.speed * time;
-            y = 1 + 0.06 * cos(2 * phase);
-            pitch = 0.04 * sin(phase);
-            step = 0.35;
-            leftX = x - step * cos(phase);
-            rightX = x - step * cos(phase + pi);
-            leftY = max(0, 0.12 * sin(phase));
-            rightY = max(0, 0.12 * sin(phase + pi));
-            states = [x, y, pitch, leftX, leftY, rightX, rightY];
-            result = lmz.api.SimulationResult(time, obj.getPhysicalStateSchema(), ...
-                states, struct('contact_left', leftY == 0, ...
-                'contact_right', rightY == 0), struct(), parameters, ...
-                struct('source', 'standalone-analytic-demo'), ...
-                struct('modelId', 'slip_biped', 'problemId', request.ProblemId));
-            context.progress(1, 'SLIP biped demonstration simulated.');
+        function result=simulate(obj,request,context)
+            switch request.ProblemId
+                case 'periodic_apex'
+                    problem=obj.createProblem('periodic_apex',struct());
+                    [u,p]=lmzmodels.slip_biped.Model.requestValues(problem,request);
+                    result=problem.evaluate(u,p,context,true).Simulation;
+                    context.progress(1,'Scientific SLIP biped stride simulated.');
+                case 'trajectory_fit'
+                    problem=obj.createProblem('trajectory_fit',struct());
+                    if isa(request.Solution,'lmz.data.Solution')
+                        u=request.Solution.DecisionValues;
+                    elseif isfield(request.Options,'decision')
+                        u=problem.getDecisionSchema().pack(request.Options.decision);
+                    else
+                        u=problem.getDecisionSchema().defaults();
+                    end
+                    result=problem.simulateDecision(u,context);
+                    context.progress(1,'SLIP biped trajectory-fit candidate simulated.');
+                otherwise
+                    result=obj.simulateDemo(request,context);
+            end
         end
-
-        function frames = kinematics(~, frame)
-            frames = frame;
-        end
-
-        function value = getPlotDescriptors(~)
-            value = struct('id', 'trajectory', 'label', 'Body and feet');
+        function value=kinematics(~,frame),value=frame;end
+        function value=getPlotDescriptors(~)
+            value=struct('id',{'trajectory','states','ground_reaction_force','footfall'}, ...
+                'label',{'Body and legs','State trajectories','Ground reaction force', ...
+                'Footfall phases'});
         end
     end
-
     methods (Static, Access=private)
-        function schema = makeSchema(names, units)
-            specs = lmz.schema.VariableSpec.empty(0, 1);
-            for index = 1:numel(names)
-                specs(index, 1) = lmz.schema.VariableSpec(names{index}, ...
-                    'Unit', units{index}); %#ok<AGROW>
+        function [u,p]=requestValues(problem,request)
+            if isa(request.Solution,'lmz.data.Solution')
+                u=request.Solution.DecisionValues;p=request.Solution.ParameterValues;return
             end
-            schema = lmz.schema.VariableSchema(specs);
-        end
-
-        function value = parameters(request, speed, period)
-            value = struct('speed', speed, 'stride_period', period);
-            if isfield(request.Options, 'speed'), value.speed = request.Options.speed; end
-            if isfield(request.Options, 'stride_period'), value.stride_period = request.Options.stride_period; end
+            u=problem.getDecisionSchema().defaults();p=problem.getParameterSchema().defaults();
             if isfield(request.Options,'decision')
-                if isfield(request.Options.decision,'speed'),value.speed=request.Options.decision.speed;end
-                if isfield(request.Options.decision,'stride_period'),value.stride_period=request.Options.decision.stride_period;end
+                u=problem.getDecisionSchema().pack(request.Options.decision);
             end
+            if isfield(request.Options,'parameters')
+                p=problem.getParameterSchema().pack(request.Options.parameters);
+            end
+        end
+    end
+    methods (Access=private)
+        function result=simulateDemo(~,request,context)
+            context.check();speed=1;period=0.8;
+            if isfield(request.Options,'speed'),speed=request.Options.speed;end
+            if isfield(request.Options,'stride_period'),period=request.Options.stride_period;end
+            time=linspace(0,period,241)';phase=2*pi*time/period;
+            x=speed*time;dx=speed*ones(size(time));y=1+0.06*cos(2*phase);
+            dy=-0.12*(2*pi/period)*sin(2*phase);
+            alphaL=0.3*sin(phase);dalphaL=0.3*(2*pi/period)*cos(phase);
+            alphaR=0.3*sin(phase+pi);dalphaR=0.3*(2*pi/period)*cos(phase+pi);
+            states=[x,dx,y,dy,alphaL,dalphaL,alphaR,dalphaR];
+            modes=struct('left',sin(phase)<=0,'right',sin(phase+pi)<=0,'period',period);
+            result=lmz.api.SimulationResult(time, ...
+                lmzmodels.slip_biped.PhysicalStateSchema.create(),states,modes, ...
+                struct('forward_speed',speed,'stride_period',period), ...
+                struct('offset_left',0,'offset_right',0), ...
+                struct('source','standalone-analytic-demo'), ...
+                struct('modelId','slip_biped','problemId','demo_stride'));
+            kinematics=lmzmodels.slip_biped.KinematicsProvider.compute(result);
+            result=lmz.api.SimulationResult(result.Time,result.StateSchema,result.States, ...
+                result.Modes,result.Observables,result.Parameters,result.Diagnostics, ...
+                result.Provenance,'Kinematics',kinematics);
+            context.progress(1,'SLIP biped introductory demonstration simulated.');
         end
     end
 end

@@ -21,9 +21,12 @@ classdef BaseProblem < handle
         end
         function value = getDescriptor(obj)
             manifest=obj.Model.getManifest();
-            value=struct('id',obj.Id,'version',obj.Version,'kind',obj.Kind, ...
-                'modelId',manifest.id,'modelVersion',manifest.version, ...
-                'configuration',obj.Configuration);
+            registry=lmz.registry.ModelRegistry.discover();
+            value=registry.getProblemDescriptor(manifest.id,obj.Id);
+            value.version=obj.Version;
+            value.modelId=manifest.id;
+            value.modelVersion=manifest.version;
+            value.configuration=obj.Configuration;
         end
         function value=getDecisionSchema(obj), value=obj.DecisionSchema; end
         function value=getParameterSchema(obj), value=obj.ParameterSchema; end

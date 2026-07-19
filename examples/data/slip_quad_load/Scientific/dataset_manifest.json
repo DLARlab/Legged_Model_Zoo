@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1.0.0",
+  "datasetId": "slip_quad_load_scientific",
+  "modelId": "slip_quad_load",
+  "sourceRepository": "https://github.com/DLARlab/2025_Gait_Transitions_in_Load_Pulling_Quadrupeds_Insights.git",
+  "sourceCommit": "19f3133073c988cc0c3424a647b4adbb60a90b99",
+  "license": "Upstream README claims BSD-3-Clause, but the audited commit contains no LICENSE/COPYING/NOTICE file; redistribution review required.",
+  "defaultSingleStride": "individual_1_tr_single",
+  "defaultMultiStride": "individual_1_tr_to_rl",
+  "files": [
+    {
+      "id": "individual_1_tr_single",
+      "name": "P3_Individual_1_TR.mat",
+      "relativePath": "P3_Individual_1_TR.mat",
+      "sourcePath": "Section2_Single_Stride_Replication/P3_Individual_1_TR.mat",
+      "sha256": "56736cc33ab31a0ab40b3de6783b625a07ebd54f1ae6a561b47aea5e04cd6abe",
+      "strideCount": 1,
+      "xAccumLength": 44,
+      "variables": ["X_accum", "gait_data", "gait_type", "term_weights"],
+      "nativeArtifactPath": "native/P3_Individual_1_TR.lmz.mat"
+    },
+    {
+      "id": "individual_1_tr_to_rl",
+      "name": "P4_TR_RL_Individual_1.mat",
+      "relativePath": "P4_TR_RL_Individual_1.mat",
+      "sourcePath": "Section3_Gait_Transition_Replication/P4_TR_RL_Individual_1.mat",
+      "sha256": "d23bd725a353d7cf1b6339699ed813755867b5dd1a0da213193eb24cb3bdad4b",
+      "strideCount": 2,
+      "xAccumLength": 57,
+      "variables": ["R2", "SensitivityStudyData", "TransitionTemplate_Normalized", "X_accum", "term_weights"],
+      "nativeArtifactPath": "native/P4_TR_RL_Individual_1.lmz.mat"
+    }
+  ]
+}

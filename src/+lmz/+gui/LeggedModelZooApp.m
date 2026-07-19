@@ -7,6 +7,17 @@ classdef LeggedModelZooApp < handle
         ProblemDropDown
         ExampleDropDown
         SimulateButton
+        SendToSolveButton
+        SendToContinuationButton
+        SolveButton
+        ContinuationButton
+        HomotopyButton
+        FamilyScanButton
+        OptimizationButton
+        OptimizationCancelButton
+        SolveControls = {}
+        ContinuationControls = {}
+        OptimizationControls = {}
         CapabilityLabel
         StatusArea
 
@@ -69,6 +80,8 @@ classdef LeggedModelZooApp < handle
         ContinuationParameterDropDown
         ContinuationTargetsField
         OptimizationAxes
+        OptimizationSensitivityAxes
+        OptimizationR2Axes
     end
 
     methods
@@ -96,7 +109,7 @@ classdef LeggedModelZooApp < handle
 
     methods (Access=private)
         function buildFigure(obj)
-            obj.Figure=uifigure('Name','Legged Model Zoo — Quadruped RoadMap', ...
+            obj.Figure=uifigure('Name','Legged Model Zoo — Scientific Workbench', ...
                 'Position',[40 40 1460 900]);
             obj.Figure.CloseRequestFcn=@(~,~)obj.closeRequested();
             obj.Figure.WindowButtonMotionFcn=@(~,~)obj.branchHovered();
@@ -125,7 +138,7 @@ classdef LeggedModelZooApp < handle
         end
 
         function buildSimulationTab(obj,tabs)
-            tab=uitab(tabs,'Title','Physical Simulation');
+            tab=lmz.gui.tabs.SimulationTab.create(tabs);
             grid=uigridlayout(tab,[3 2]);grid.RowHeight={'1x','1x',82};grid.ColumnWidth={'1.12x','1x'};
             obj.Axes=uiaxes(grid);place(obj.Axes,[1 2],1);title(obj.Axes,'Select and simulate a RoadMap point');
 
@@ -164,7 +177,7 @@ classdef LeggedModelZooApp < handle
         end
 
         function buildBranchTab(obj,tabs)
-            tab=uitab(tabs,'Title','RoadMap Branches');
+            tab=lmz.gui.tabs.RoadMapBranchTab.create(tabs);
             grid=uigridlayout(tab,[3 2]);grid.RowHeight={84,'1x',116};grid.ColumnWidth={'1x',315};
             buttons=uigridlayout(grid,[2 9]);place(buttons,1,[1 2]);buttons.ColumnWidth={165,95,85,92,105,90,105,105,'1x'};
             obj.RoadMapBranchDropDown=uidropdown(buttons);place(obj.RoadMapBranchDropDown,1,1);
@@ -211,7 +224,7 @@ classdef LeggedModelZooApp < handle
         end
 
         function buildSolutionTab(obj,tabs)
-            tab=uitab(tabs,'Title','Solution Inspector');root=uigridlayout(tab,[2 1]);root.RowHeight={'1x',80};groups=uitabgroup(root);
+            tab=lmz.gui.tabs.SolutionTab.create(tabs);root=uigridlayout(tab,[2 1]);root.RowHeight={'1x',80};groups=uitabgroup(root);
             [obj.SolutionTable,~]=obj.makeTableTab(groups,'Initial State',true);
             [obj.EventTable,~]=obj.makeTableTab(groups,'Event Timing',true);
             [obj.ParameterTable,~]=obj.makeTableTab(groups,'Parameters',true);
@@ -227,97 +240,180 @@ classdef LeggedModelZooApp < handle
             uibutton(controls,'Text','Simulate candidate','ButtonPushedFcn',@(~,~)obj.simulateSelected());
             uibutton(controls,'Text','Save solution…','ButtonPushedFcn',@(~,~)obj.saveWorkingSolution());
             uibutton(controls,'Text','Add candidate dataset','ButtonPushedFcn',@(~,~)obj.addWorkingDataset());
-            uibutton(controls,'Text','Send to Solve','ButtonPushedFcn',@(~,~)obj.solve());
-            uibutton(controls,'Text','Send to Continuation','ButtonPushedFcn',@(~,~)obj.sendWorkingToContinuation());
+            obj.SendToSolveButton=uibutton(controls,'Text','Send to Solve', ...
+                'ButtonPushedFcn',@(~,~)obj.solve());
+            obj.SendToContinuationButton=uibutton(controls, ...
+                'Text','Send to Continuation', ...
+                'ButtonPushedFcn',@(~,~)obj.sendWorkingToContinuation());
+            obj.SolveControls{end+1}=obj.SendToSolveButton;
+            obj.ContinuationControls{end+1}=obj.SendToContinuationButton;
         end
 
         function [tableHandle,tab]=makeTableTab(obj,group,titleText,editable)
-            tab=uitab(group,'Title',titleText);tableHandle=uitable(tab,'Units','normalized','Position',[0 0 1 1]);
+            tab=uitab(group,'Title',titleText);
+            tableHandle=lmz.gui.components.InspectorTable.create( ...
+                tab,editable,[]);
             if editable
-                tableHandle.ColumnName={'Name','Label','Value','Unit','Bounds','Scale','Edited'};
-                tableHandle.ColumnEditable=[false false true false false false false];
-                tableHandle.CellEditCallback=@(~,event)obj.solutionValueEdited(tableHandle,event);
+                tableHandle.CellEditCallback= ...
+                    @(~,event)obj.solutionValueEdited(tableHandle,event);
             end
         end
 
         function buildSolveTab(obj,tabs)
-            tab=uitab(tabs,'Title','Solve / Seeds');grid=uigridlayout(tab,[3 1]);grid.RowHeight={80,42,'1x'};
+            tab=lmz.gui.tabs.SolveTab.create(tabs);grid=uigridlayout(tab,[3 1]);grid.RowHeight={80,42,'1x'};
             controls=uigridlayout(grid,[2 10]);controls.ColumnWidth={72,88,105,54,70,54,70,90,72,'1x'};
             label=uilabel(controls,'Text','Direction');place(label,1,1);obj.SeedDirectionDropDown=uidropdown(controls,'Items',{'next','previous'},'Value','next');place(obj.SeedDirectionDropDown,1,2);
-            button=uibutton(controls,'Text','Adjacent pair','ButtonPushedFcn',@(~,~)obj.makeAdjacentSeed());place(button,1,3);
+            button=uibutton(controls,'Text','Adjacent pair','ButtonPushedFcn',@(~,~)obj.makeAdjacentSeed());place(button,1,3);obj.ContinuationControls{end+1}=button;
             label=uilabel(controls,'Text','First');place(label,1,4);obj.SeedFirstIndexSpinner=uispinner(controls,'Limits',[1 Inf],'Value',1,'Step',1,'RoundFractionalValues','on');place(obj.SeedFirstIndexSpinner,1,5);
             label=uilabel(controls,'Text','Second');place(label,1,6);obj.SeedSecondIndexSpinner=uispinner(controls,'Limits',[1 Inf],'Value',2,'Step',1,'RoundFractionalValues','on');place(obj.SeedSecondIndexSpinner,1,7);
-            button=uibutton(controls,'Text','Manual pair','ButtonPushedFcn',@(~,~)obj.makeManualSeed());place(button,1,8);
+            button=uibutton(controls,'Text','Manual pair','ButtonPushedFcn',@(~,~)obj.makeManualSeed());place(button,1,8);obj.ContinuationControls{end+1}=button;
             label=uilabel(controls,'Text','Radius');place(label,1,9);obj.SecondSeedRadiusField=uieditfield(controls,'numeric','Limits',[1e-6 Inf],'Value',0.01);place(obj.SecondSeedRadiusField,1,10);
             button=uibutton(controls,'Text','Evaluate','ButtonPushedFcn',@(~,~)obj.evaluateSelected());place(button,2,1);
-            button=uibutton(controls,'Text','Solve/refine','ButtonPushedFcn',@(~,~)obj.solve());place(button,2,2);
-            button=uibutton(controls,'Text','Generated second seed','ButtonPushedFcn',@(~,~)obj.makeSecondSeed());place(button,2,3);
+            obj.SolveButton=uibutton(controls,'Text','Solve/refine','ButtonPushedFcn',@(~,~)obj.solve());place(obj.SolveButton,2,2);obj.SolveControls{end+1}=obj.SolveButton;
+            button=uibutton(controls,'Text','Generated second seed','ButtonPushedFcn',@(~,~)obj.makeSecondSeed());place(button,2,3);obj.ContinuationControls{end+1}=button;
             label=uilabel(controls,'Text','Noise');place(label,2,4);obj.NoiseMagnitudeField=uieditfield(controls,'numeric','Limits',[0 Inf],'Value',0.001);place(obj.NoiseMagnitudeField,2,5);
             label=uilabel(controls,'Text','Seed');place(label,2,6);obj.NoiseSeedSpinner=uispinner(controls,'Limits',[0 Inf],'Value',123,'Step',1,'RoundFractionalValues','on');place(obj.NoiseSeedSpinner,2,7);
-            button=uibutton(controls,'Text','Apply noise','ButtonPushedFcn',@(~,~)obj.applyNoise());place(button,2,8);
+            button=uibutton(controls,'Text','Apply noise','ButtonPushedFcn',@(~,~)obj.applyNoise());place(button,2,8);obj.SolveControls{end+1}=button;
             button=uibutton(controls,'Text','Simulate solved','ButtonPushedFcn',@(~,~)obj.simulateSelected());place(button,2,9);
+            obj.SolveControls=[obj.SolveControls {obj.NoiseMagnitudeField obj.NoiseSeedSpinner}];
+            obj.ContinuationControls=[obj.ContinuationControls {obj.SeedDirectionDropDown ...
+                obj.SeedFirstIndexSpinner obj.SeedSecondIndexSpinner ...
+                obj.SecondSeedRadiusField}];
             obj.SolveStatus=uilabel(grid,'Text','Ready','WordWrap','on');place(obj.SolveStatus,2,1);
             obj.SeedAxes=uiaxes(grid);place(obj.SeedAxes,3,1);title(obj.SeedAxes,'RoadMap seed-pair overlay');obj.SeedAxes.XGrid='on';obj.SeedAxes.YGrid='on';
         end
 
         function buildContinuationTab(obj,tabs)
-            tab=uitab(tabs,'Title','Continuation');grid=uigridlayout(tab,[3 1]);grid.RowHeight={'1x',84,38};
+            tab=lmz.gui.tabs.ContinuationTab.create(tabs);grid=uigridlayout(tab,[3 1]);grid.RowHeight={'1x',84,38};
             obj.ContinuationAxes=uiaxes(grid);obj.ContinuationAxes.XGrid='on';obj.ContinuationAxes.YGrid='on';title(obj.ContinuationAxes,'Live RoadMap continuation overlay');
             controls=uigridlayout(grid,[2 9]);controls.ColumnWidth={62,64,105,65,65,65,115,'1x',105};
             label=uilabel(controls,'Text','Points');place(label,1,1);obj.ContinuationPointsSpinner=uispinner(controls,'Limits',[3 1000],'Value',20,'Step',1,'RoundFractionalValues','on');place(obj.ContinuationPointsSpinner,1,2);
-            button=uibutton(controls,'Text','Run continuation','ButtonPushedFcn',@(~,~)obj.continueBranch());place(button,1,3);
+            obj.ContinuationButton=uibutton(controls,'Text','Run continuation','ButtonPushedFcn',@(~,~)obj.continueBranch());place(obj.ContinuationButton,1,3);obj.ContinuationControls{end+1}=obj.ContinuationButton;
             button=uibutton(controls,'Text','Pause','ButtonPushedFcn',@(~,~)obj.pauseContinuation());place(button,1,4);
             button=uibutton(controls,'Text','Resume','ButtonPushedFcn',@(~,~)obj.resumeContinuation());place(button,1,5);
             button=uibutton(controls,'Text','Stop','ButtonPushedFcn',@(~,~)obj.stopContinuation());place(button,1,6);
             button=uibutton(controls,'Text','Add result dataset','ButtonPushedFcn',@(~,~)obj.addContinuationDataset());place(button,1,7);
             button=uibutton(controls,'Text','Save result…','ButtonPushedFcn',@(~,~)obj.saveContinuationResult());place(button,1,9);
+            obj.ContinuationControls=[obj.ContinuationControls {button}];
             label=uilabel(controls,'Text','Checkpoint');place(label,2,1);
             obj.ContinuationCheckpointField=uieditfield(controls,'text','Value','');place(obj.ContinuationCheckpointField,2,[2 4]);
             button=uibutton(controls,'Text','Choose…','ButtonPushedFcn',@(~,~)obj.chooseCheckpoint());place(button,2,5);
             button=uibutton(controls,'Text','Resume file','ButtonPushedFcn',@(~,~)obj.resumeCheckpoint());place(button,2,6);
-            obj.ContinuationParameterDropDown=uidropdown(controls);place(obj.ContinuationParameterDropDown,2,7);
+            obj.ContinuationParameterDropDown=uidropdown(controls, ...
+                'Tooltip','Only active parameters are shown; inactive and derived parameters cannot be transported.');place(obj.ContinuationParameterDropDown,2,7);
             obj.ContinuationTargetsField=uieditfield(controls,'text','Value','0 0.05');place(obj.ContinuationTargetsField,2,8);
             familyGrid=uigridlayout(controls,[1 2]);place(familyGrid,2,9);
-            uibutton(familyGrid,'Text','Homotopy','ButtonPushedFcn',@(~,~)obj.runHomotopy());
-            uibutton(familyGrid,'Text','Family','ButtonPushedFcn',@(~,~)obj.runFamilyScan());
+            obj.HomotopyButton=uibutton(familyGrid,'Text','Homotopy','ButtonPushedFcn',@(~,~)obj.runHomotopy());
+            obj.FamilyScanButton=uibutton(familyGrid,'Text','Family','ButtonPushedFcn',@(~,~)obj.runFamilyScan());
+            obj.ContinuationControls=[obj.ContinuationControls {obj.ContinuationPointsSpinner ...
+                obj.ContinuationCheckpointField obj.ContinuationParameterDropDown ...
+                obj.ContinuationTargetsField obj.HomotopyButton obj.FamilyScanButton}];
+            buttons=findall(controls,'Type','uibutton');
+            for index=1:numel(buttons)
+                if ~any(cellfun(@(item)isequal(item,buttons(index)), ...
+                        obj.ContinuationControls))
+                    obj.ContinuationControls{end+1}=buttons(index);
+                end
+            end
             obj.ContinuationStatus=uilabel(grid,'Text','Ready','WordWrap','on');
         end
 
         function buildOptimizationTab(obj,tabs)
-            tab=uitab(tabs,'Title','Optimization');grid=uigridlayout(tab,[2 1]);
-            obj.OptimizationAxes=uiaxes(grid);
-            uibutton(grid,'Text','Run fit (supported models)','ButtonPushedFcn',@(~,~)obj.optimize());
+            tab=lmz.gui.tabs.OptimizationTab.create(tabs);grid=uigridlayout(tab,[2 3]);
+            grid.RowHeight={'1x',40};
+            obj.OptimizationAxes=uiaxes(grid);title(obj.OptimizationAxes,'Objective history');
+            obj.OptimizationSensitivityAxes=uiaxes(grid);title(obj.OptimizationSensitivityAxes,'Sensitivity / terms');
+            obj.OptimizationR2Axes=uiaxes(grid);title(obj.OptimizationR2Axes,'Fit quality');
+            controls=uigridlayout(grid,[1 2]);place(controls,2,[1 3]);
+            obj.OptimizationButton=uibutton(controls, ...
+                'Text','Run fit (supported models)','ButtonPushedFcn',@(~,~)obj.optimize());
+            obj.OptimizationCancelButton=uibutton(controls,'Text','Cancel fit', ...
+                'ButtonPushedFcn',@(~,~)obj.Controller.stopCurrentRun());
+            obj.OptimizationControls={obj.OptimizationButton obj.OptimizationCancelButton};
         end
 
         function modelChanged(obj)
             obj.stopAnimation();obj.Controller.selectModel(obj.ModelDropDown.Value);obj.refreshModel();
         end
-        function problemChanged(obj),obj.Controller.State.ProblemId=obj.ProblemDropDown.Value;end
+        function problemChanged(obj)
+            obj.stopAnimation();
+            obj.Controller.selectProblem(obj.ProblemDropDown.Value);
+            obj.ProblemDropDown.Value=obj.Controller.State.ProblemId;
+            obj.refreshProblemBadge();
+            obj.selectionChanged();
+        end
         function exampleChanged(obj),obj.Controller.State.ExampleId=obj.ExampleDropDown.Value;end
 
         function refreshModel(obj)
             obj.ModelDropDown.Value=obj.Controller.State.ModelId;
-            problems=obj.Controller.problemIds();obj.ProblemDropDown.Items=problems;
+            problems=obj.Controller.problemIds();
+            manifest=obj.Controller.Registry.getManifest(obj.Controller.State.ModelId);
+            labels=cell(size(problems));
+            for index=1:numel(problems)
+                descriptor=problemDescriptor(manifest,problems{index});
+                labels{index}=lmz.gui.components.ProblemBadge.selectorLabel(descriptor);
+            end
+            obj.ProblemDropDown.Items=labels;obj.ProblemDropDown.ItemsData=problems;
             if any(strcmp(obj.Controller.State.ProblemId,problems)),obj.ProblemDropDown.Value=obj.Controller.State.ProblemId;else,obj.ProblemDropDown.Value=problems{1};end
             examples=obj.Controller.builtInExamples();obj.ExampleDropDown.Items=examples;obj.ExampleDropDown.Value=examples{1};obj.Controller.State.ExampleId=examples{1};
-            capabilities=obj.Controller.capabilities();obj.SimulateButton.Enable=onOff(capabilities.simulate);
-            obj.CapabilityLabel.Text=capabilityText(capabilities,obj.Controller.State.ModelId);
+            obj.refreshProblemBadge();
             obj.refreshRoadMapSelector();obj.refreshParameterSelector();obj.refreshDatasetControls();obj.renderBranch();obj.renderSolution();obj.StatusArea.Value={obj.Controller.State.Status};
         end
 
-        function refreshRoadMapSelector(obj)
-            if ~strcmp(obj.Controller.State.ModelId,'slip_quadruped')
-                obj.RoadMapBranchDropDown.Items={'RoadMap unavailable'};obj.RoadMapBranchDropDown.ItemsData={''};return
+        function refreshProblemBadge(obj)
+            manifest=obj.Controller.Registry.getManifest(obj.Controller.State.ModelId);
+            descriptor=problemDescriptor(manifest,obj.Controller.State.ProblemId);
+            capabilities=obj.Controller.capabilities();
+            if isfield(descriptor,'capabilities'),capabilities=descriptor.capabilities;end
+            if ~isempty(obj.SimulateButton)&&isfield(capabilities,'simulate')
+                obj.SimulateButton.Enable=onOff(capabilities.simulate);
             end
-            catalog=lmzmodels.slip_quadruped.RoadMapCatalog.default();files=catalog.listBranches();labels=cell(size(files));
+            setControlsEnabled(obj.SolveControls,capabilities.solve);
+            setControlsEnabled(obj.ContinuationControls,capabilities.('continue'));
+            setControlsEnabled(obj.OptimizationControls,capabilities.optimize);
+            obj.HomotopyButton.Enable=onOff(capabilities.parameterHomotopy);
+            obj.FamilyScanButton.Enable=onOff(capabilities.branchFamilyScan);
+            optionalContinuation=capabilities.parameterHomotopy|| ...
+                capabilities.branchFamilyScan;
+            obj.ContinuationParameterDropDown.Enable=onOff(optionalContinuation);
+            obj.ContinuationTargetsField.Enable=onOff(optionalContinuation);
+            obj.CapabilityLabel.Text=sprintf('%s  |  %s', ...
+                lmz.gui.components.ProblemBadge.label(descriptor), ...
+                capabilityText(capabilities,obj.Controller.State.ModelId));
+        end
+
+        function refreshRoadMapSelector(obj)
+            switch obj.Controller.State.ModelId
+                case 'slip_quadruped'
+                    catalog=lmzmodels.slip_quadruped.RoadMapCatalog.default();
+                    files=catalog.listBranches();defaultPath=catalog.defaultBranchPath();
+                    title(obj.BranchAxes,'SLIP quadruped RoadMap');
+                case 'slip_biped'
+                    catalog=lmzmodels.slip_biped.GaitMapCatalog.default();
+                    files=catalog.listBranches();defaultPath=catalog.defaultBranchPath();
+                    title(obj.BranchAxes,'SLIP biped GaitMap');
+                case 'slip_quad_load'
+                    catalog=lmzmodels.slip_quad_load.ScientificDatasetCatalog.default();
+                    records=catalog.records();files=cell(1,numel(records));
+                    for recordIndex=1:numel(records),files{recordIndex}=catalog.pathFor(records(recordIndex).id);end
+                    defaultPath=catalog.defaultMultiPath();
+                    title(obj.BranchAxes,'SLIP quadruped-with-load datasets');
+                otherwise
+                    obj.RoadMapBranchDropDown.Items={'Scientific data unavailable'};
+                    obj.RoadMapBranchDropDown.ItemsData={''};return
+            end
+            labels=cell(size(files));
             for index=1:numel(files),[~,name,extension]=fileparts(files{index});labels{index}=[name extension];end
-            obj.RoadMapBranchDropDown.Items=labels;obj.RoadMapBranchDropDown.ItemsData=files;obj.RoadMapBranchDropDown.Value=catalog.defaultBranchPath();
+            obj.RoadMapBranchDropDown.Items=labels;obj.RoadMapBranchDropDown.ItemsData=files;obj.RoadMapBranchDropDown.Value=defaultPath;
         end
 
         function refreshParameterSelector(obj)
             if isempty(obj.Controller.State.WorkingSolution),obj.ContinuationParameterDropDown.Items={'parameter'};return,end
-            names=obj.Controller.State.WorkingSolution.ParameterSchema.names();obj.ContinuationParameterDropDown.Items=names;
-            if any(strcmp('phi_neutral',names)),obj.ContinuationParameterDropDown.Value='phi_neutral';else,obj.ContinuationParameterDropDown.Value=names{1};end
+            names=obj.Controller.homotopyParameterNames();
+            if isempty(names),names={'No active transport parameter'};end
+            obj.ContinuationParameterDropDown.Items=names;
+            if any(strcmp('k_leg',names)),obj.ContinuationParameterDropDown.Value='k_leg'; ...
+            else,obj.ContinuationParameterDropDown.Value=names{1};end
         end
 
         function refreshDatasetControls(obj)
@@ -354,15 +450,34 @@ classdef LeggedModelZooApp < handle
 
         function simulateSelected(obj)
             try
-                if ~strcmp(obj.Controller.State.ModelId,'slip_quadruped'),error('lmz:GUI:QuadrupedView','Physical quadruped view requires slip_quadruped.');end
                 obj.stopAnimation();simulation=obj.Controller.simulateWorkingSolution();
-                obj.AnimationRenderer=lmzmodels.slip_quadruped.QuadrupedRenderer(obj.Axes,simulation);obj.AnimationRenderer.ShowForces=obj.AnimationForceCheckBox.Value;
+                switch obj.Controller.State.ModelId
+                    case 'slip_quadruped'
+                        obj.AnimationRenderer=lmzmodels.slip_quadruped.QuadrupedRenderer(obj.Axes,simulation);
+                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotTorso(obj.TorsoAxes,simulation);
+                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotBackLegs(obj.BackLegAxes,simulation);
+                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotFrontLegs(obj.FrontLegAxes,simulation);
+                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotGRF(obj.GRFAxes,simulation);
+                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotOscillator(obj.OscillatorAxes,simulation);
+                    case 'slip_biped'
+                        obj.AnimationRenderer=lmzmodels.slip_biped.BipedRenderer(obj.Axes,simulation);
+                        lmzmodels.slip_biped.BipedPlotProvider.plotBody(obj.TorsoAxes,simulation);
+                        lmzmodels.slip_biped.BipedPlotProvider.plotLegs(obj.BackLegAxes,simulation);
+                        lmzmodels.slip_biped.BipedPlotProvider.plotFootfall(obj.FrontLegAxes,simulation);
+                        lmzmodels.slip_biped.BipedPlotProvider.plotGRF(obj.GRFAxes,simulation);
+                        lmzmodels.slip_biped.BipedPlotProvider.plotFootfall(obj.OscillatorAxes,simulation);
+                    case 'slip_quad_load'
+                        obj.AnimationRenderer=lmzmodels.slip_quad_load.QuadLoadRenderer(obj.Axes,simulation);
+                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotBodyAndLegs(obj.TorsoAxes,simulation);
+                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotLoad(obj.BackLegAxes,simulation);
+                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotFootfall(obj.FrontLegAxes,simulation);
+                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotGRF(obj.GRFAxes,simulation);
+                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotTugline(obj.OscillatorAxes,simulation);
+                end
+                if isprop(obj.AnimationRenderer,'ShowForces')
+                    obj.AnimationRenderer.ShowForces=obj.AnimationForceCheckBox.Value;
+                end
                 obj.AnimationPlayer=lmz.gui.AnimationController(simulation,obj.AnimationRenderer);obj.AnimationPlayer.FrameChangedFcn=@(value,index)obj.animationFrameChanged(value,index);
-                lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotTorso(obj.TorsoAxes,simulation);
-                lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotBackLegs(obj.BackLegAxes,simulation);
-                lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotFrontLegs(obj.FrontLegAxes,simulation);
-                lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotGRF(obj.GRFAxes,simulation);
-                lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotOscillator(obj.OscillatorAxes,simulation);
                 obj.animationFrameChanged(0,1);obj.StatusArea.Value={obj.Controller.State.Status};
             catch exception,obj.showError(exception);end
         end
@@ -391,10 +506,10 @@ classdef LeggedModelZooApp < handle
         function pauseAnimation(obj),if ~isempty(obj.AnimationPlayer),obj.AnimationPlayer.pause();end,end
         function stopAnimation(obj),if ~isempty(obj.AnimationPlayer),obj.AnimationPlayer.stop();end,end
         function resetAnimation(obj),if ~isempty(obj.AnimationPlayer),obj.AnimationPlayer.reset();end,end
-        function forceDisplayChanged(obj),if ~isempty(obj.AnimationRenderer),obj.AnimationRenderer.ShowForces=obj.AnimationForceCheckBox.Value;obj.AnimationRenderer.updateFrame(obj.AnimationRenderer.CurrentIndex);end,end
+        function forceDisplayChanged(obj),if ~isempty(obj.AnimationRenderer)&&isprop(obj.AnimationRenderer,'ShowForces'),obj.AnimationRenderer.ShowForces=obj.AnimationForceCheckBox.Value;obj.AnimationRenderer.updateFrame(obj.AnimationRenderer.CurrentIndex);end,end
 
-        function recordGif(obj),obj.recordAnimationWithDialog('gif','*.gif','Save quadruped animation',struct('FrameCount',40));end
-        function recordMP4(obj),obj.recordAnimationWithDialog('mp4','*.mp4','Save quadruped video',struct('FrameCount',60,'FPS',obj.AnimationFPSSpinner.Value));end
+        function recordGif(obj),obj.recordAnimationWithDialog('gif','*.gif','Save scientific animation',struct('FrameCount',40));end
+        function recordMP4(obj),obj.recordAnimationWithDialog('mp4','*.mp4','Save scientific video',struct('FrameCount',60,'FPS',obj.AnimationFPSSpinner.Value));end
         function recordKeyframes(obj),obj.recordAnimationWithDialog('keyframes',{'*.png';'*.pdf'},'Export animation keyframes',struct('NormalizedTimes',[0 .25 .5 .75 1]));end
         function recordAnimationWithDialog(obj,format,filter,titleText,options)
             if isempty(obj.AnimationRenderer),obj.simulateSelected();end;if isempty(obj.AnimationRenderer),return,end
@@ -420,10 +535,24 @@ classdef LeggedModelZooApp < handle
         end
 
         function loadSelectedRoadMap(obj)
-            try,obj.Controller.loadRoadMap(obj.RoadMapBranchDropDown.Value);obj.selectionChanged();catch exception,obj.showError(exception);end
+            try
+                switch obj.Controller.State.ModelId
+                    case 'slip_quadruped',obj.Controller.loadRoadMap(obj.RoadMapBranchDropDown.Value);
+                    case 'slip_biped',obj.Controller.loadGaitMap(obj.RoadMapBranchDropDown.Value);
+                    case 'slip_quad_load',obj.Controller.loadScientificLoadDataset(obj.RoadMapBranchDropDown.Value);
+                end
+                obj.selectionChanged();
+            catch exception,obj.showError(exception);end
         end
         function loadAllBranches(obj)
-            try,obj.Controller.loadAllRoadMapBranches();obj.selectionChanged();catch exception,obj.showError(exception);end
+            try
+                switch obj.Controller.State.ModelId
+                    case 'slip_quadruped',obj.Controller.loadAllRoadMapBranches();
+                    case 'slip_biped',obj.Controller.loadAllGaitMapBranches();
+                    case 'slip_quad_load',obj.Controller.loadAllScientificLoadDatasets();
+                end
+                obj.selectionChanged();
+            catch exception,obj.showError(exception);end
         end
         function openBranchFolder(obj)
             folder=uigetdir(pwd,'Open folder containing MAT/artifact branches');if isequal(folder,0),return,end
@@ -451,8 +580,16 @@ classdef LeggedModelZooApp < handle
             try,obj.Controller.setAxisVariables(obj.BranchXDropDown.Value,obj.BranchYDropDown.Value,obj.BranchZDropDown.Value);obj.renderBranch();catch exception,obj.showError(exception);end
         end
         function roadMapPreset(obj)
-            obj.BranchXDropDown.Value='dx';obj.BranchYDropDown.Value='dphi';obj.BranchZDropDown.Value='y';obj.BranchDimensionDropDown.Value='2-D';obj.BranchAzimuthSpinner.Value=0;obj.BranchElevationSpinner.Value=90;
-            obj.BranchXLimitsField.Value='[0 10]';obj.BranchYLimitsField.Value='[-0.05 0.15]';obj.BranchZLimitsField.Value='[0.6 1.2]';obj.axesChanged();obj.applyAxisLimits();
+            switch obj.Controller.State.ModelId
+                case 'slip_quadruped'
+                    names={'dx','dphi','y'};limits={'[0 10]','[-0.05 0.15]','[0.6 1.2]'};
+                case 'slip_biped'
+                    names={'dx','alphaL','y'};limits={'auto','auto','auto'};
+                otherwise
+                    names={'quad_dx','tAPEX','tugline_stiffness'};limits={'auto','auto','auto'};
+            end
+            obj.BranchXDropDown.Value=names{1};obj.BranchYDropDown.Value=names{2};obj.BranchZDropDown.Value=names{3};obj.BranchDimensionDropDown.Value='2-D';obj.BranchAzimuthSpinner.Value=0;obj.BranchElevationSpinner.Value=90;
+            obj.BranchXLimitsField.Value=limits{1};obj.BranchYLimitsField.Value=limits{2};obj.BranchZLimitsField.Value=limits{3};obj.axesChanged();obj.applyAxisLimits();
         end
         function viewChanged(obj)
             if strcmp(obj.BranchDimensionDropDown.Value,'3-D'),view(obj.BranchAxes,obj.BranchAzimuthSpinner.Value,obj.BranchElevationSpinner.Value);else,view(obj.BranchAxes,2);end
@@ -526,6 +663,11 @@ classdef LeggedModelZooApp < handle
 
         function selectionChanged(obj)
             obj.stopAnimation();obj.AnimationRenderer=[];obj.AnimationPlayer=[];
+            if ~isempty(obj.ProblemDropDown)&& ...
+                    ~strcmp(obj.ProblemDropDown.Value,obj.Controller.State.ProblemId)
+                obj.ProblemDropDown.Value=obj.Controller.State.ProblemId;
+                obj.refreshProblemBadge();
+            end
             axesList=[obj.Axes obj.TorsoAxes obj.BackLegAxes obj.FrontLegAxes obj.GRFAxes obj.OscillatorAxes obj.SeedAxes obj.ContinuationAxes];
             for index=1:numel(axesList),if isgraphics(axesList(index)),cla(axesList(index));end,end
             obj.refreshDatasetControls();obj.renderBranch();obj.renderSolution();obj.StatusArea.Value={obj.Controller.State.Status};
@@ -547,11 +689,20 @@ classdef LeggedModelZooApp < handle
         end
 
         function rows=schemaRows(~,schema,values,group,locked)
-            selected=arrayfun(@(spec)strcmp(spec.Group,group),schema.Specs);specs=schema.Specs(selected);indices=find(selected);rows=cell(numel(specs),7);
-            lockedValues=[];if ~isempty(locked),if strcmp(group,'parameter'),lockedValues=locked.ParameterValues;else,lockedValues=locked.DecisionValues;end,end
+            selected=arrayfun(@(spec)strcmp(spec.Group,group),schema.Specs);
+            if ~any(selected)
+                groups=arrayfun(@(spec)spec.Group,schema.Specs,'UniformOutput',false);
+                switch group
+                    case 'initial_state',selected=~contains(groups,'event');
+                    case 'event_timing',selected=contains(groups,'event');
+                    case 'parameter',selected=true(size(groups));
+                end
+            end
+            specs=schema.Specs(selected);indices=find(selected);rows=cell(numel(specs),7);
+            lockedValues=[];if ~isempty(locked),if isequal(schema.names(),locked.ParameterSchema.names()),lockedValues=locked.ParameterValues;else,lockedValues=locked.DecisionValues;end,end
             for index=1:numel(specs)
                 spec=specs(index);edited=false;if ~isempty(lockedValues),edited=abs(values(indices(index))-lockedValues(indices(index)))>1e-12*max(1,abs(lockedValues(indices(index))));end
-                rows(index,:)={spec.Name,spec.Label,values(indices(index)),spec.Unit,sprintf('[%g, %g]',spec.LowerBound,spec.UpperBound),spec.Scale,edited};
+                rows(index,:)={spec.Name,spec.Label,values(indices(index)),spec.Unit,sprintf('[%g, %g] • %s',spec.LowerBound,spec.UpperBound,spec.Activity),spec.Scale,edited};
             end
         end
 
@@ -564,7 +715,18 @@ classdef LeggedModelZooApp < handle
         end
 
         function evaluateSelected(obj)
-            try,evaluation=obj.Controller.evaluateWorkingSolution(true);obj.SolveStatus.Text=sprintf('Residual %.6g • gait %s',evaluation.ScaledResidualNorm,evaluation.Diagnostics.GaitAbbreviation);obj.StatusArea.Value={obj.SolveStatus.Text};obj.renderSolution();catch exception,obj.showError(exception);end
+            try
+                evaluation=obj.Controller.evaluateWorkingSolution(true);
+                if isfield(evaluation.Diagnostics,'GaitAbbreviation')
+                    obj.SolveStatus.Text=sprintf('Residual %.6g • gait %s', ...
+                        evaluation.ScaledResidualNorm,evaluation.Diagnostics.GaitAbbreviation);
+                elseif isfield(evaluation.Diagnostics,'Objective')
+                    obj.SolveStatus.Text=sprintf('Objective %.6g',evaluation.Diagnostics.Objective);
+                else
+                    obj.SolveStatus.Text=sprintf('Residual %.6g',evaluation.ScaledResidualNorm);
+                end
+                obj.StatusArea.Value={obj.SolveStatus.Text};obj.renderSolution();
+            catch exception,obj.showError(exception);end
         end
         function restoreSolution(obj),obj.Controller.restoreWorkingSolution();obj.selectionChanged();obj.StatusArea.Value={'Restored the locked source point.'};end
         function projectSolution(obj)
@@ -656,7 +818,26 @@ classdef LeggedModelZooApp < handle
 
         function optimize(obj)
             if ~obj.Controller.capabilities().optimize,obj.StatusArea.Value={'Selected model does not support optimization.'};return,end
-            try,result=obj.Controller.runOptimization(struct());semilogy(obj.OptimizationAxes,max(result.History,eps),'o-');grid(obj.OptimizationAxes,'on');obj.StatusArea.Value={sprintf('Objective %.6g',result.Objective)};obj.renderSolution();catch exception,obj.showError(exception);end
+            try
+                result=obj.Controller.runOptimization(struct());
+                history=result.History;if isempty(history),history=result.Objective;end
+                semilogy(obj.OptimizationAxes,max(history,eps),'o-');grid(obj.OptimizationAxes,'on');
+                xlabel(obj.OptimizationAxes,'Iteration');ylabel(obj.OptimizationAxes,'Objective');
+                if strcmp(obj.Controller.State.ModelId,'slip_quad_load')
+                    problem=obj.Controller.Registry.createModel('slip_quad_load').createProblem('multi_stride_fit',struct());
+                    lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotSensitivity( ...
+                        obj.OptimizationSensitivityAxes,problem.Dataset.SensitivityStudyData);
+                    diagnostics=result.Provenance.diagnostics;
+                    lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotR2( ...
+                        obj.OptimizationR2Axes,diagnostics.R2);
+                else
+                    plotObjectiveTerms(obj.OptimizationSensitivityAxes,result.Terms);
+                    cla(obj.OptimizationR2Axes);text(obj.OptimizationR2Axes,.5,.5, ...
+                        'R-squared is not defined for this fit','HorizontalAlignment','center');
+                    axis(obj.OptimizationR2Axes,'off');
+                end
+                obj.StatusArea.Value={sprintf('Objective %.6g',result.Objective)};obj.renderSolution();
+            catch exception,obj.showError(exception);end
         end
         function saveActiveBranch(obj),[file,path]=uiputfile('*.lmz.mat','Save native branch');if isequal(file,0),return,end;try,obj.Controller.saveBranch(fullfile(path,file),obj.Controller.activeDataset().Branch);obj.StatusArea.Value={['Saved ' fullfile(path,file)]};catch exception,obj.showError(exception);end,end
         function exportLegacyBranch(obj),[file,path]=uiputfile('*.mat','Export legacy Results29 branch');if isequal(file,0),return,end;try,obj.Controller.exportLegacyBranch(fullfile(path,file),obj.Controller.activeDataset().Branch);obj.StatusArea.Value={['Saved ' fullfile(path,file)]};catch exception,obj.showError(exception);end,end
@@ -671,8 +852,50 @@ end
 
 function place(control,row,column),control.Layout.Row=row;control.Layout.Column=column;end
 function value=onOff(condition),if condition,value='on';else,value='off';end,end
-function text=capabilityText(capabilities,modelId)
-parts={'simulation'};if strcmp(modelId,'slip_quadruped'),parts=[parts {'RoadMap','scientific solve','continuation'}];else,if capabilities.solve,parts{end+1}='solve';end;if capabilities.('continue'),parts{end+1}='continuation';end;end;text=strjoin(parts,' • ');
+function setControlsEnabled(controls,enabled)
+for index=1:numel(controls)
+    control=controls{index};
+    if ~isempty(control)&&isvalid(control)&&isprop(control,'Enable')
+        control.Enable=onOff(enabled);
+    end
+end
+end
+function plotObjectiveTerms(ax,terms)
+names=fieldnames(terms);values=zeros(numel(names),1);
+for index=1:numel(names)
+    item=terms.(names{index});
+    if isnumeric(item)&&isscalar(item)
+        values(index)=item;
+    elseif isstruct(item)&&isfield(item,'Value')
+        values(index)=item.Value;
+        if isfield(item,'Weight'),values(index)=values(index)*item.Weight;end
+    end
+end
+cla(ax);bar(ax,values);grid(ax,'on');title(ax,'Objective terms');
+xticks(ax,1:numel(names));xticklabels(ax,strrep(names,'_',' '));xtickangle(ax,25);
+end
+function descriptor=problemDescriptor(manifest,problemId)
+descriptor=struct('id',problemId,'maturity','experimental', ...
+    'validationStatus','untested');
+if ~isfield(manifest,'problemDescriptors'),return,end
+values=manifest.problemDescriptors;
+if ~iscell(values),values=num2cell(values);end
+for index=1:numel(values)
+    if isstruct(values{index})&&isfield(values{index},'id')&& ...
+            strcmp(values{index}.id,problemId)
+        descriptor=values{index};return
+    end
+end
+end
+function text=capabilityText(capabilities,modelId) %#ok<INUSD>
+parts={};
+if isfield(capabilities,'simulate')&&capabilities.simulate,parts{end+1}='simulation';end
+if isfield(capabilities,'solve')&&capabilities.solve,parts{end+1}='solve';end
+if isfield(capabilities,'continue')&&capabilities.('continue'),parts{end+1}='continuation';end
+if isfield(capabilities,'optimize')&&capabilities.optimize,parts{end+1}='optimization';end
+if isfield(capabilities,'visualize')&&capabilities.visualize,parts{end+1}='visualization';end
+if isempty(parts),parts={'metadata only'};end
+text=strjoin(parts,' • ');
 end
 function text=displayValue(value)
 if isnumeric(value),if isscalar(value),text=sprintf('%.8g',value);else,text=mat2str(value,5);end;elseif ischar(value),text=value;elseif isstring(value),text=char(value);elseif islogical(value),text=mat2str(value);elseif isstruct(value),text=sprintf('struct (%d fields)',numel(fieldnames(value)));else,text=class(value);end

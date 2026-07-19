@@ -51,12 +51,35 @@ classdef ModelRegistry
 
         function manifest = getManifest(obj, modelId)
             modelId = lmz.registry.ModelRegistry.canonicalModelId(modelId);
-            index = find(strcmp(modelId, obj.listModels()), 1);
+            ids = arrayfun(@(entry) entry.id, obj.Entries, ...
+                'UniformOutput', false);
+            index = find(strcmp(modelId, ids), 1);
             if isempty(index)
                 error('lmz:Registry:UnknownModel', ...
                     'Unknown model ID: %s', modelId);
             end
             manifest = obj.Entries(index);
+        end
+
+        function descriptor = getProblemDescriptor(obj, modelId, problemId)
+            manifest = obj.getManifest(modelId);
+            descriptor = [];
+            for index = 1:numel(manifest.problemDescriptors)
+                candidate = manifest.problemDescriptors{index};
+                if strcmp(candidate.id, problemId)
+                    descriptor = candidate;
+                    break
+                end
+            end
+            if isempty(descriptor)
+                error('lmz:Registry:UnknownProblem', ...
+                    'Unknown problem %s for model %s.', problemId, manifest.id);
+            end
+        end
+
+        function capabilities = getCapabilities(obj, modelId)
+            manifest = obj.getManifest(modelId);
+            capabilities = manifest.capabilities;
         end
 
         function model = createModel(obj, modelId)
@@ -86,7 +109,7 @@ classdef ModelRegistry
     methods (Static, Access=private)
         function manifest = validateManifest(manifest, catalogDirectory)
             required = {'schemaVersion', 'id', 'version', 'name', ...
-                'implementationClass', 'problems', 'capabilities'};
+                'implementationClass', 'problems'};
             lmz.registry.ModelRegistry.requireFields( ...
                 manifest, required, 'manifest');
 
@@ -132,25 +155,13 @@ classdef ModelRegistry
             end
             manifest.problemDescriptors = descriptors;
 
-            implemented = cellfun(@(value) value.implemented, descriptors);
-            kinds = cellfun(@(value) value.kind, descriptors, ...
-                'UniformOutput', false);
-            hasEquation = any(implemented & strcmp(kinds, 'nonlinear_equation'));
-            hasOptimization = any(implemented & strcmp(kinds, 'optimization'));
-            if (manifest.capabilities.solve || ...
-                    manifest.capabilities.('continue')) ...
-                    && ~hasEquation
-                error('lmz:Registry:UnsupportedClaim', ...
-                    'Solve/continue requires an implemented equation problem.');
+            if isfield(manifest, 'capabilities')
+                manifest.declaredCapabilities = manifest.capabilities;
+            else
+                manifest.declaredCapabilities = struct();
             end
-            if manifest.capabilities.optimize && ~hasOptimization
-                error('lmz:Registry:UnsupportedClaim', ...
-                    'Optimize requires an implemented optimization problem.');
-            end
-            if manifest.capabilities.simulate && ~any(implemented)
-                error('lmz:Registry:UnsupportedClaim', ...
-                    'Simulation cannot be claimed when no problem is implemented.');
-            end
+            manifest.capabilities = ...
+                lmz.registry.ModelRegistry.deriveCapabilities(descriptors);
 
             if manifest.capabilities.visualize
                 scenePath = fullfile(catalogDirectory, 'scene.lmz.json');
@@ -164,7 +175,8 @@ classdef ModelRegistry
 
         function descriptor = validateProblem(descriptor, expectedId)
             required = {'schemaVersion', 'id', 'kind', ...
-                'implementationId', 'implemented'};
+                'implementationId', 'implemented', 'maturity', ...
+                'provenance', 'validationStatus', 'capabilities'};
             lmz.registry.ModelRegistry.requireFields( ...
                 descriptor, required, 'problem descriptor');
             if ~strcmp(descriptor.schemaVersion, '1.0.0')
@@ -183,6 +195,87 @@ classdef ModelRegistry
             if ~islogical(descriptor.implemented) || ~isscalar(descriptor.implemented)
                 error('lmz:Registry:InvalidImplementedFlag', ...
                     'Problem implemented flag must be logical scalar.');
+            end
+            maturities = {'tutorial', 'compatibility', 'validated', ...
+                'experimental'};
+            if ~ischar(descriptor.maturity) || ...
+                    ~any(strcmp(descriptor.maturity, maturities))
+                error('lmz:Registry:InvalidMaturity', ...
+                    'Unsupported problem maturity for %s.', expectedId);
+            end
+            validationStatuses = {'untested', 'tested', 'source-equivalent'};
+            if ~ischar(descriptor.validationStatus) || ...
+                    ~any(strcmp(descriptor.validationStatus, validationStatuses))
+                error('lmz:Registry:InvalidValidationStatus', ...
+                    'Unsupported validation status for %s.', expectedId);
+            end
+            if ~isstruct(descriptor.provenance) || ...
+                    ~isscalar(descriptor.provenance)
+                error('lmz:Registry:InvalidProvenance', ...
+                    'Problem provenance for %s must be a scalar object.', ...
+                    expectedId);
+            end
+            descriptor.capabilities = ...
+                lmz.registry.ModelRegistry.validateProblemCapabilities( ...
+                descriptor.capabilities, expectedId);
+            if ~descriptor.implemented
+                values = struct2cell(descriptor.capabilities);
+                if any([values{:}])
+                    error('lmz:Registry:UnimplementedCapability', ...
+                        'Unimplemented problem %s cannot advertise capabilities.', ...
+                        expectedId);
+                end
+            end
+        end
+
+        function capabilities = validateProblemCapabilities(capabilities, problemId)
+            if ~isstruct(capabilities) || ~isscalar(capabilities)
+                error('lmz:Registry:InvalidProblemCapabilities', ...
+                    'Capabilities for %s must be a scalar object.', problemId);
+            end
+            required = {'simulate', 'solve', 'continue', 'optimize', ...
+                'visualize', 'animate'};
+            optional = {'parameterHomotopy', 'branchFamilyScan'};
+            lmz.registry.ModelRegistry.requireFields(capabilities, required, ...
+                'problem capabilities');
+            names = fieldnames(capabilities);
+            if ~all(ismember(names, [required optional]))
+                error('lmz:Registry:UnknownProblemCapability', ...
+                    'Problem %s declares an unknown capability.', problemId);
+            end
+            for index = 1:numel(names)
+                value = capabilities.(names{index});
+                if ~islogical(value) || ~isscalar(value)
+                    error('lmz:Registry:InvalidProblemCapability', ...
+                        'Capability %s for %s must be a logical scalar.', ...
+                        names{index}, problemId);
+                end
+            end
+            for index = 1:numel(optional)
+                if ~isfield(capabilities, optional{index})
+                    capabilities.(optional{index}) = false;
+                end
+            end
+        end
+
+        function capabilities = deriveCapabilities(descriptors)
+            names = {'simulate', 'solve', 'continue', 'optimize', ...
+                'visualize', 'animate', 'parameterHomotopy', ...
+                'branchFamilyScan'};
+            capabilities = struct();
+            for index = 1:numel(names)
+                capabilities.(names{index}) = false;
+            end
+            for descriptorIndex = 1:numel(descriptors)
+                descriptor = descriptors{descriptorIndex};
+                if ~descriptor.implemented
+                    continue
+                end
+                for nameIndex = 1:numel(names)
+                    name = names{nameIndex};
+                    capabilities.(name) = capabilities.(name) || ...
+                        descriptor.capabilities.(name);
+                end
             end
         end
 

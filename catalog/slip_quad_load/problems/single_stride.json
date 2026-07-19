@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "single_stride",
+  "kind": "simulation",
+  "implementationId": "slip_quad_load.single_stride.source.v1",
+  "implemented": true,
+  "maturity": "validated",
+  "provenance": {"repository": "DLARlab/2025_Gait_Transitions_in_Load_Pulling_Quadrupeds_Insights", "commit": "19f3133073c988cc0c3424a647b4adbb60a90b99"},
+  "validationStatus": "source-equivalent",
+  "capabilities": {"simulate": true, "solve": false, "continue": false, "optimize": false, "visualize": true, "animate": true}
+}

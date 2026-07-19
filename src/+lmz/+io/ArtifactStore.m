@@ -109,6 +109,38 @@ classdef ArtifactStore
                 error('lmz:Artifact:InvalidMetadata', ...
                     'Diagnostics, lineage, and source commits must be structs.');
             end
+            hasMaturity=isfield(artifact,'problemMaturity');
+            hasValidation=isfield(artifact,'validationStatus');
+            if hasMaturity||hasValidation
+                if ~(hasMaturity&&hasValidation)
+                    error('lmz:Artifact:IncompleteProblemMetadata', ...
+                        ['Problem maturity and validation status must be ' ...
+                        'recorded together.']);
+                end
+                maturities={'tutorial','compatibility','validated','experimental'};
+                statuses={'untested','tested','source-equivalent'};
+                if ~ischar(artifact.problemMaturity)|| ...
+                        ~any(strcmp(artifact.problemMaturity,maturities))
+                    error('lmz:Artifact:InvalidProblemMaturity', ...
+                        'Artifact problem maturity is invalid.');
+                end
+                if ~ischar(artifact.validationStatus)|| ...
+                        ~any(strcmp(artifact.validationStatus,statuses))
+                    error('lmz:Artifact:InvalidValidationStatus', ...
+                        'Artifact validation status is invalid.');
+                end
+                if isfield(artifact,'problemMetadata')
+                    metadata=artifact.problemMetadata;
+                    if ~isstruct(metadata)||~isscalar(metadata)|| ...
+                            ~isfield(metadata,'maturity')|| ...
+                            ~isfield(metadata,'validationStatus')|| ...
+                            ~strcmp(metadata.maturity,artifact.problemMaturity)|| ...
+                            ~strcmp(metadata.validationStatus,artifact.validationStatus)
+                        error('lmz:Artifact:ProblemMetadataMismatch', ...
+                            'Artifact problem metadata is inconsistent.');
+                    end
+                end
+            end
             if strcmp(artifact.artifactType, 'checkpoint')
                 lmz.io.ArtifactStore.requireFields(artifact, ...
                     {'checkpointState', 'algorithmOptions', 'terminationReason'});
@@ -129,6 +161,7 @@ classdef ArtifactStore
                         artifact.modelId);
                     artifact.modelId = canonical;
                 end
+                artifact=lmz.io.ArtifactStore.applyActivityMigration(artifact);
                 return
             end
             error('lmz:Artifact:UnsupportedVersion', ...
@@ -216,6 +249,53 @@ classdef ArtifactStore
         function removeTemporary(path)
             if exist(path, 'file') == 2
                 delete(path);
+            end
+        end
+
+        function artifact=applyActivityMigration(artifact)
+            if ~isfield(artifact,'modelId')|| ...
+                    ~strcmp(artifact.modelId,'slip_quadruped')
+                return
+            end
+            if isfield(artifact,'parameterSchema')
+                artifact.parameterSchema= ...
+                    lmz.io.ArtifactStore.markQuadrupedActivities( ...
+                    artifact.parameterSchema);
+            end
+            if isfield(artifact,'solution')&& ...
+                    isfield(artifact.solution,'ParameterSchema')
+                artifact.solution.ParameterSchema= ...
+                    lmz.io.ArtifactStore.markQuadrupedActivities( ...
+                    artifact.solution.ParameterSchema);
+            end
+            if isfield(artifact,'branch')&& ...
+                    isfield(artifact.branch,'ParameterSchema')
+                artifact.branch.ParameterSchema= ...
+                    lmz.io.ArtifactStore.markQuadrupedActivities( ...
+                    artifact.branch.ParameterSchema);
+            end
+        end
+
+        function schema=markQuadrupedActivities(schema)
+            if ~isstruct(schema)||~isfield(schema,'variables')
+                return
+            end
+            for index=1:numel(schema.variables)
+                if iscell(schema.variables)
+                    variable=schema.variables{index};
+                else
+                    variable=schema.variables(index);
+                end
+                activity='active';
+                if isfield(variable,'Name')&&strcmp(variable.Name,'phi_neutral')
+                    activity='inactive';
+                end
+                variable.Activity=activity;
+                if iscell(schema.variables)
+                    schema.variables{index}=variable;
+                else
+                    schema.variables(index)=variable;
+                end
             end
         end
     end

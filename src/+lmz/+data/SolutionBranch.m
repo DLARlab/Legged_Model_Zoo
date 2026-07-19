@@ -182,7 +182,7 @@ classdef SolutionBranch
             artifact.decisionValues = obj.DecisionValues;
             artifact.parameterValues = obj.ParameterValues;
             artifact.branch = obj.toStruct();
-            artifact.codeVersion = 'round5';
+            artifact.codeVersion = 'round6';
         end
     end
     methods (Static)
