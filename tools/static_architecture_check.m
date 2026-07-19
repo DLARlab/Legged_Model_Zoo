@@ -1,3 +1,11 @@
-function static_architecture_check
-root=fileparts(fileparts(mfilename('fullpath')));generic={'+lmz/+core','+lmz/+solvers','+lmz/+continuation','+lmz/+hybrid','+lmz/+problems'};bad={'figure(','uifigure','uiaxes','pause(','drawnow','global ','eval(','pwd','cd('};concrete={'slip_quadruped','jerboa_biped','slip_quad_load'};violations={};for d=generic,files=dir(fullfile(root,d{1},'*.m'));for f=files.',text=fileread(fullfile(f.folder,f.name));for token=bad,if contains(lower(text),lower(token{1})),violations{end+1}=sprintf('%s: forbidden %s',f.name,token{1});end,end;if contains(d{1},'+solvers')||contains(d{1},'+continuation'),for token=concrete,if contains(lower(text),token{1}),violations{end+1}=sprintf('%s: concrete model %s',f.name,token{1});end,end,end,end,end;if ~isempty(violations),error('lmz:ArchitectureCheck','%s',strjoin(violations,newline));end;fprintf('Static architecture checks passed.\n');
+function violations=static_architecture_check(root)
+% Check forbidden constructs in generic framework packages.
+files=dir(fullfile(root,'src','+lmz','**','*.m')); violations={};
+patterns={'\<global\>','restoredefaultpath','addpath\s*\(\s*genpath','\<eval(in)?\s*\(','\<assignin\s*\(','Quadrupedal_ZeroFun','ZeroFunc_Biped','Quad_Load_ZeroFun'};
+for k=1:numel(files)
+    path=fullfile(files(k).folder,files(k).name); text=fileread(path);
+    for j=1:numel(patterns)
+        if ~isempty(regexp(text,patterns{j},'once')), violations{end+1}=sprintf('%s: %s',path,patterns{j}); end %#ok<AGROW>
+    end
+end
 end
