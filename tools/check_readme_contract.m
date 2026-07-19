@@ -1,0 +1,72 @@
+function check_readme_contract
+%CHECK_README_CONTRACT Validate public naming, commands, and model table.
+root = lmz.util.ProjectPaths.root();
+readme = fileread(fullfile(root, 'README.md'));
+requiredSections = {'Project overview','Features','Requirements', ...
+    'Standalone installation','Launch the GUI','GUI walkthrough', ...
+    'Available models','Built-in examples','Command-line quick start', ...
+    'Simulating each model','Loading and saving data', ...
+    'Solving periodic solutions','Numerical continuation', ...
+    'Parameter homotopy and branch-family scans', ...
+    'Optimization and data fitting','Visualization, animation, and recording', ...
+    'Artifact format','Legacy MAT import/export','Adding a new model', ...
+    'Testing','Troubleshooting','Project structure', ...
+    'License and provenance','Current verified status'};
+positions = zeros(size(requiredSections));
+for index = 1:numel(requiredSections)
+    positions(index) = strfind(readme, ['## ' requiredSections{index}]);
+end
+if any(positions == 0) || any(diff(positions) <= 0)
+    error('lmz:Documentation:SectionContract', ...
+        'README required sections are missing or out of order.');
+end
+requiredText = {'legged_model_zoo', ...
+    'registry = lmz.registry.ModelRegistry.discover()', ...
+    'slip_biped','slip_quadruped','slip_quad_load', ...
+    '<!-- LMZ:MODEL_TABLE:BEGIN -->','<!-- LMZ:MODEL_TABLE:END -->'};
+for index = 1:numel(requiredText)
+    if isempty(strfind(readme, requiredText{index})) %#ok<STREMP>
+        error('lmz:Documentation:MissingCommand', ...
+            'README is missing required text: %s', requiredText{index});
+    end
+end
+examples = {'demo_gui.m','demo_registry.m','demo_slip_biped.m', ...
+    'demo_slip_quadruped.m','demo_slip_quad_load.m'};
+for index = 1:numel(examples)
+    if exist(fullfile(root,'examples',examples{index}),'file') ~= 2
+        error('lmz:Documentation:MissingExample', ...
+            'Documented example is missing: %s', examples{index});
+    end
+end
+registry = lmz.registry.ModelRegistry.discover();
+ids = registry.listModels();
+if ~isequal(ids, {'slip_biped','slip_quad_load','slip_quadruped'})
+    error('lmz:Documentation:ModelNames','Canonical model list is stale.');
+end
+for index = 1:numel(ids)
+    manifest = registry.getManifest(ids{index});
+    c = manifest.capabilities;
+    expectedRow = sprintf('| `%s` | %s | %s | %s | %s | %s | %s |', ...
+        manifest.id, manifest.name, yesNo(c.simulate), yesNo(c.visualize), ...
+        yesNo(c.solve), yesNo(c.('continue')), yesNo(c.optimize));
+    if isempty(strfind(readme, expectedRow)) %#ok<STREMP>
+        error('lmz:Documentation:CapabilityTable', ...
+            'README capability row is stale for %s.', manifest.id);
+    end
+end
+provenancePosition = strfind(readme, '## License and provenance');
+normalUsage = readme(1:provenancePosition(1)-1);
+prohibited = {'SLIP_Model_Zoo','2022_A_Template_Model_Explains_Jerboa_Gait_Transitions', ...
+    '2025_Gait_Transitions_in_Load_Pulling_Quadrupeds_Insights'};
+for index = 1:numel(prohibited)
+    if ~isempty(strfind(normalUsage, prohibited{index})) %#ok<STREMP>
+        error('lmz:Documentation:ExternalInstallReference', ...
+            'README normal usage references an external source repository.');
+    end
+end
+fprintf('README contract valid for %d canonical models.\n', numel(ids));
+end
+
+function value = yesNo(condition)
+if condition, value = 'Yes'; else, value = 'No'; end
+end

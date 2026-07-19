@@ -1,0 +1,1 @@
+{"schemaVersion":"1.0.0","frames":["world","body","load"],"primitives":[{"type":"ground","frame":"world"},{"type":"polygon","frame":"body"},{"type":"point_mass","frame":"load"},{"type":"rope","from":"body","to":"load"}]}

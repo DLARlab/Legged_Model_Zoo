@@ -79,6 +79,13 @@ classdef ArtifactStore
                         '%s must be nonempty text.', identityFields{index});
                 end
             end
+            canonicalModelId = lmz.registry.ModelRegistry.canonicalModelId( ...
+                artifact.modelId);
+            if ~strcmp(canonicalModelId, artifact.modelId)
+                error('lmz:Artifact:DeprecatedModelId', ...
+                    'New artifacts must use canonical model ID %s.', ...
+                    canonicalModelId);
+            end
 
             decisionCount = lmz.io.ArtifactStore.validateStoredSchema( ...
                 artifact.decisionSchema, 'decisionSchema');
@@ -116,6 +123,11 @@ classdef ArtifactStore
             end
             if strcmp(artifact.schemaVersion, ...
                     lmz.io.ArtifactStore.CurrentSchemaVersion)
+                if isfield(artifact, 'modelId')
+                    canonical = lmz.registry.ModelRegistry.canonicalModelId( ...
+                        artifact.modelId);
+                    artifact.modelId = canonical;
+                end
                 return
             end
             error('lmz:Artifact:UnsupportedVersion', ...

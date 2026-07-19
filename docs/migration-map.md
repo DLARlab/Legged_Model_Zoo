@@ -2,7 +2,7 @@
 
 | Legacy concept | Native boundary |
 |---|---|
-| Quadruped 29-row `results` | `lmzmodels.slipquadruped.Results29Adapter` |
+| Quadruped 29-row `results` | `lmzmodels.slip_quadruped.Results29Adapter` |
 | Legacy zero functions | model-specific evaluators (not yet vendored) |
 | Numerical solvers | future `lmz.solvers` implementations consuming problem contracts |
 | Continuation routines | future chart-aware generic continuation engine |

@@ -2,7 +2,7 @@
 
 ## SLIP quadruped roadmap
 
-The public legacy branch variable `results` is a 29-by-N matrix. Rows 1–13 are initial state/decision values, rows 14–22 are nine event times, and rows 23–29 are seven parameters. Raw indexing is confined to `lmzmodels.slipquadruped.Results29Adapter`.
+The public legacy branch variable `results` is a 29-by-N matrix. Rows 1–13 are initial state/decision values, rows 14–22 are nine event times, and rows 23–29 are seven parameters. Raw indexing is confined to `lmzmodels.slip_quadruped.Results29Adapter`.
 
 ## Jerboa branch
 

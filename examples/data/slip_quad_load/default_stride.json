@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "default_stride",
+  "modelId": "slip_quad_load",
+  "problemId": "demo_stride",
+  "options": {"speed": 0.8, "stride_period": 0.9, "rope_length": 0.8},
+  "variables": ["speed", "stride_period", "rope_length"],
+  "units": ["m/s", "s", "m"],
+  "provenance": {"source": "Legged Model Zoo analytic demonstration", "generated": true},
+  "license": "Project license; no third-party data"
+}

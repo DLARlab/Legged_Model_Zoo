@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "default_stride",
+  "modelId": "slip_biped",
+  "problemId": "demo_stride",
+  "options": {"speed": 1.0, "stride_period": 0.8},
+  "variables": ["speed", "stride_period"],
+  "units": ["m/s", "s"],
+  "provenance": {"source": "Legged Model Zoo analytic demonstration", "generated": true},
+  "license": "Project license; no third-party data"
+}

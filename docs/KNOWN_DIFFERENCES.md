@@ -6,3 +6,5 @@
 - The prior tracked project contents were already deleted in the working tree at task start and were not restored wholesale.
 - Catalog capabilities are deliberately false until executable problem/service support exists; merely retaining an adapter does not advertise simulation or solving.
 - Artifact schema version `1.0.0` now requires explicit diagnostics, lineage, random seed, source commits, and ordered schema metadata. Earlier incomplete development artifacts are rejected rather than guessed into shape.
+- Round 3 built-in simulations are explicitly labeled standalone analytic demonstrations. They exercise common runtime and GUI boundaries but are not claimed equivalent to the published legacy equations.
+- Canonical model IDs are `slip_biped`, `slip_quadruped`, and `slip_quad_load`. Older IDs resolve only through warning-producing registry/artifact aliases.

@@ -1,0 +1,1 @@
+{"schemaVersion":"1.0.0","frames":["world","body","foot_left","foot_right"],"primitives":[{"type":"ground","frame":"world"},{"type":"point_mass","frame":"body"},{"type":"spring","from":"body","to":"foot_left"},{"type":"spring","from":"body","to":"foot_right"}]}

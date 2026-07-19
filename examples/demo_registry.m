@@ -1,2 +1,10 @@
-startup; registry=lmz.registry.ModelRegistry.discover(); disp(registry.listModels());
-model=registry.createModel('slip.quadruped.planar.v2'); disp(model.getCapabilities());
+projectRoot = fileparts(fileparts(mfilename('fullpath')));
+originalDirectory = pwd;
+directoryCleanup = onCleanup(@()cd(originalDirectory));
+cd(projectRoot);
+startup;
+cd(originalDirectory);
+registry = lmz.registry.ModelRegistry.discover();
+modelIds = registry.listModels();
+disp(modelIds);
+clear directoryCleanup

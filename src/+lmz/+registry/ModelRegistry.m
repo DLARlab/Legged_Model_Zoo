@@ -46,9 +46,11 @@ classdef ModelRegistry
         function ids = listModels(obj)
             ids = arrayfun(@(entry) entry.id, obj.Entries, ...
                 'UniformOutput', false);
+            ids = reshape(sort(ids), 1, []);
         end
 
         function manifest = getManifest(obj, modelId)
+            modelId = lmz.registry.ModelRegistry.canonicalModelId(modelId);
             index = find(strcmp(modelId, obj.listModels()), 1);
             if isempty(index)
                 error('lmz:Registry:UnknownModel', ...
@@ -58,6 +60,7 @@ classdef ModelRegistry
         end
 
         function model = createModel(obj, modelId)
+            modelId = lmz.registry.ModelRegistry.canonicalModelId(modelId);
             manifest = obj.getManifest(modelId);
             constructor = str2func(manifest.implementationClass);
             model = constructor();
@@ -172,7 +175,7 @@ classdef ModelRegistry
                 error('lmz:Registry:ProblemIdMismatch', ...
                     'Problem filename ID and descriptor ID differ.');
             end
-            supportedKinds = {'nonlinear_equation', 'optimization'};
+            supportedKinds = {'simulation', 'nonlinear_equation', 'optimization'};
             if ~any(strcmp(descriptor.kind, supportedKinds))
                 error('lmz:Registry:UnsupportedProblemKind', ...
                     'Unsupported problem kind: %s', descriptor.kind);
@@ -210,6 +213,26 @@ classdef ModelRegistry
                     'Catalog directory does not exist: %s', path);
             end
             path = attributes.Name;
+        end
+    end
+
+    methods (Static)
+        function canonical = canonicalModelId(modelId)
+            aliases = struct( ...
+                'old', {'jerboa.biped.offset', 'slip.quadruped.planar.v2', ...
+                    'slip.quadruped.load'}, ...
+                'canonical', {'slip_biped', 'slip_quadruped', ...
+                    'slip_quad_load'});
+            canonical = modelId;
+            for index = 1:numel(aliases)
+                if strcmp(modelId, aliases(index).old)
+                    canonical = aliases(index).canonical;
+                    warning('lmz:Registry:DeprecatedModelId', ...
+                        'Model ID %s is deprecated; use %s.', ...
+                        modelId, canonical);
+                    return
+                end
+            end
         end
     end
 end

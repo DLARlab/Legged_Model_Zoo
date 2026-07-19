@@ -1,343 +1,208 @@
 # Legged Model Zoo
 
-Legged Model Zoo is a MATLAB framework for representing, discovering, validating, and eventually solving hybrid legged-locomotion models through common model, problem, service, persistence, and visualization APIs.
+## Project overview
 
-The project currently provides the validated core scaffold: project path discovery, declarative model catalogs, variable schemas and charts, cooperative run controls, artifact validation and persistence, and an exact layout adapter for legacy 29-row SLIP quadruped branches. Numerical model evaluation, solving, continuation, optimization, and the GUI are still under migration and are deliberately not advertised as available capabilities.
+Legged Model Zoo is a MATLAB framework and programmatic GUI for exploring legged-model simulations through common registry, model, service, data, and visualization boundaries. The current standalone preview includes three repository-contained analytic demonstrations. They are useful for GUI and API exploration but are not yet numerical-equivalence replacements for the original research models.
 
-See [MIGRATION_STATUS.md](MIGRATION_STATUS.md) for implementation progress and [docs/TEST_STATUS.md](docs/TEST_STATUS.md) for exactly what has and has not been executed.
+## Features
+
+- One-command programmatic GUI launch
+- Declarative discovery of three canonical models
+- Standalone built-in simulation for every model
+- Named state schemas and validated simulation results
+- Trajectory plotting and normalized-time scrubbing
+- Cooperative progress, pause, and cancellation context
+- Versioned plain-struct artifact validation and atomic MAT persistence
+- Deprecated import aliases for older model identifiers
+
+Root solving, optimization, continuation, recording, and legacy-equation equivalence remain under implementation and are not advertised as available.
 
 ## Requirements
 
 - MATLAB R2019b or newer
-- Optimization Toolbox will be required for future `fsolve` and `fmincon` workflows, but is not required for catalog, schema, adapter, or artifact operations
-- Parallel Computing Toolbox is optional and will not be required for synchronous workflows
+- No toolbox is required for the built-in analytic simulations
+- Optimization Toolbox will be required when solver and fitting capabilities are enabled
+- Parallel Computing Toolbox is optional
 
-MATLAB was not available in the current development environment, so the MATLAB tests described below are implemented but have not yet been executed.
+The current slice was executed with MATLAB R2025b Update 5. Optimization Toolbox and Parallel Computing Toolbox were licensed; `usejava('desktop')` was false in batch mode, but programmatic `uifigure` construction still passed. Compatibility remains targeted at R2019b and needs execution on that release.
 
-## Installation and setup
+## Standalone installation
 
-Clone or copy this repository to a local directory. The original research repositories are not required for normal catalog and schema use. When regenerating migration fixtures, the following repositories are expected as siblings of this repository:
+Clone or download `Legged_Model_Zoo`, start MATLAB in the repository root, and run:
+
+```matlab
+legged_model_zoo
+```
+
+Normal installation and usage require only this repository. `startup.m` adds only the repository's `src` and `models` roots.
+
+## Launch the GUI
+
+Launch directly:
+
+```matlab
+app = legged_model_zoo;
+```
+
+Or initialize explicitly:
+
+```matlab
+startup;
+app = lmz.gui.LeggedModelZooApp();
+```
+
+## GUI walkthrough
+
+The header provides canonical model, problem, and built-in example selectors. Choose a model and press **Simulate**. The Simulation tab plots its body trajectory; move the normalized-time slider to inspect the current point. The status panel reports completion or an actionable error.
+
+Branch, Solution, Solve, Continuation, and Optimization tabs are present as workflow landmarks but explicitly report that their runtime algorithms are not implemented. They do not expose nonfunctional controls. GUI construction, model selection, controller simulation, and clean shutdown have been executed in MATLAB batch mode; interactive desktop behavior has not been manually inspected.
+
+## Available models
+
+<!-- LMZ:MODEL_TABLE:BEGIN -->
+| Model ID | Label | Simulation | Visualization | Solve | Continuation | Optimization |
+|---|---|---:|---:|---:|---:|---:|
+| `slip_biped` | SLIP Biped | Yes | Yes | No | No | No |
+| `slip_quad_load` | SLIP Quadruped with Load | Yes | Yes | No | No | No |
+| `slip_quadruped` | SLIP Quadruped | Yes | Yes | No | No | No |
+<!-- LMZ:MODEL_TABLE:END -->
+
+The displayed simulations are self-contained analytic demonstrations identified by `diagnostics.source = standalone-analytic-demo`. They are not claimed to reproduce published trajectories.
+
+## Built-in examples
+
+Every model exposes `default_stride` through the application controller. The declarative JSON assets live under `examples/data/<model-id>/` and record model/problem identity, options, variable names, units, provenance, and redistribution status. `DataService` validates and loads them; no file browsing or external dataset is required. Run `examples/demo_gui.m` for the GUI or one of the model examples below for command-line use.
+
+## Command-line quick start
+
+```matlab
+startup;
+registry = lmz.registry.ModelRegistry.discover();
+modelIds = registry.listModels()
+```
+
+The deterministic result is:
 
 ```text
-workspace/
-  Legged_Model_Zoo/
-  SLIP_Model_Zoo/
-  2022_A_Template_Model_Explains_Jerboa_Gait_Transitions/
-  2025_Gait_Transitions_in_Load_Pulling_Quadrupeds_Insights/
+slip_biped
+slip_quad_load
+slip_quadruped
 ```
 
-Start MATLAB, change to the project directory, and initialize the code roots:
+## Simulating each model
 
-```matlab
-cd('/path/to/Legged_Model_Zoo');
-startup;
-```
-
-`startup` adds only `src` and `models`. It does not recursively add the repository, tests, examples, catalogs, or any legacy repository to the MATLAB path.
-
-## Quick start: discover the model catalog
+All three use the same public service API:
 
 ```matlab
 startup;
-
 registry = lmz.registry.ModelRegistry.discover();
-modelIds = registry.listModels();
-disp(modelIds);
-
-manifest = registry.getManifest('slip.quadruped.planar.v2');
-disp(manifest);
-
-model = registry.createModel('slip.quadruped.planar.v2');
-disp(model.getCapabilities());
-disp(model.listProblems());
-```
-
-The registry resolves the catalog through `lmz.util.ProjectPaths`, so discovery does not depend on MATLAB's current working directory after `startup` has run.
-
-The same workflow is available in:
-
-```matlab
-run(fullfile(lmz.util.ProjectPaths.examples(), 'demo_registry.m'));
-```
-
-## Available models and current capabilities
-
-| Model ID | Declared problems | Current numerical capabilities |
-|---|---|---|
-| `slip.quadruped.planar.v2` | `periodic_apex` | Disabled pending vendored evaluator and regression baseline |
-| `jerboa.biped.offset` | `periodic_apex`, `trajectory_fit` | Disabled pending migration |
-| `slip.quadruped.load` | `single_stride_periodic`, `multi_stride_fit` | Disabled pending migration |
-
-The models instantiate successfully, but calls to unavailable numerical operations fail with explicit model-specific errors. This is intentional: the framework does not claim simulation, solving, continuation, optimization, or visualization support merely because a catalog entry or boundary adapter exists.
-
-## Project paths
-
-Use the centralized path utility instead of manually traversing package directories:
-
-```matlab
-projectRoot = lmz.util.ProjectPaths.root();
-sourceRoot = lmz.util.ProjectPaths.src();
-modelRoot = lmz.util.ProjectPaths.models();
-catalogRoot = lmz.util.ProjectPaths.catalog();
-testRoot = lmz.util.ProjectPaths.tests();
-exampleRoot = lmz.util.ProjectPaths.examples();
-checkpointRoot = lmz.util.ProjectPaths.checkpoints();
-```
-
-Temporary and checkpoint paths are returned but are not created until a caller needs them.
-
-## Variable schemas and charts
-
-`VariableSpec` describes one named variable, while `VariableSchema` preserves ordering and supports validation, packing, unpacking, grouping, metadata, and persistence.
-
-```matlab
-period = lmz.schema.VariableSpec( ...
-    'period', ...
-    'Label', 'Stride period', ...
-    'Unit', 's', ...
-    'Group', 'timing', ...
-    'DefaultValue', 1, ...
-    'LowerBound', 0, ...
-    'Scale', 1, ...
-    'Topology', 'positive');
-
-touchdown = lmz.schema.VariableSpec( ...
-    'touchdown', ...
-    'Label', 'Touchdown time', ...
-    'Unit', 's', ...
-    'Group', 'timing', ...
-    'DefaultValue', 0.25, ...
-    'Topology', 'cyclic_time', ...
-    'PeriodSource', 'period');
-
-schema = lmz.schema.VariableSchema([period; touchdown], '1.0.0');
-
-vector = schema.pack(struct('period', 1.2, 'touchdown', 0.3));
-namedValues = schema.unpack(vector);
-timingSchema = schema.selectGroup('timing');
-metadata = schema.metadataTable();
-storedSchema = schema.toStruct();
-restoredSchema = lmz.schema.VariableSchema.fromStruct(storedSchema);
-```
-
-Charts implement local cyclic geometry and canonical representation:
-
-```matlab
-chart = lmz.schema.VariableChart(schema);
-
-localDelta = chart.difference([1.2; 0.05], [1.2; 1.15]);
-candidate = chart.retract([1.2; 1.1], [-0.2; 0.15]);
-canonical = chart.canonicalize(candidate);
-```
-
-When a retraction changes a period and a cyclic time in the same step, the candidate's new period is used for wrapping. Nonfinite and nonpositive periods are rejected.
-
-`DiagonalMetric` supplies scale-aware norms and inner products:
-
-```matlab
-metric = lmz.schema.DiagonalMetric([1; 0.1]);
-scaledLength = metric.norm([0.5; 0.02]);
-scaledInnerProduct = metric.inner([1; 0], [0.5; 0.1]);
-```
-
-## Importing and exporting legacy quadruped branches
-
-The SLIP quadruped legacy format stores a branch as a numeric `results` matrix with 29 rows:
-
-- Rows 1–13: periodic initial-state values
-- Rows 14–22: nine event times
-- Rows 23–29: seven parameters
-
-All raw positional indexing is confined to `lmzmodels.slipquadruped.Results29Adapter`.
-
-```matlab
-startup;
-
-adapter = lmzmodels.slipquadruped.Results29Adapter();
-branch = adapter.loadBranch('/path/to/legacy_branch.mat');
-
-disp(branch.pointCount);
-firstState = branch.state(:, 1);
-firstEventTimes = branch.eventTimes(:, 1);
-firstParameters = branch.parameters(:, 1);
-
-legacyResults = lmzmodels.slipquadruped.Results29Adapter.encode(branch);
-```
-
-The current adapter guarantees exact numeric layout round trips. Conversion to native `SolutionBranch` objects, named branch access, and artifact lineage is part of the remaining quadruped vertical-slice work.
-
-## Run context, cancellation, and progress
-
-Long-running services will receive a GUI-independent `RunContext`. The synchronous context is usable now:
-
-```matlab
+model = registry.createModel('slip_biped');
+problem = model.createProblem('demo_stride', struct());
 context = lmz.api.RunContext.synchronous(42);
-context.check();
-context.progress(0.25, 'Preparing inputs');
-context.log('info', 'Run initialized');
+simulation = lmz.services.SimulationService().simulate( ...
+    problem, struct(), struct(), context);
+plot(simulation.state('x'), simulation.state('y'));
 ```
 
-The seed passed to `synchronous` is retained as `context.RandomSeed`. Callbacks can be replaced for command-line logging or GUI integration:
+For the quadruped, replace the model ID with `slip_quadruped`; its body states are also named `x` and `y`. For the load-pulling demonstration, use `slip_quad_load` and plot `quad_x` against `quad_y`.
 
-```matlab
-context.ProgressFcn = @(fraction, message) ...
-    fprintf('%3.0f%% %s\n', 100 * fraction, message);
-context.LogFcn = @(level, message) ...
-    fprintf('[%s] %s\n', upper(level), message);
-context.CheckpointFcn = @(value) disp(value);
-```
+Executable examples:
 
-Cancellation and pause are cooperative:
+- `examples/demo_slip_biped.m`
+- `examples/demo_slip_quadruped.m`
+- `examples/demo_slip_quad_load.m`
 
-```matlab
-context.Cancellation.cancel();
-% A later context.check() throws lmz:Cancelled.
-```
+## Loading and saving data
 
-## Artifact persistence
-
-Native MAT files contain exactly one top-level plain struct named `artifact`. Live class instances are not the public serialization format.
-
-Supported artifact types are:
-
-- `solution`
-- `branch`
-- `simulation`
-- `optimization-run`
-- `checkpoint`
-
-Use:
+Native artifacts contain exactly one top-level plain struct named `artifact`:
 
 ```matlab
 lmz.io.ArtifactStore.save('result.lmz.mat', artifact);
 restored = lmz.io.ArtifactStore.load('result.lmz.mat');
 ```
 
-Before writing, `ArtifactStore` validates:
+The store validates schema identity, dimensions, finite values, lineage, random seed, source commits, and version metadata before an atomic rename.
 
-- artifact schema version and type;
-- model/problem identity and versions;
-- ordered decision and parameter names;
-- variable units, topology, and positive scales;
-- finite real decision and parameter values;
-- dimensions consistent with stored schemas;
-- diagnostics, lineage, random seed, source commits, and version metadata;
-- checkpoint-specific state and termination metadata.
+## Solving periodic solutions
 
-Writes use a temporary MAT file, reload and validate it, then rename it to the requested destination. Unsupported or incomplete development artifacts are rejected explicitly.
+Periodic root solving is not implemented in the standalone preview. Manifests report `solve = false`, and the GUI does not enable solver controls. No solver result is fabricated from the analytic demonstrations.
 
-## Model catalog format
+## Numerical continuation
 
-Each model lives under `catalog/<model>/` and contains a `manifest.json`, problem descriptors, and—when visualization is advertised—a `scene.lmz.json`.
+Pseudo-arclength continuation is not implemented. Manifests report `continue = false`; checkpoint and branch APIs will be documented when executable.
 
-The registry validates:
+## Parameter homotopy and branch-family scans
 
-- supported manifest and problem schema versions;
-- unique model and problem IDs;
-- semantic model versions;
-- implementation classes restricted to `lmzmodels.*`;
-- existence of every implementation class and problem descriptor;
-- supported problem kinds;
-- truthful relationships between implemented problems and capabilities;
-- presence of a scene when visualization is enabled.
+Parameter homotopy and branch-family scanning are not implemented. These names are reserved for transport and repeated one-dimensional branch workflows; the project will not mislabel a parameter scan as two-dimensional continuation.
 
-JSON is declarative. It must never contain executable MATLAB expressions.
+## Optimization and data fitting
 
-## Regenerating minimal migration inputs
+Optimization is not implemented. The load model currently demonstrates simulation and tugline-force output only. Optimization Toolbox absence therefore does not prevent application startup or simulation.
 
-When the three immutable reference repositories are present as siblings, run:
+## Visualization, animation, and recording
 
-```matlab
-startup;
-toolsPath = fullfile(lmz.util.ProjectPaths.root(), 'tools');
-addpath(toolsPath);
-cleanup = onCleanup(@() rmpath(toolsPath));
-regenerate_regression_inputs;
-```
+The GUI provides named body-trajectory plotting and normalized-time scrubbing. Models expose named plot descriptors and repository-contained scene specifications. Continuous playback, GIF/MP4 recording, and keyframe export are not yet implemented, despite the current `animate` capability indicating time-scrubbable simulation data.
 
-This extracts small input fixtures under `tests/fixtures` and records their source paths, hashes, commits, and selected columns. It does not add legacy repositories to the path and does not execute legacy numerical functions.
+## Artifact format
 
-Generated inputs are not numerical baselines. Residuals, trajectories, events, forces, gait classifications, and measured regression tolerances still require MATLAB baseline execution.
+Supported artifact types are `solution`, `branch`, `simulation`, `optimization-run`, and `checkpoint`. New artifacts must use schema version `1.0.0` and one of the canonical model IDs. Live handle objects are never the public serialization format.
 
-## Running tests
+## Legacy MAT import/export
 
-Run the complete recursive suite from the repository root:
+`lmzmodels.slip_quadruped.Results29Adapter` imports and exactly exports the legacy 29-row quadruped `results` layout. Native branch conversion is still pending. Deprecated model IDs are accepted for registry lookup and old artifact loading with warning diagnostics; newly saved artifacts must use canonical IDs.
+
+## Adding a new model
+
+Add a package below `models/+lmzmodels`, implement `lmz.api.LeggedModel`, and add a catalog directory containing `manifest.json`, problem descriptors, and a scene when visualization is enabled. Bindings are restricted to `lmzmodels.*`, JSON remains declarative, and advertised capabilities must match implemented problems.
+
+## Testing
+
+Run all tests:
 
 ```matlab
 results = run_tests;
 ```
 
-For batch validation:
+Batch form:
 
 ```bash
 matlab -batch "cd('/path/to/Legged_Model_Zoo'); results=run_tests; assert(~any([results.Failed]));"
 ```
 
-`run_tests` initializes the project, temporarily adds only test utilities and fixtures, runs all test folders recursively, prints a concise summary, and raises `lmz:Tests:Failed` if any test fails.
+Run the documentation contract during development:
 
-The current suite covers project paths, registry discovery and validation, duplicate catalog IDs, schema packing, cyclic chart behavior, changing-period retraction, invalid periods, artifact round trips and corruption, the quadruped layout adapter, and architecture rules. Consult [docs/TEST_STATUS.md](docs/TEST_STATUS.md) before interpreting the suite as passing.
-
-## Repository layout
-
-```text
-Legged_Model_Zoo/
-  startup.m                 Project initialization
-  run_tests.m               Root validation entry point
-  src/+lmz/                 Generic framework packages
-  models/+lmzmodels/        Model-specific code and adapters
-  catalog/                  Declarative model/problem/scene descriptors
-  examples/                 Public API examples
-  tests/                    Unit, integration, regression, architecture tests
-  tools/                    Explicit development and fixture utilities
-  docs/                     Architecture, migration, provenance, test records
-  vendor/dlar/              Reserved isolated legacy source area
+```matlab
+startup;
+addpath(fullfile(lmz.util.ProjectPaths.root(), 'tools'));
+check_readme_contract;
 ```
 
-Generic framework packages must not contain model-specific packed indices. Legacy indexing belongs only in documented model-specific adapters, codecs, layouts, or evaluators.
-
-## Current limitations
-
-The following workflows are not yet available:
-
-- physical simulation for any of the three models;
-- deterministic residual or objective evaluation;
-- root solving and multistart search;
-- second-seed construction;
-- pseudo-arclength continuation, homotopy, or branch-family scans;
-- trajectory/force rendering, animation, or recording;
-- the programmatic GUI;
-- native `SolutionBranch` import from legacy files;
-- numerical regression baselines or equivalence claims.
-
-Calling an unavailable model operation should produce an explicit error rather than placeholder numerical output.
+The current complete result is 27 tests run, 0 failed, and 0 incomplete under MATLAB R2025b Update 5. See `docs/TEST_STATUS.md` for the exact command and supplementary isolation/example evidence.
 
 ## Troubleshooting
 
-### The registry cannot find an implementation class
+- **Undefined `lmz` package:** run `startup` from the repository root.
+- **GUI cannot construct:** verify MATLAB R2019b or newer and desktop graphics availability.
+- **Solver controls unavailable:** those algorithms are not implemented yet; this is not a toolbox-detection error.
+- **Artifact uses an old model ID:** load it to migrate the ID, then save a new canonical artifact.
+- **Cyclic time rejected:** its named period must be finite and positive.
 
-Run `startup` before constructing the registry. Confirm that `lmz.util.ProjectPaths.models()` exists and that the implementation class is under the `lmzmodels.*` namespace.
+## Project structure
 
-### A manifest is rejected
+```text
+src/+lmz/                 Generic APIs, services, data, GUI, and utilities
+models/+lmzmodels/        Canonically named standalone model packages
+catalog/                  Model, problem, and scene descriptors
+examples/                 Public API examples and built-in demonstrations
+tests/                    Unit, GUI, documentation, and architecture tests
+tools/                    README validation and maintainer utilities
+docs/                     Architecture, provenance, and evidence records
+```
 
-Check that every declared problem has a corresponding JSON file under `problems/`, IDs match filenames, versions use `major.minor.patch`, capability values are logical, and unsupported capabilities remain false.
+## License and provenance
 
-### An artifact is rejected
+Project licensing and third-party redistribution review remain release blockers. Historical migration sources include `SLIP_Model_Zoo`, `2022_A_Template_Model_Explains_Jerboa_Gait_Transitions`, and `2025_Gait_Transitions_in_Load_Pulling_Quadrupeds_Insights`. They are provenance references only and are not runtime dependencies. No legacy numerical source or data was copied in this GUI slice.
 
-Artifacts created before the current `1.0.0` contract may lack required schema metadata, lineage, seed, diagnostics, or source commits. Recreate them through the current artifact builder once the relevant model workflow is implemented; do not bypass validation.
+## Current verified status
 
-### A cyclic time fails validation
-
-Its named period source must exist in the same schema and resolve to a finite positive value at the evaluated point.
-
-## Development status and provenance
-
-- [Migration status](MIGRATION_STATUS.md)
-- [Test status](docs/TEST_STATUS.md)
-- [Architecture](docs/architecture.md)
-- [Legacy inventory](docs/legacy-inventory.md)
-- [Legacy data contracts](docs/legacy-data-contracts.md)
-- [Baseline fixtures](docs/baseline-fixtures.md)
-- [Source provenance](docs/provenance.md)
-- [Known differences](docs/KNOWN_DIFFERENCES.md)
-
-The three original research repositories are immutable reference inputs. The target project is designed to run without adding them to the MATLAB path.
+Static catalog, naming, dependency, and README checks pass. MATLAB executed all three standalone simulations, headless controller workflows, programmatic GUI construction, four command-line examples, the README contract, the full 27-test suite, and an isolated-copy registry/simulation/GUI workflow with no sibling repositories. No legacy numerical-equivalence, solve, continuation, optimization, interactive desktop, or recording result is claimed. Refer to `MIGRATION_STATUS.md` and `docs/TEST_STATUS.md` for exact evidence.

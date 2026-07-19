@@ -1,7 +1,0 @@
-{
-  "schemaVersion": "1.0.0",
-  "id": "single_stride_periodic",
-  "kind": "nonlinear_equation",
-  "implementationId": "quadload.single_stride.v1",
-  "implemented": false
-}

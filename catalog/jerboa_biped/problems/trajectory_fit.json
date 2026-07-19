@@ -1,7 +1,0 @@
-{
-  "schemaVersion": "1.0.0",
-  "id": "trajectory_fit",
-  "kind": "optimization",
-  "implementationId": "jerboabiped.trajectory_fit.v1",
-  "implemented": false
-}
