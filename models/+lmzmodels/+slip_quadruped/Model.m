@@ -5,10 +5,10 @@ classdef Model < lmz.api.LeggedModel
             value = struct('id', 'slip_quadruped', 'version', '1.0.0');
         end
         function value = getCapabilities(~)
-            value = struct('simulate', true, 'solve', false, ...
-                'continue', false, 'optimize', false, 'visualize', true, ...
-                'animate', true, 'parameterHomotopy', false, ...
-                'branchFamilyScan', false);
+            value = struct('simulate', true, 'solve', true, ...
+                'continue', true, 'optimize', false, 'visualize', true, ...
+                'animate', true, 'parameterHomotopy', true, ...
+                'branchFamilyScan', true);
         end
         function schema = getPhysicalStateSchema(~)
             names = {'x','y','body_pitch','foot_bl_x','foot_bl_y', ...
@@ -26,18 +26,20 @@ classdef Model < lmz.api.LeggedModel
                 lmz.schema.VariableSpec('stride_period','DefaultValue',0.7, ...
                     'LowerBound',0,'Topology','positive')]);
         end
-        function value = listProblems(~), value = {'demo_stride'}; end
+        function value = listProblems(~), value = {'demo_stride','periodic_apex'}; end
         function problem = createProblem(obj, problemId, configuration)
-            if ~strcmp(problemId,'demo_stride')
-                error('lmz:slip_quadruped:UnknownProblem','Unknown problem: %s',problemId);
+            switch problemId
+                case 'demo_stride',problem=lmz.api.SimulationProblem(obj,problemId,configuration);
+                case 'periodic_apex',problem=lmzmodels.slip_quadruped.PeriodicApexProblem(obj,configuration);
+                otherwise,error('lmz:slip_quadruped:UnknownProblem','Unknown problem: %s',problemId);
             end
-            problem = lmz.api.SimulationProblem(obj, problemId, configuration);
         end
         function result = simulate(obj, request, context)
             context.check(); options=request.Options;
             speed=1.3; period=0.7;
             if isfield(options,'speed'), speed=options.speed; end
             if isfield(options,'stride_period'), period=options.stride_period; end
+            if isfield(options,'decision'), speed=options.decision.speed; period=options.decision.stride_period; end
             time=linspace(0,period,241)'; phase=2*pi*time/period; x=speed*time;
             y=0.75+0.04*cos(2*phase); pitch=0.025*sin(phase);
             offsets=[-0.38,0.38,-0.38,0.38]; phases=[0,pi,pi,0]; feet=zeros(numel(time),8);

@@ -1,0 +1,2 @@
+projectRoot=fileparts(fileparts(mfilename('fullpath')));originalDirectory=pwd;cleanup=onCleanup(@()cd(originalDirectory));cd(projectRoot);startup;cd(originalDirectory);
+registry=lmz.registry.ModelRegistry.discover();problem=registry.createModel('slip_quadruped').createProblem('periodic_apex',struct());seed=problem.makeSolution([1;0.8],[],[]);solveResult=lmz.services.SolveService().solve(problem,seed,struct(),lmz.api.RunContext.synchronous(24));clear cleanup

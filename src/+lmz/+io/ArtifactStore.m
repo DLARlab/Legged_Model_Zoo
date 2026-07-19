@@ -2,8 +2,9 @@ classdef ArtifactStore
     %ARTIFACTSTORE Versioned plain-struct MAT artifact persistence.
     properties (Constant, Access=private)
         CurrentSchemaVersion = '1.0.0'
-        SupportedTypes = {'solution', 'branch', 'simulation', ...
-            'optimization-run', 'checkpoint'}
+        SupportedTypes = {'solution', 'branch', 'simulation', 'solve-run', ...
+            'continuation-run', 'optimization-run', 'checkpoint', ...
+            'branch-family-report'}
     end
 
     methods (Static)

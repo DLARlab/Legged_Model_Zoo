@@ -6,8 +6,8 @@ classdef Model < lmz.api.LeggedModel
         end
 
         function value = getCapabilities(~)
-            value = struct('simulate', true, 'solve', false, ...
-                'continue', false, 'optimize', false, 'visualize', true, ...
+            value = struct('simulate', true, 'solve', true, ...
+                'continue', true, 'optimize', true, 'visualize', true, ...
                 'animate', true, 'parameterHomotopy', false, ...
                 'branchFamilyScan', false);
         end
@@ -29,15 +29,16 @@ classdef Model < lmz.api.LeggedModel
         end
 
         function value = listProblems(~)
-            value = {'demo_stride'};
+            value = {'demo_stride','periodic_apex','trajectory_fit'};
         end
 
         function problem = createProblem(obj, problemId, configuration)
-            if ~strcmp(problemId, 'demo_stride')
-                error('lmz:slip_biped:UnknownProblem', ...
-                    'Unknown problem: %s', problemId);
+            switch problemId
+                case 'demo_stride', problem=lmz.api.SimulationProblem(obj,problemId,configuration);
+                case 'periodic_apex', problem=lmzmodels.slip_biped.PeriodicApexProblem(obj,configuration);
+                case 'trajectory_fit', problem=lmzmodels.slip_biped.TrajectoryFitProblem(obj,configuration);
+                otherwise, error('lmz:slip_biped:UnknownProblem','Unknown problem: %s',problemId);
             end
-            problem = lmz.api.SimulationProblem(obj, problemId, configuration);
         end
 
         function result = simulate(obj, request, context)
@@ -85,6 +86,10 @@ classdef Model < lmz.api.LeggedModel
             value = struct('speed', speed, 'stride_period', period);
             if isfield(request.Options, 'speed'), value.speed = request.Options.speed; end
             if isfield(request.Options, 'stride_period'), value.stride_period = request.Options.stride_period; end
+            if isfield(request.Options,'decision')
+                if isfield(request.Options.decision,'speed'),value.speed=request.Options.decision.speed;end
+                if isfield(request.Options.decision,'stride_period'),value.stride_period=request.Options.decision.stride_period;end
+            end
         end
     end
 end

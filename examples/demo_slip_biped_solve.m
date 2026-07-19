@@ -1,0 +1,2 @@
+projectRoot=fileparts(fileparts(mfilename('fullpath')));originalDirectory=pwd;cleanup=onCleanup(@()cd(originalDirectory));cd(projectRoot);startup;cd(originalDirectory);
+registry=lmz.registry.ModelRegistry.discover();problem=registry.createModel('slip_biped').createProblem('periodic_apex',struct());seed=problem.makeSolution([0.7;1],[],[]);solveResult=lmz.services.SolveService().solve(problem,seed,struct(),lmz.api.RunContext.synchronous(21));clear cleanup

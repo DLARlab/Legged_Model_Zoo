@@ -11,6 +11,11 @@ classdef LeggedModelZooApp < handle
         TimeSlider
         StatusArea
         CapabilityLabel
+        BranchAxes
+        SolutionTable
+        SolveStatus
+        ContinuationAxes
+        OptimizationAxes
     end
     methods
         function obj = LeggedModelZooApp(varargin)
@@ -47,7 +52,8 @@ classdef LeggedModelZooApp < handle
                 'Items', obj.Controller.modelIds(), ...
                 'ValueChangedFcn', @(~,~) obj.modelChanged());
             uilabel(header, 'Text', 'Problem');
-            obj.ProblemDropDown = uidropdown(header);
+            obj.ProblemDropDown = uidropdown(header, ...
+                'ValueChangedFcn', @(~,~) obj.problemChanged());
             uilabel(header, 'Text', 'Example');
             obj.ExampleDropDown = uidropdown(header, ...
                 'Items', obj.Controller.builtInExamples());
@@ -70,20 +76,32 @@ classdef LeggedModelZooApp < handle
                 'ValueChangedFcn', @(~,~) obj.updateTimeMarker());
             uilabel(controls, 'Text', '0–100%');
 
-            obj.addUnavailableTab(tabs, 'Branch', 'Branch import and exploration is not implemented.');
-            obj.addUnavailableTab(tabs, 'Solution', 'Native solution editing is not implemented.');
-            obj.addUnavailableTab(tabs, 'Solve', 'Root solving is not implemented.');
-            obj.addUnavailableTab(tabs, 'Continuation', 'Continuation is not implemented.');
-            obj.addUnavailableTab(tabs, 'Optimization', 'Optimization is not implemented.');
+            obj.buildBranchTab(tabs);
+            obj.buildSolutionTab(tabs);
+            obj.buildSolveTab(tabs);
+            obj.buildContinuationTab(tabs);
+            obj.buildOptimizationTab(tabs);
 
             obj.StatusArea = uitextarea(root, 'Editable', 'off', ...
                 'Value', {'Ready. Select a model and run its built-in demonstration.'});
         end
 
-        function addUnavailableTab(~, tabs, name, message)
-            tab = uitab(tabs, 'Title', name);
-            grid = uigridlayout(tab, [1 1]);
-            uilabel(grid, 'Text', message, 'HorizontalAlignment', 'center');
+        function buildBranchTab(obj,tabs)
+            tab=uitab(tabs,'Title','Branch');grid=uigridlayout(tab,[2 1]);grid.RowHeight={'1x',40};obj.BranchAxes=uiaxes(grid);
+            controls=uigridlayout(grid,[1 3]);uibutton(controls,'Text','Reload built-in','ButtonPushedFcn',@(~,~)obj.reloadBranch());
+            uibutton(controls,'Text','Select first','ButtonPushedFcn',@(~,~)obj.selectPoint(1));uibutton(controls,'Text','Select last','ButtonPushedFcn',@(~,~)obj.selectLastPoint());
+        end
+        function buildSolutionTab(obj,tabs)
+            tab=uitab(tabs,'Title','Solution');grid=uigridlayout(tab,[2 1]);obj.SolutionTable=uitable(grid);uibutton(grid,'Text','Restore selected branch point','ButtonPushedFcn',@(~,~)obj.restoreSolution());
+        end
+        function buildSolveTab(obj,tabs)
+            tab=uitab(tabs,'Title','Solve');grid=uigridlayout(tab,[3 1]);uibutton(grid,'Text','Solve selected solution','ButtonPushedFcn',@(~,~)obj.solve());obj.SolveStatus=uilabel(grid,'Text','Ready');uibutton(grid,'Text','Simulate solved solution','ButtonPushedFcn',@(~,~)obj.simulateSolved());
+        end
+        function buildContinuationTab(obj,tabs)
+            tab=uitab(tabs,'Title','Continuation');grid=uigridlayout(tab,[2 1]);obj.ContinuationAxes=uiaxes(grid);controls=uigridlayout(grid,[1 2]);uibutton(controls,'Text','Make second seed','ButtonPushedFcn',@(~,~)obj.makeSecondSeed());uibutton(controls,'Text','Run short branch','ButtonPushedFcn',@(~,~)obj.continueBranch());
+        end
+        function buildOptimizationTab(obj,tabs)
+            tab=uitab(tabs,'Title','Optimization');grid=uigridlayout(tab,[2 1]);obj.OptimizationAxes=uiaxes(grid);uibutton(grid,'Text','Run fit','ButtonPushedFcn',@(~,~)obj.optimize());
         end
 
         function modelChanged(obj)
@@ -91,11 +109,19 @@ classdef LeggedModelZooApp < handle
             obj.refreshModel();
         end
 
+        function problemChanged(obj)
+            obj.Controller.State.ProblemId = obj.ProblemDropDown.Value;
+        end
+
         function refreshModel(obj)
             obj.ModelDropDown.Value = obj.Controller.State.ModelId;
             problems = obj.Controller.problemIds();
             obj.ProblemDropDown.Items = problems;
-            obj.ProblemDropDown.Value = problems{1};
+            if any(strcmp(obj.Controller.State.ProblemId, problems))
+                obj.ProblemDropDown.Value = obj.Controller.State.ProblemId;
+            else
+                obj.ProblemDropDown.Value = problems{1};
+            end
             examples = obj.Controller.builtInExamples();
             obj.ExampleDropDown.Items = examples;
             obj.ExampleDropDown.Value = examples{1};
@@ -107,6 +133,7 @@ classdef LeggedModelZooApp < handle
             cla(obj.Axes);
             title(obj.Axes, ['Built-in example: ' obj.Controller.State.ModelId], ...
                 'Interpreter', 'none');
+            obj.renderBranch();obj.renderSolution();
         end
 
         function simulate(obj)
@@ -153,6 +180,34 @@ classdef LeggedModelZooApp < handle
             obj.Figure.CloseRequestFcn = [];
             delete(obj.Figure);
             obj.Figure = [];
+        end
+        function reloadBranch(obj),obj.Controller.loadBuiltInBranch();obj.renderBranch();obj.renderSolution();end
+        function selectPoint(obj,index),obj.Controller.selectBranchPoint(index);obj.renderSolution();end
+        function selectLastPoint(obj),obj.selectPoint(obj.Controller.State.Datasets{1}.Branch.pointCount());end
+        function restoreSolution(obj),obj.Controller.selectBranchPoint(obj.Controller.State.Selection.PointIndex);obj.renderSolution();end
+        function renderBranch(obj)
+            if isempty(obj.BranchAxes)||isempty(obj.Controller.State.Datasets),return,end
+            branch=obj.Controller.State.Datasets{1}.Branch;names=branch.DecisionSchema.names();plot(obj.BranchAxes,branch.decision(names{1}),branch.decision(names{2}),'o-');xlabel(obj.BranchAxes,names{1},'Interpreter','none');ylabel(obj.BranchAxes,names{2},'Interpreter','none');grid(obj.BranchAxes,'on');
+        end
+        function renderSolution(obj)
+            if isempty(obj.SolutionTable)||isempty(obj.Controller.State.WorkingSolution),return,end
+            solution=obj.Controller.State.WorkingSolution;names=solution.DecisionSchema.names();values=num2cell(solution.DecisionValues);obj.SolutionTable.Data=[names,values];obj.SolutionTable.ColumnName={'Decision','Value'};
+        end
+        function solve(obj)
+            try,result=obj.Controller.solveWorkingSolution(struct());obj.SolveStatus.Text=sprintf('Exit %d, residual %.3g',result.ExitFlag,result.Evaluation.ScaledResidualNorm);obj.renderSolution();catch exception,obj.SolveStatus.Text=exception.message;end
+        end
+        function simulateSolved(obj)
+            solution=obj.Controller.State.WorkingSolution;if isempty(solution),return,end;model=obj.Controller.Registry.createModel(solution.ModelId);problem=model.createProblem(solution.ProblemId,struct());obj.Controller.State.Simulation=lmz.services.SolutionService().simulate(problem,solution,obj.Controller.Context);obj.StatusArea.Value={'Solved solution simulated'};
+        end
+        function makeSecondSeed(obj)
+            try,pair=obj.Controller.makeSecondSeed(0.03);obj.StatusArea.Value={sprintf('Second seed radius %.4g',pair.AchievedRadius)};catch exception,obj.StatusArea.Value={exception.message};end
+        end
+        function continueBranch(obj)
+            try,result=obj.Controller.runContinuation(struct('MaximumPoints',10,'BothDirections',true));branch=result.Branch;names=branch.DecisionSchema.names();plot(obj.ContinuationAxes,branch.decision(names{1}),branch.decision(names{2}),'o-');grid(obj.ContinuationAxes,'on');obj.StatusArea.Value={['Continuation: ' result.TerminationReason]};catch exception,obj.StatusArea.Value={exception.message};end
+        end
+        function optimize(obj)
+            capabilities=obj.Controller.capabilities();if ~capabilities.optimize,obj.StatusArea.Value={'Selected model does not support optimization.'};return,end
+            try,result=obj.Controller.runOptimization(struct());semilogy(obj.OptimizationAxes,max(result.History,eps),'o-');grid(obj.OptimizationAxes,'on');obj.StatusArea.Value={sprintf('Objective %.6g',result.Objective)};obj.renderSolution();catch exception,obj.StatusArea.Value={exception.message};end
         end
     end
 end

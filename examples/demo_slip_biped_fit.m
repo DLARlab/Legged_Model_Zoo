@@ -1,0 +1,2 @@
+projectRoot=fileparts(fileparts(mfilename('fullpath')));originalDirectory=pwd;cleanup=onCleanup(@()cd(originalDirectory));cd(projectRoot);startup;cd(originalDirectory);
+registry=lmz.registry.ModelRegistry.discover();problem=registry.createModel('slip_biped').createProblem('trajectory_fit',struct());seed=problem.makeSolution(problem.getDecisionSchema().defaults(),[],[]);optimizationResult=lmz.services.OptimizationService().run(problem,seed,struct(),lmz.api.RunContext.synchronous(23));clear cleanup

@@ -4,7 +4,7 @@ classdef Model < lmz.api.LeggedModel
         function value=getManifest(~), value=struct('id','slip_quad_load','version','1.0.0'); end
         function value=getCapabilities(~)
             value=struct('simulate',true,'solve',false,'continue',false, ...
-                'optimize',false,'visualize',true,'animate',true, ...
+                'optimize',true,'visualize',true,'animate',true, ...
                 'parameterHomotopy',false,'branchFamilyScan',false);
         end
         function schema=getPhysicalStateSchema(~)
@@ -18,16 +18,20 @@ classdef Model < lmz.api.LeggedModel
                 lmz.schema.VariableSpec('stride_period','DefaultValue',0.9,'LowerBound',0,'Topology','positive'); ...
                 lmz.schema.VariableSpec('rope_length','DefaultValue',0.8,'LowerBound',0,'Topology','positive')]);
         end
-        function value=listProblems(~), value={'demo_stride'}; end
+        function value=listProblems(~), value={'demo_stride','multi_stride_fit'}; end
         function problem=createProblem(obj,problemId,configuration)
-            if ~strcmp(problemId,'demo_stride'), error('lmz:slip_quad_load:UnknownProblem','Unknown problem: %s',problemId); end
-            problem=lmz.api.SimulationProblem(obj,problemId,configuration);
+            switch problemId
+                case 'demo_stride',problem=lmz.api.SimulationProblem(obj,problemId,configuration);
+                case 'multi_stride_fit',problem=lmzmodels.slip_quad_load.MultiStrideFitProblem(obj,configuration);
+                otherwise,error('lmz:slip_quad_load:UnknownProblem','Unknown problem: %s',problemId);
+            end
         end
         function result=simulate(obj,request,context)
             context.check(); options=request.Options; speed=0.8; period=0.9; rope=0.8;
             if isfield(options,'speed'), speed=options.speed; end
             if isfield(options,'stride_period'), period=options.stride_period; end
             if isfield(options,'rope_length'), rope=options.rope_length; end
+            if isfield(options,'decision'), speed=options.decision.speed; period=options.decision.stride_period; rope=options.decision.rope_length; end
             time=linspace(0,period,241)'; phase=2*pi*time/period; x=speed*time;
             quadY=0.72+0.035*cos(2*phase); pitch=0.02*sin(phase);
             loadX=x-rope-0.03*sin(phase); loadY=0.25+0*time;

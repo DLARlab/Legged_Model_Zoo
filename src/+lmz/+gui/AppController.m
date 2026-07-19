@@ -28,6 +28,8 @@ classdef AppController < handle
             obj.State.ProblemId = problems{1};
             obj.State.Simulation = [];
             obj.State.Status = ['Selected ' manifest.id];
+            obj.State.Datasets={}; obj.State.Selection=[]; obj.State.WorkingSolution=[];
+            obj.loadBuiltInBranch();
         end
 
         function ids = problemIds(obj)
@@ -48,7 +50,7 @@ classdef AppController < handle
                 options = example.options;
             end
             model = obj.Registry.createModel(obj.State.ModelId);
-            problem = model.createProblem(obj.State.ProblemId, struct());
+            problem = model.createProblem('demo_stride', struct());
             service = lmz.services.SimulationService();
             result = service.simulate(problem, struct(), options, obj.Context);
             obj.State.Simulation = result;
@@ -58,6 +60,27 @@ classdef AppController < handle
         function capabilities = capabilities(obj)
             model = obj.Registry.createModel(obj.State.ModelId);
             capabilities = model.getCapabilities();
+        end
+        function dataset=loadBuiltInBranch(obj)
+            branch=lmz.services.BranchService().loadBuiltInBranch(obj.Registry,obj.State.ModelId);dataset=lmz.data.BranchDataset([obj.State.ModelId ' built-in'],branch,'ReadOnly',true);
+            obj.State.Datasets={dataset};obj.State.ActiveDatasetId=dataset.Id;obj.selectBranchPoint(1);
+        end
+        function solution=selectBranchPoint(obj,index)
+            dataset=obj.State.Datasets{1};obj.State.Selection=lmz.services.BranchService().selectPoint(dataset,index);solution=dataset.Branch.point(index);obj.State.WorkingSolution=solution;obj.State.ProblemId=solution.ProblemId;
+        end
+        function result=solveWorkingSolution(obj,options)
+            model=obj.Registry.createModel(obj.State.ModelId);problem=model.createProblem('periodic_apex',struct());result=lmz.services.SolveService().solve(problem,obj.State.WorkingSolution,options,obj.Context);obj.State.SolveResult=result;obj.State.WorkingSolution=result.Solution;obj.State.Status='Solve complete';
+        end
+        function pair=makeSecondSeed(obj,radius)
+            model=obj.Registry.createModel(obj.State.ModelId);problem=model.createProblem('periodic_apex',struct());pair=lmz.services.SeedService().makeSecondSeed(problem,obj.State.WorkingSolution,radius,struct(),obj.Context);obj.State.SeedPair=pair;
+        end
+        function result=runContinuation(obj,options)
+            if isempty(obj.State.SeedPair),obj.makeSecondSeed(0.03);end
+            model=obj.Registry.createModel(obj.State.ModelId);problem=model.createProblem('periodic_apex',struct());result=lmz.services.ContinuationService().run(problem,obj.State.SeedPair,options,obj.Context);obj.State.ContinuationResult=result;obj.State.Status='Continuation complete';
+        end
+        function result=runOptimization(obj,options)
+            model=obj.Registry.createModel(obj.State.ModelId);problems=model.listProblems();if any(strcmp(problems,'trajectory_fit')),id='trajectory_fit';else,id='multi_stride_fit';end
+            problem=model.createProblem(id,struct());seed=problem.makeSolution(problem.getDecisionSchema().defaults(),[],[]);result=lmz.services.OptimizationService().run(problem,seed,options,obj.Context);obj.State.OptimizationResult=result;obj.State.WorkingSolution=result.Solution;obj.State.Status='Optimization complete';
         end
 
         function names = bodyTrajectoryNames(obj)

@@ -9,6 +9,17 @@ for k=1:numel(files)
         if ~isempty(regexp(text,patterns{j},'once')), violations{end+1}=sprintf('%s: %s',path,patterns{j}); end %#ok<AGROW>
     end
 end
+restricted= [dir(fullfile(root,'src','+lmz','+gui','**','*.m')); ...
+    dir(fullfile(root,'src','+lmz','+services','**','*.m'))];
+restrictedPatterns={'\<fsolve\s*\(','\<fmincon\s*\(','\<fminsearch\s*\(', ...
+    'Quadrupedal_ZeroFun','ZeroFunc_Biped','Quad_Load_ZeroFun', ...
+    'not implemented','status\s*=\s*''not-implemented'''};
+for k=1:numel(restricted)
+    path=fullfile(restricted(k).folder,restricted(k).name);text=fileread(path);
+    for j=1:numel(restrictedPatterns)
+        if ~isempty(regexpi(text,restrictedPatterns{j},'once')),violations{end+1}=sprintf('%s: %s',path,restrictedPatterns{j});end %#ok<AGROW>
+    end
+end
 oldPackages = {'+jerboabiped', '+slipquadruped', '+quadload'};
 for k=1:numel(oldPackages)
     if exist(fullfile(root,'models','+lmzmodels',oldPackages{k}),'dir') == 7
