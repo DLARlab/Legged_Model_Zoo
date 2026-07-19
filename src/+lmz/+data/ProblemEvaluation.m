@@ -1,6 +1,7 @@
 classdef ProblemEvaluation
     properties (SetAccess=private)
-        ResidualBlocks; Residual; ScaledResidual; ResidualNorm; ScaledResidualNorm
+        ResidualBlocks; Residual; UnscaledResidual; ScaledResidual
+        ResidualNorm; UnscaledResidualNorm; ScaledResidualNorm
         Simulation; Feasibility; PhysicalValidity; Warnings; Diagnostics
     end
     methods
@@ -9,7 +10,9 @@ classdef ProblemEvaluation
             addParameter(parser,'PhysicalValidity',true); addParameter(parser,'Warnings',{}); addParameter(parser,'Diagnostics',struct()); parse(parser,varargin{:});
             obj.ResidualBlocks=blocks(:); raw=[]; scaled=[];
             for index=1:numel(blocks), raw=[raw;blocks(index).Values]; scaled=[scaled;blocks(index).scaled()]; end %#ok<AGROW>
-            obj.Residual=raw; obj.ScaledResidual=scaled; obj.ResidualNorm=norm(raw); obj.ScaledResidualNorm=norm(scaled);
+            obj.Residual=raw; obj.UnscaledResidual=raw; obj.ScaledResidual=scaled;
+            obj.ResidualNorm=norm(raw); obj.UnscaledResidualNorm=obj.ResidualNorm;
+            obj.ScaledResidualNorm=norm(scaled);
             obj.Simulation=parser.Results.Simulation; obj.Feasibility=parser.Results.Feasibility; obj.PhysicalValidity=parser.Results.PhysicalValidity;
             obj.Warnings=parser.Results.Warnings; obj.Diagnostics=parser.Results.Diagnostics;
         end

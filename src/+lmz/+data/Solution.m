@@ -30,6 +30,13 @@ classdef Solution
         function value=withParameterValues(obj,values)
             data=obj.toStruct(); data.DecisionSchema=obj.DecisionSchema; data.ParameterSchema=obj.ParameterSchema; data.ResidualBlocks=obj.ResidualBlocks; data.ParameterValues=values(:); data.Id=lmz.util.Ids.new('solution'); value=lmz.data.Solution(data);
         end
+        function value=withoutDerivedData(obj)
+            data=obj.toStruct();data.DecisionSchema=obj.DecisionSchema;data.ParameterSchema=obj.ParameterSchema;
+            data.ResidualBlocks=lmz.data.ResidualBlock.empty(0,1);data.Observables=struct();
+            data.Diagnostics=struct('Status','unevaluated');data.Classification=struct();
+            data.Feasibility=struct('Valid',false,'Status','unevaluated');data.Id=lmz.util.Ids.new('solution');
+            value=lmz.data.Solution(data);
+        end
         function value=toStruct(obj)
             value=struct(); names=properties(obj);
             for index=1:numel(names), value.(names{index})=obj.(names{index}); end
@@ -44,7 +51,7 @@ classdef Solution
                 'parameterSchema',obj.ParameterSchema.toStruct(),'decisionValues',obj.DecisionValues, ...
                 'parameterValues',obj.ParameterValues,'diagnostics',obj.Diagnostics,'lineage',obj.Lineage, ...
                 'randomSeed',0,'sourceCommitSHAs',struct(),'createdAt',obj.CreatedAt, ...
-                'matlabVersion',version,'codeVersion','round4','solution',obj.toStruct());
+                'matlabVersion',version,'codeVersion','round5','solution',obj.toStruct());
         end
     end
     methods (Static)

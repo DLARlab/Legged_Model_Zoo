@@ -1,5 +1,15 @@
 # GUI design
 
-`LeggedModelZooApp` owns widget construction. `AppController` owns state transitions and calls services. `AppState` synchronizes datasets, selection, working solution, simulation, solve result, seed pair, continuation result, and optimization result.
+`LeggedModelZooApp` owns widgets and rendering handles. `AppController` owns state transitions and invokes services. `AppState` carries the RoadMap catalog, datasets, active dataset, independent hover and locked selections, working/solved solutions, simulation, seed pair, continuation result/preview, oscillator index, recording state, and status.
 
-Branch, Solution, Solve, Continuation, and Optimization tabs execute native workflows. The current UI is a compact vertical slice: full branch dataset styling, cell editing, file dialogs, pause/resume controls, rich diagnostics, and manual interactive visual review remain future work.
+The application opens on the built-in quadruped RoadMap. The branch explorer can load a manifest selection, all nine built-ins, a folder, or an individual legacy/native MAT; it supports persisted visibility, remove/reload, native/legacy export, and a details panel for source, status, gait, parameter signature, style, point count, and read-only state. It plots schema-named decisions, event times, parameters, or scalar observables with 2-D/3-D, azimuth/elevation, limits, aspect, and the source-derived `dx` / `dphi` / optional `y` preset.
+
+Hover searches all visible datasets in displayed, range-scaled 2-D/3-D coordinates and writes only `HoverSelection`; a transient marker/data tip shows dataset, index, coordinates, parameters, gait, and residual. Click, keyboard, index, and percentage navigation call `lockBranchPoint`, which synchronizes `Selection` (the Round 4 compatibility alias), `LockedSelection`, `WorkingSolution`, active dataset, problem, and oscillator index. Changing selection or numerical inputs invalidates stale simulation, solve, seed, and continuation state. Source branches are never mutated.
+
+The inspector separates initial state, event timing, parameters, observables, residual blocks, diagnostics, and provenance. Editable table callbacks update an unevaluated working copy; validate/evaluate repopulates derived data. Restore, simulation, explicit wrap/ground-contact projection, solution save, writable candidate datasets, solve, and continuation handoff are controller actions. The GUI contains no evaluator, optimizer, or continuation-engine calls.
+
+`QuadrupedRenderer` consumes named kinematics/contact/force data. `AnimationController` maps slider/numeric time to physical frames and reports playback frames back to the UI. Plot providers draw torso, back/front legs, all GRF components, and oscillator views in complete or progressive-window mode. `RecorderService` owns atomic GIF/MP4/keyframe/plot/axes exports, cancellation checks, frame restoration, and writer cleanup.
+
+The solve tab supports next/previous and manual RoadMap pairs, generated second seeds, reproducible noise, solve diagnostics, and a pair/predictor overlay. The continuation tab installs prediction/accepted/rejected callbacks for a live source overlay, exposes point count and checkpoint resume, preserves controlled-stop results, and provides named homotopy/family actions.
+
+Batch construction and callback-level edit/visibility/import/export/controller workflows are automated. Manual desktop hover ergonomics, OS-native dialogs, the five requested screenshots, and end-user codec behavior still require a desktop session.

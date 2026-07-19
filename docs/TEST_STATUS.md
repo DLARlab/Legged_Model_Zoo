@@ -5,98 +5,122 @@
 - MATLAB `25.2.0.3177638 (R2025b) Update 5`
 - Optimization Toolbox: licensed
 - Parallel Computing Toolbox: licensed but not required
-- `usejava('desktop')`: false in batch mode
 - Student License
+- `usejava('desktop')`: false in the verification process
 
-Compatibility remains targeted at R2019b but was not executed on that release.
+Compatibility remains targeted at R2019b, but this round was not executed on that release.
 
-## Full suite
+## Full suite and static contracts
 
-Command:
+Final command:
 
 ```bash
-/Applications/MATLAB_R2025b.app/bin/matlab -batch "cd('/Users/nanyoujiayu/Documents/GitHub/Legged_Model_Zoo'); startup; addpath(fullfile(pwd,'tools')); update_readme_status; check_readme_contract; results=run_tests; assert(~any([results.Failed]));"
+/Applications/MATLAB_R2025b.app/bin/matlab -batch "cd('/path/to/Legged_Model_Zoo'); startup; addpath(fullfile(pwd,'tools')); addpath(fullfile(pwd,'tools','maintainers')); check_readme_contract; violations=static_architecture_check(pwd); assert(isempty(violations),strjoin(violations,newline)); report=verify_slip_quadruped_roadmap; results=run_tests; assert(~any([results.Failed])); assert(~any([results.Incomplete]));"
 ```
 
-Exact summary:
+Exact final summary:
 
 ```text
-README model table is already current.
 README contract valid for 3 canonical models.
-Legged Model Zoo: 36 run, 0 failed, 0 incomplete.
+LMZ_ROADMAP_VERIFY_OK branches=9 points=3443 files=11
+Legged Model Zoo: 55 run, 0 failed, 0 incomplete.
+ROUND5_FULL_OK run=55 failed=0 incomplete=0
 ```
 
-Coverage includes prior architecture/catalog/schema/simulation/GUI tests plus solution/branch contracts, native run artifacts, both periodic solves, both optimizations, second-seed radius, pseudo-arclength continuation, homotopy, family scan, and advanced controller workflows.
+The 55 tests cover the earlier model/catalog/schema/simulation/solve/optimization contracts plus all-asset manifest hashes, nine native imports, exact Results29 round-trip and metadata, scientific residual/trajectory/event/GRF/gait equivalence, strictly increasing public simulation, physical kinematics/rendering/plots, multi-dataset 2-D/3-D hover and lock synchronization, real table edits, plot visibility semantics, downstream-state invalidation, manual/adjacent/generated seeds, scientific continuation, callbacks, controlled stop, checkpoints/resume, homotopy/family scan, atomic recording/export, GUI construction, README, and static architecture rules.
 
-## Direct numerical evidence
+## Scientific regression
 
-Executed end-to-end controller workflow result:
+The repository-contained fixture was captured once from immutable `SLIP_Model_Zoo` commit `2c106101383ecee1b2a9d695efe09fbd72d5718a`, using `PK_20_2.mat` columns 1, 267, and 446. Ordinary tests do not access the sibling source repository.
+
+| Quantity | Absolute tolerance | Relative tolerance |
+|---|---:|---:|
+| residual | `1e-11` | direct absolute comparison |
+| raw time | `1e-13` | direct absolute comparison |
+| raw state / event state | `1e-10` | `1e-9` |
+| 12-channel GRF | `1e-9` | `1e-8` |
+
+The source and migrated compatibility evaluator are the same preserved numerical statements, so the captured adaptive grids compare directly in R2025b. Each case also compares state and GRF trajectories on a 401-sample common interpolation grid after selecting the last sample at duplicate event times. Public `SimulationResult` separately applies that last-sample policy and preserves pre/post states in nine event records.
+
+Default RoadMap point 267 produced:
 
 ```text
-WORKFLOW_OK solve=1.57e-16 radius=0.03 points=6 objective=3.04e-17
+scaled residual norm = 2.91e-11
+solve algorithm      = accepted-existing-seed
 ```
 
-Executed quadruped continuation diagnostic:
+The first corrected point of a three-point scientific continuation produced:
 
 ```text
-radius=0.0300009 err=9.22e-07
-points=8 reason=maximum_points maxres=1.57e-16
+SCIENTIFIC_CONTINUATION_EVIDENCE points=3 residual=2.0478450749452257e-11 reason=maximum_points
 ```
 
-Executed load optimization diagnostic:
+Generated second-seed evidence used requested radius `0.005`, achieved `0.0050000007`, residual `5.45e-12`, and positive exit flag 4. Named `phi_neutral` homotopy completed two targets, and a one-target family scan returned one completed three-point branch.
+
+## Public RoadMap example
+
+The example now bootstraps correctly even when invoked with `run(...)`, which temporarily changes MATLAB's current directory to `examples`:
 
 ```text
-exit=2 initial=0.4425 final=3.03682e-17
+LMZ_ROADMAP_WORKFLOW_OK seed=267 residual=2.91e-11 solve=accepted-existing-seed continuation=20
+ROUND5_EXAMPLE_OK points=20 artifact=branch figures=6
 ```
 
-These are native demonstration results, not legacy-equivalence measurements.
+It created a source branch plot, physical selected frame, torso/back/front trajectories, GRF plot, oscillator plot, continuation overlay, and a reloadable 20-point native artifact using only repository-contained data and public APIs.
 
-## Public examples
+## GUI and recording evidence
 
-One clean MATLAB process executed all eleven required Round 4 examples. Each printed `EXAMPLE_OK`:
+Automated GUI interaction tests construct the complete `uifigure`, edit a working value through the actual table callback, exercise Plot selected/all/clear, verify 3-D nearest hover leaves the lock unchanged, and check the new playback, metadata, diagnostics, and checkpoint widgets.
+
+Recording tests verify:
+
+- GIF output and renderer-frame restoration;
+- three PNG keyframes;
+- PNG plot export;
+- animated-axes/oscillator GIF;
+- MP4 through `VideoWriter` when supported;
+- invalid frame-count rejection without a partial destination;
+- inactive recording state and closed resources after completion.
+
+Five real batch-graphics app captures are stored under `docs/screenshots/`:
 
 ```text
-demo_branch_explorer.m
-demo_solution_inspector.m
-demo_slip_biped_solve.m
-demo_slip_biped_continuation.m
-demo_slip_biped_fit.m
-demo_slip_quadruped_solve.m
-demo_slip_quadruped_continuation.m
-demo_parameter_homotopy.m
-demo_branch_family_scan.m
-demo_slip_quad_load_fit.m
-demo_full_gui_workflow.m
+roadmap_branch_explorer.png
+roadmap_selected_solution.png
+roadmap_animation.png
+roadmap_trajectories_grf.png
+roadmap_continuation_overlay.png
 ```
 
-## Isolated advanced workflow
-
-The repository was copied without `.git` or prompt files to:
+Exact capture marker:
 
 ```text
-/private/tmp/lmz-round4-isolation.CMWr3w/Legged_Model_Zoo
+ROUND5_BATCH_SCREENSHOTS_OK files=5 continuation=4
 ```
 
-The parent contained no research repositories. MATLAB executed branch selection, quadruped solve, second seed, five-point continuation, load optimization, and GUI construction. Exact marker:
+These are automated captures, not a claim that the human desktop checklist was performed.
+
+## Final isolated workflow
+
+The final working tree was copied without `.git` or Round prompt files to:
 
 ```text
-ISOLATED_ADVANCED_WORKFLOWS_OK
+/private/tmp/lmz-round5-final-isolation.eMRCoO/Legged_Model_Zoo
 ```
 
-## Static checks
+Its parent contains no sibling research repository. A clean MATLAB process loaded all nine branches (3,443 points), evaluated and simulated the default point, constructed the GUI, updated a physical renderer frame, accepted the solved seed, created the adjacent pair, ran a three-point scientific continuation, and saved/reloaded its native branch artifact.
 
-- Catalog and built-in JSON files parse.
-- `git diff --check` passes.
-- README contract and generated capability table pass.
-- Generic services and GUI contain no direct model evaluator calls.
-- GUI contains no direct `fsolve`, `fmincon`, or `fminsearch` calls.
-- The three immutable source repositories remain clean.
+Exact marker:
 
-## Not verified
+```text
+ISOLATED_ROADMAP_WORKFLOW_OK branches=9 points=3443 residual=2.91e-11 solve=accepted-existing-seed continuation=3 gui=1 frame=1279 artifact=branch
+```
 
-- Published legacy residual, trajectory, event, force, gait, or objective equivalence
-- Measured scientific regression tolerances
-- Results14 and X_accum native imports
-- File-backed checkpoint resume, pause/resume UI, curvature/stagnation/loop policies
-- Manual interactive desktop inspection
+## Still not verified
+
+- Human MATLAB desktop walkthrough, including hover ergonomics, native file dialogs, interactive continuation Pause/Resume/Stop timing, codecs, and clean close
+- The prompt's screenshots as manually captured evidence (the five repository PNGs are automated batch captures)
 - MATLAB R2019b execution
+- Forced scientific corrector rejection, curvature-threshold, stagnation, and historical-segment loop-closure termination cases
+- Published biped Results14 equivalence and load-pulling `X_accum`/objective equivalence
+- Upstream redistribution rights; the source repository provides no license or notice

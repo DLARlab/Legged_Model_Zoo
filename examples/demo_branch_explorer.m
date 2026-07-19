@@ -1,3 +1,3 @@
-projectRoot=fileparts(fileparts(mfilename('fullpath')));originalDirectory=pwd;cleanup=onCleanup(@()cd(originalDirectory));cd(projectRoot);startup;cd(originalDirectory);
+startup;cleanup=onCleanup(@()close all);
 registry=lmz.registry.ModelRegistry.discover();branch=lmz.services.BranchService().loadBuiltInBranch(registry,'slip_quadruped');
-plot(branch.decision('speed'),branch.decision('stride_period'),'o-');xlabel('speed');ylabel('stride period');clear cleanup
+plot(branch.decision('dx'),branch.decision('dphi'),'LineWidth',1.5);xlabel('Forward speed, dx');ylabel('Pitch rate, dphi');grid on;clear cleanup

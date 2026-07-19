@@ -4,7 +4,11 @@ classdef PauseToken < handle
         function pause(obj), obj.IsPaused=true; end
         function resume(obj), obj.IsPaused=false; end
         function wait(obj,cancellation)
-            while obj.IsPaused, cancellation.throwIfCancellationRequested(); pause(0.05); end
+            while obj.IsPaused
+                cancellation.throwIfCancellationRequested();
+                drawnow limitrate;
+                pause(0.05);
+            end
         end
     end
 end

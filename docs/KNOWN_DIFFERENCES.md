@@ -1,13 +1,14 @@
 # Known differences
 
-- Native evaluation is not implemented; model stubs fail explicitly instead of silently delegating.
-- No event schedule repair or parameter transform occurs inside residual evaluation.
-- Registry configuration is declarative and implementation classes are restricted to `lmzmodels.*`.
-- The prior tracked project contents were already deleted in the working tree at task start and were not restored wholesale.
-- Catalog capabilities are deliberately false until executable problem/service support exists; merely retaining an adapter does not advertise simulation or solving.
-- Artifact schema version `1.0.0` now requires explicit diagnostics, lineage, random seed, source commits, and ordered schema metadata. Earlier incomplete development artifacts are rejected rather than guessed into shape.
-- Round 3 built-in simulations are explicitly labeled standalone analytic demonstrations. They exercise common runtime and GUI boundaries but are not claimed equivalent to the published legacy equations.
-- Canonical model IDs are `slip_biped`, `slip_quadruped`, and `slip_quad_load`. Older IDs resolve only through warning-producing registry/artifact aliases.
-- Round 4 periodic problems solve the native relation `speed * stride_period = stride_length`, with an explicitly redundant residual block to exercise rank-deficient formulation and generic continuation. This is not the published biped or quadruped residual.
-- Round 4 fitting problems use deterministic named quadratic targets. They exercise real `fmincon` and objective decomposition but are not equivalent to the published trajectory/load objectives.
-- Continuation currently provides secant prediction, metric-weighted correction, adaptive step reduction/growth, duplicate rejection, bidirectional tracing, callbacks, and cancellation. File-backed checkpoint resume, curvature control, stagnation, and historical loop closure remain incomplete.
+- `slip_quadruped/periodic_apex` is now the migrated 22-decision scientific problem. `demo_stride` remains a separate introductory animation and is never used as RoadMap data.
+- Residual evaluation wraps cyclic event times deterministically but never performs the source evaluator's hidden `fsolve`. Ground-contact timing projection is an explicit seed operation.
+- Public `SimulationResult.Time` is strictly increasing. The source trajectory repeats event timestamps; regression fixtures retain the raw arrays, while the public adapter keeps the last sample at each duplicate time and preserves event states separately.
+- The source evaluator returns 23 residual entries for `J_pitch = Inf` and can append optional symmetry equations. The RoadMap contract is finite inertia, no optional symmetry constraints, and exactly 22 residuals.
+- The copied FIG files are visual references, not numerical authority. Their Y labels disagree with their row-5 data, and their BG curve predates the current BG MAT branch. The MAT hashes and manifest are authoritative.
+- `phi_neutral` is present in the seven-parameter source contract but is unused by the active source dynamics. Homotopy over it therefore demonstrates parameter transport without changing this evaluator's residual.
+- Gait classification preserves the source point-classification rules. The compatibility branch helper replaces `downsample` with the equivalent colon index expression, removing its Signal Processing Toolbox-only dependency.
+- The renderer recomputes stance leg length so stance feet remain on the ground; swing legs use the resting length. This follows source kinematic equations without migrating its graphics classes.
+- Biped and load-pulling periodic/fit problems remain native demonstrations rather than source-equivalent research evaluators.
+- Canonical IDs are `slip_biped`, `slip_quadruped`, and `slip_quad_load`; deprecated IDs are import aliases only.
+- The upstream quadruped repository has no stated license. The local copy records user authorization but does not infer an open-source grant.
+- Batch graphics, callbacks, recording services, and GUI construction are verified, but the five required human-desktop screenshots and MATLAB R2019b execution remain outstanding.

@@ -1,0 +1,25 @@
+classdef ParameterSchema
+    %PARAMETERSCHEMA Named seven-parameter SLIP quadruped contract.
+    methods (Static)
+        function schema = create()
+            names = {'k_leg','k_swing','J_pitch','l_leg', ...
+                'phi_neutral','l_b','k_r_leg'};
+            labels = {'Leg stiffness','Swing stiffness','Pitch inertia', ...
+                'Resting leg length','Neutral swing angle', ...
+                'Back attachment fraction','Back/front stiffness ratio'};
+            units = {'Mg/L','Mg/L','ML^2','L','rad','L/L','1'};
+            defaults = [10;20;2;1;0;0.5;1];
+            scales = [10;20;2;1;1;0.5;1];
+            specs = lmz.schema.VariableSpec.empty(0,1);
+            for index = 1:numel(names)
+                lower = -Inf;
+                if index ~= 5, lower = eps; end
+                specs(end+1,1) = lmz.schema.VariableSpec(names{index}, ... %#ok<AGROW>
+                    'Label',labels{index},'Group','parameter','Unit',units{index}, ...
+                    'DefaultValue',defaults(index),'LowerBound',lower, ...
+                    'Scale',scales(index));
+            end
+            schema = lmz.schema.VariableSchema(specs,'1.0.0');
+        end
+    end
+end
