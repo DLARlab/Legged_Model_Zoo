@@ -2,12 +2,16 @@
 
 ## Project overview
 
-Legged Model Zoo is a standalone MATLAB framework and non-technical GUI for exploring legged-model simulation, solving, continuation, fitting, and visualization through common registry, service, schema, and artifact boundaries. The repository contains three validated scientific workflows: the nine-branch SLIP quadruped RoadMap, the six-branch jerboa biped GaitMap and trajectory fit, and single-/multi-stride quadruped-with-load simulation and fitting. Each model also keeps a clearly labeled `demo_stride` tutorial; tutorial results are never presented as scientific validation.
+Legged Model Zoo is a standalone MATLAB framework and non-technical GUI for exploring legged-model simulation, solving, continuation, fitting, and visualization through common registry, service, schema, and artifact boundaries. Version `1.0.0-rc.1` contains three validated scientific workflows: the nine-branch SLIP quadruped RoadMap, the six-branch jerboa biped GaitMap and trajectory fit, and single-/multi-stride quadruped-with-load simulation and fitting. It also contains `tutorial_hopper`, a small analytic hybrid model that demonstrates solving, continuation, event/reset records, generic scenes, and model-zoo extensibility without making a scientific reproduction claim.
+
+This is an internally testable release candidate, not a public binary release. The source tree is the supported way to evaluate it while redistribution authority remains unresolved. Problem badges and catalog metadata distinguish `validated • source-equivalent` scientific problems from `tutorial • tested` examples.
 
 ## Features
 
-- One-command programmatic GUI launch
-- Declarative discovery of three canonical models
+- One-command programmatic GUI launch and a source-only command-line workflow
+- Declarative discovery of four canonical models: three scientific models and one analytic tutorial
+- Semantic framework, artifact, catalog, model, and problem version contracts
+- A classified public API with explicit deprecation and artifact-compatibility policies
 - Standalone built-in simulation for every model
 - Named state schemas and validated simulation results
 - A multi-dataset RoadMap explorer with named decision, timing, parameter, and observable axes
@@ -23,27 +27,46 @@ Legged Model Zoo is a standalone MATLAB framework and non-technical GUI for expl
 - Source-equivalent load-pulling `44 + 13*(N-1)` simulation, event/GRF/tugline outputs, objective terms, guarded R-squared metrics, and reduced-variable optimization
 - Per-problem tutorial/validated maturity and tested/source-equivalent validation badges derived from catalog descriptors
 - Deterministic continuation edge-case coverage for forced rejection, minimum step, curvature, stagnation, historical loop closure, controlled stop, and checkpoint resume
+- Six self-contained GUI tab components synchronized by a transactional presentation event bus
+- Versioned GUI preferences for window position, default/high-contrast palette, and recent user-selected data/output folders
+- Timestamped, copyable status diagnostics and expandable error details
+- Stable generic hybrid-system and declarative 2-D scene contracts exercised by `tutorial_hopper` and an isolated external plugin fixture
+- An inactive model-template generator and explicitly trusted external-plugin discovery; no core registry edit is needed for a plugin
+- Reproducible solve, continuation, and optimization artifacts with source/data hashes and a `reproduceRun` helper
+- Bounded JSON/MAT validation, canonical path checks, malformed-input tests, code analysis, benchmarks, coverage tooling, and local/remote CI definitions
+- Authorization-gated deterministic ZIP and MATLAB toolbox builders; technical-validation packages are temporary and marked `NOT_FOR_REDISTRIBUTION`
 
 Scientific claims are per problem, not per model name. `slip_biped/periodic_apex`, `slip_biped/trajectory_fit`, `slip_quad_load/single_stride`, `slip_quad_load/multi_stride_fit`, and `slip_quadruped/periodic_apex` are compared with repository-contained source baselines. Every `demo_stride` problem is a tested analytic tutorial.
 
 ## Requirements
 
-- MATLAB R2019b or newer
+- Designed for MATLAB R2019b compatibility; runtime-verified locally on MATLAB R2025b Update 5
 - No toolbox is required to load built-in branches/datasets, inspect schemas/artifacts, or run deterministic scientific simulation
 - Optimization Toolbox is required for `fsolve`, continuation correction, fitting, and the optional quadruped ground-contact event projection. Default cyclic-time wrapping is toolbox-free.
 - Parallel Computing Toolbox is optional
+- A MATLAB desktop/display is required for a human GUI walkthrough; automated hidden-figure construction is available without `usejava('desktop')`
+- MATLAB R2023a or newer is required only for the repository's programmatic `CoverageResult` report; CI can emit Cobertura evidence through the official MATLAB test action
 
-The Round 6 release gate is executed with MATLAB R2025b Update 5. Optimization Toolbox is licensed; Parallel Computing Toolbox is licensed but not required. `usejava('desktop')` is false in the verification process, so programmatic `uifigure` construction and callbacks are automated but the human desktop walkthrough remains explicitly blocked. R2019b is the compatibility target; no R2019b installation is present, so only the recorded static audit—not runtime verification—is claimed.
+The current local verification environment is MATLAB R2025b Update 5 on macOS/Apple silicon. Optimization Toolbox is licensed; Parallel Computing Toolbox is licensed but not required. `usejava('desktop')` is false in the verification process, so programmatic `uifigure` construction and callback tests are automated but the human desktop walkthrough remains explicitly unexecuted. No R2019b installation is present, so the repository claims only a static compatibility target—not R2019b runtime verification. See [the release matrix](docs/MATLAB_RELEASE_MATRIX.md) for the exact distinction.
 
 ## Standalone installation
 
-Clone or download `Legged_Model_Zoo`, start MATLAB in the repository root, and run:
+Clone or download `Legged_Model_Zoo`. Keep the whole directory together; catalog JSON, built-in MAT data, model packages, and runtime code are resolved relative to the project root. Start MATLAB, change to that root, and initialize the current MATLAB session:
 
 ```matlab
-legged_model_zoo
+cd('/absolute/path/to/Legged_Model_Zoo');
+startup;
+fprintf('Legged Model Zoo %s\n', lmz.util.Version.current());
 ```
 
-Normal installation and usage require only this repository. `startup.m` adds only the repository's `src` and `models` roots.
+Confirm discovery before beginning scientific work:
+
+```matlab
+registry = lmz.registry.ModelRegistry.discover();
+disp(registry.listModels());
+```
+
+Normal source usage requires only this repository. `startup.m` adds only the repository's `src` and `models` roots for the current MATLAB session; it does not recursively add tests/tools or permanently rewrite the default MATLAB path. Run `startup` once after opening a new MATLAB session. A public ZIP or `.mltbx` is not currently available because the project has no root `LICENSE` or completed redistribution grant; do not treat a maintainer technical-validation package as an installable public release.
 
 ## Launch the GUI
 
@@ -60,11 +83,30 @@ startup;
 app = lmz.gui.LeggedModelZooApp();
 ```
 
+Keep the returned `app` variable while using the GUI. Close the figure normally or run `delete(app)` to release presentation listeners, timers, and path-independent GUI resources. For automated construction without showing a window:
+
+```matlab
+app = lmz.gui.LeggedModelZooApp('Visible', 'off');
+cleanup = onCleanup(@() delete(app));
+```
+
 ## GUI walkthrough
 
-The application opens on the SLIP quadruped RoadMap. The header provides canonical model, problem, and demonstration selectors. Every problem label includes its maturity and validation badge—for example, `validated • source-equivalent` versus `tutorial • tested`. **Run demo** always executes the separate analytic tutorial. Scientific work starts by selecting the appropriate RoadMap, GaitMap, or load dataset and locking a stored point.
+The application opens on the SLIP quadruped RoadMap. A reliable first session is:
 
-The branch tab supports built-in selection, folder/file import, one/all dataset visibility, removal/reload, native and legacy export, named X/Y/Z coordinates, 2-D/3-D views, explicit view/limit/aspect controls, index and percentage navigation, independent hover data tips, keyboard navigation, click-to-lock selection, and model-specific styling. The Solution Inspector groups the exact schema into initial state, event timing, physical/load parameters, later-stride additions, observables, residuals/objective terms, diagnostics, and provenance; inactive parameters are shown but disabled for transport, and edits affect an isolated working copy. Physical Simulation dispatches to the selected model’s renderer and plot provider. Solve and Continuation are enabled only on problems that advertise them; Optimization is enabled for the biped trajectory fit and multi-stride load fit.
+1. Use the header to choose a model and problem. Read the badge before interpreting a result: `validated • source-equivalent` has immutable numerical evidence, while `tutorial • tested` is an explanatory analytic workflow. **Run demo** runs only the selected built-in demonstration.
+2. In **Branches / Data**, load a built-in RoadMap, GaitMap, or load dataset. Choose one or all datasets, then click a curve or use the index/percentage controls to lock a point. Hover previews never replace the locked selection.
+3. In **Solution**, inspect named state, event-time, parameter, observable, residual/objective, diagnostics, and provenance groups. Edits create an isolated working copy. **Restore locked point** discards those edits; a read-only built-in source branch is never modified in place.
+4. In **Physical Simulation**, evaluate the working point, scrub normalized time, play/pause/stop, inspect model plots, and export supported frames, plots, GIF, or MP4. Export uses a temporary file and restores the displayed frame on success, cancellation, or error.
+5. Use **Solve / Seeds** only when the problem advertises `solve`. Accept or refine the current point, form an adjacent/manual pair, or generate a reproducible nearby second seed.
+6. Use **Continuation** only after a valid pair exists. Pause/resume/controlled-stop retain accepted points; checkpoint paths support atomic save and later resume. Homotopy/family controls list active parameters only.
+7. Use **Optimization** for `slip_biped/trajectory_fit` or `slip_quad_load/multi_stride_fit`. A bounded demonstration run is evidence that the pipeline and objective work, not proof of a global optimum.
+
+Each of the six tabs owns its controls and callbacks and delegates numerical work to `AppController` and the service layer. Model/problem/selection changes propagate through one presentation event bus, so incompatible downstream state is invalidated consistently.
+
+For accessibility and diagnostics, every non-obvious control has a tooltip, layouts resize to a minimum usable window size, busy operations disable incompatible controls while preserving the applicable cancel/stop action, and branch markers use shape as well as color. Choose **high-contrast** from the header palette control when needed. The status panel keeps bounded, timestamped, selectable history and has **Copy diagnostics**; errors show a short summary with expandable/copyable technical details when desktop dialogs are available.
+
+Window position, palette, and user-selected recent data/output folders persist under the versioned MATLAB preference namespace `LeggedModelZoo_GUI_v1`. Built-in repository paths are not stored as recent folders. Use **Reset preferences** in the header, or call `app.resetPreferences()`, to return to defaults. Keyboard traversal, focus order, DPI scaling, clipboard behavior, and real dialog interaction still require the pending human desktop checklist in [docs/MANUAL_DESKTOP_QA.md](docs/MANUAL_DESKTOP_QA.md); automated GUI evidence is not a substitute for that walkthrough.
 
 ## SLIP Quadruped RoadMap Tutorial
 
@@ -196,6 +238,7 @@ See [examples/demo_slip_quad_load_single_stride.m](examples/demo_slip_quad_load_
 | `slip_biped` | SLIP Biped | Yes | Yes | Yes | Yes | Yes |
 | `slip_quad_load` | SLIP Quadruped with Load | Yes | Yes | No | No | Yes |
 | `slip_quadruped` | SLIP Quadruped | Yes | Yes | Yes | Yes | No |
+| `tutorial_hopper` | Analytic Hybrid Hopper Tutorial | Yes | Yes | Yes | Yes | No |
 <!-- LMZ:MODEL_TABLE:END -->
 
 Model-level availability is the union of implemented problem capabilities. Scientific maturity is deliberately recorded per problem:
@@ -211,19 +254,22 @@ Model-level availability is the union of implemented problem capabilities. Scien
 | `slip_quad_load/multi_stride_fit` | optimization | validated | source-equivalent | simulate, visualize, animate, optimize |
 | `slip_quadruped/periodic_apex` | nonlinear_equation | validated | source-equivalent | simulate, visualize, animate, solve, continue, homotopy, family scan |
 | `slip_quadruped/demo_stride` | simulation | tutorial | tested | simulate, visualize, animate |
+| `tutorial_hopper/periodic_hop` | nonlinear_equation | tutorial | tested | simulate, visualize, animate, solve, continue |
+| `tutorial_hopper/demo_hop` | simulation | tutorial | tested | simulate, visualize, animate |
 <!-- LMZ:PROBLEM_TABLE:END -->
 
 `validated` means a problem has numerical regression evidence; `source-equivalent` means that evidence is tied to an immutable captured source baseline. `tutorial • tested` means the analytic demonstration works as designed, not that it reproduces a publication model.
 
 ## Built-in examples
 
-Every model exposes `default_stride` as an analytic tutorial through the application controller. Scientific data is separate: quadruped RoadMap branches, biped GaitMap/trajectory-fit files, and load-pulling `X_accum` datasets live under `examples/data/<model-id>/` with manifests, hashes, source paths, commits, exact dimensions, and redistribution status. Catalogs validate them before use; ordinary runtime never inspects sibling research repositories.
+Each scientific model exposes `default_stride` as an analytic tutorial through the application controller. `tutorial_hopper` exposes `default_hop` and the `demo_hop`/`periodic_hop` problems as the compact reference for generic hybrid events, solve, continuation, and scene rendering. Scientific data is separate: quadruped RoadMap branches, biped GaitMap/trajectory-fit files, and load-pulling `X_accum` datasets live under `examples/data/<model-id>/` with manifests, hashes, source paths, commits, exact dimensions, and redistribution status. Catalogs validate them before use; ordinary runtime never inspects sibling research repositories.
 
-The Round 6 end-to-end examples are:
+Recommended end-to-end examples are:
 
 - `demo_slip_biped_gaitmap_workflow.m`, `demo_slip_biped_solve.m`, `demo_slip_biped_continuation.m`, and `demo_slip_biped_trajectory_fit.m`
 - `demo_slip_quad_load_single_stride.m`, `demo_slip_quad_load_multi_stride.m`, and `demo_slip_quad_load_fit.m`
 - `demo_slip_quadruped_roadmap_workflow.m`, `demo_all_scientific_models.m`, and `demo_full_desktop_workflow.m`
+- `demo_tutorial_hopper.m` for the complete built-in analytic hybrid/scene workflow
 
 Each is safe to rerun, uses public APIs and repository-contained data, leaves a structured `output`, and prints an exact success marker.
 
@@ -232,6 +278,8 @@ Each is safe to rerun, uses public APIs and repository-contained data, leaves a 
 ```matlab
 startup;
 registry = lmz.registry.ModelRegistry.discover();
+fprintf('Framework %s, artifact schema %s\n', ...
+    lmz.util.Version.current(), lmz.util.Version.artifactSchemaVersion());
 modelIds = registry.listModels()
 ```
 
@@ -241,6 +289,17 @@ The deterministic result is:
 slip_biped
 slip_quad_load
 slip_quadruped
+tutorial_hopper
+```
+
+Create a model only from an ID returned by this registry. Query its catalog manifest and advertised capabilities before choosing a service:
+
+```matlab
+modelId = 'tutorial_hopper';
+manifest = registry.getManifest(modelId);
+capabilities = registry.getCapabilities(modelId);
+model = registry.createModel(modelId);
+problemIds = model.listProblems()
 ```
 
 ## Simulating each model
@@ -260,11 +319,23 @@ plot(simulation.state('x'), simulation.state('y'));
 
 For scientific solutions, load through the model catalog and call `problem.evaluate(...,true)` or `problem.simulateDecision(...)` as shown in the tutorials. Biped/quadruped body states are named `x` and `y`; the load model uses `quad_x`, `quad_y`, `load_x`, and `load_y`.
 
+The analytic hybrid hopper uses the same services and returns named modes plus pre/post-reset event records:
+
+```matlab
+hopper = registry.createModel('tutorial_hopper');
+hop = hopper.createProblem('demo_hop', struct());
+context = lmz.api.RunContext.synchronous(17);
+simulation = lmz.services.SimulationService().simulate( ...
+    hop, struct(), struct(), context);
+disp(simulation.EventRecords);
+```
+
 Executable examples:
 
 - `examples/demo_slip_biped.m`
 - `examples/demo_slip_quadruped.m`
 - `examples/demo_slip_quad_load.m`
+- `examples/demo_tutorial_hopper.m`
 
 ## Loading and saving data
 
@@ -301,7 +372,18 @@ lmz.io.ArtifactStore.save('result.lmz.mat', artifact);
 restored = lmz.io.ArtifactStore.load('result.lmz.mat');
 ```
 
-The store validates schema identity, dimensions, finite values, per-problem maturity/validation metadata, lineage, random seed, source commits, and version metadata before an atomic rename.
+The store validates schema identity, dimensions, finite values, per-problem maturity/validation metadata, lineage, random seed, source commits, and version metadata before an atomic rename. Prefer a new output filename and keep the source artifact until the new file has loaded successfully.
+
+Solve, continuation, and optimization results can be stored as reproducible run artifacts. The run record includes the exact options, source seed or pair, random seed, framework/model/problem versions, MATLAB/toolbox environment, termination data, warnings, and built-in source/data hashes:
+
+```matlab
+runPath = fullfile(tempdir, 'quadruped-solve-run.lmz.mat');
+lmz.io.ArtifactStore.save(runPath, solveResult.toArtifact());
+[reproduced, reproduction] = lmz.services.reproduceRun(runPath);
+assert(reproduction.UnresolvedHashCount == 0);
+```
+
+`reproduceRun` supports `solve-run`, `continuation-run`, and `optimization-run`. It rejects incompatible versions and stale verified built-in hashes, reconstructs recorded options and lineage exactly, and then invokes the normal public service. Floating-point equality remains subject to the documented solver/platform tolerance; an external source path that cannot be verified is reported rather than silently treated as verified. See [the artifact reference](docs/artifact-reference.md).
 
 ## Solving periodic solutions
 
@@ -373,11 +455,15 @@ Additional compatibility examples remain available (`demo_slip_biped_fit.m`, `de
 
 ## Visualization, animation, and recording
 
-Model-specific renderers consume the same named `SimulationResult` boundary. The quadruped draws torso/attachments/four legs, contacts, forces, and oscillators; the biped draws its point mass, two legs/feet, contacts, and forces; the load renderer adds the load body and tugline to the quadruped. `AnimationController` provides normalized-time scrubbing, FPS/speed/loop playback, and Play/Pause/Stop/Reset. Plot providers expose body/leg/load trajectories, footfalls, all available GRF channels, energy/oscillator/tugline histories, sensitivity data, and R-squared diagnostics. `RecorderService` exports GIF, MP4 where `VideoWriter` supports it, animation keyframes, plot PNG/PDF, and animated axes through atomic temporary files; it restores the source frame and closes video/file resources on success, cancellation, or error.
+Model-specific renderers consume the same named `SimulationResult` boundary. The quadruped draws torso/attachments/four legs, contacts, forces, and oscillators; the biped draws its point mass, two legs/feet, contacts, and forces; the load renderer adds the load body and tugline to the quadruped. `tutorial_hopper` demonstrates the generic declarative `SceneSpec`/`SceneRenderer2D` path. Scene JSON describes only supported ground, polygon/body, marker, link, spring, rope, force-vector, trail, and text primitives; it cannot evaluate expressions.
+
+`AnimationController` provides normalized-time scrubbing, FPS/speed/loop playback, and Play/Pause/Stop/Reset. Plot providers expose body/leg/load trajectories, footfalls, all available GRF channels, energy/oscillator/tugline histories, sensitivity data, and R-squared diagnostics. `RecorderService` exports GIF, MP4 where `VideoWriter` supports it, animation keyframes, plot PNG/PDF, and animated axes through atomic temporary files; it restores the source frame and closes video/file resources on success, cancellation, or error. Model authors should follow [the visualization authoring guide](docs/visualization-authoring.md) instead of adding model-ID conditionals to generic GUI code.
 
 ## Artifact format
 
-Supported artifact types include `solution`, `branch`, `simulation`, `solve-run`, `continuation-run`, `optimization-run`, `checkpoint`, and `branch-family-report`. New artifacts must use schema version `1.0.0` and one of the canonical model IDs. Live handle objects are never the public serialization format.
+Supported artifact types include `solution`, `branch`, `simulation`, `solve-run`, `continuation-run`, `optimization-run`, `checkpoint`, and `branch-family-report`. New artifacts use artifact schema `1.0.0`, the current framework version, canonical model/problem identities and versions, and the declared minimum MATLAB release. Live handles, function handles, model objects, and callbacks are never the public serialization format.
+
+Treat JSON, MAT files, and external plugins as inputs with different trust levels. Catalog and scene JSON are bounded declarative data, canonicalized inside an approved root, and never evaluated. `ArtifactStore` accepts only the expected bounded plain-data graph; do not use arbitrary `load` calls as an artifact inspector. MATLAB may deserialize a nested object before recursive validation can reject it, so this validation boundary is not a malware sandbox for an untrusted MAT file. External plugin roots contain executable MATLAB code and must be reviewed before explicit registration. See [SECURITY.md](SECURITY.md) and [the configuration reference](docs/configuration-reference.md).
 
 ## Legacy MAT import/export
 
@@ -391,49 +477,148 @@ Each native point retains file/column/hash provenance, schema metadata, classifi
 
 ## Adding a new model
 
-Add a package below `models/+lmzmodels`, implement `lmz.api.LeggedModel`, and add a catalog directory containing `manifest.json`, problem descriptors, and a scene when visualization is enabled. Bindings are restricted to `lmzmodels.*`, JSON remains declarative, and advertised capabilities must match implemented problems.
+The recommended starting point is the inactive external-model generator. It writes outside the production catalog by default and refuses reserved IDs, path traversal, collisions, or accidental production activation:
+
+```matlab
+startup;
+addpath(fullfile(lmz.util.ProjectPaths.root(), 'tools'));
+pluginRoot = fullfile(tempdir, 'my_lmz_plugin');
+if exist(pluginRoot, 'dir') ~= 7
+    mkdir(pluginRoot);
+end
+report = new_model('example_hopper', pluginRoot);
+```
+
+The generated project contains a model package, model/problem manifests, state/parameter/decision schemas, an analytic periodic problem, a plot plugin and scene, a test, an executable example, and `plugin.json`. It is not automatically added to the built-in registry. Review the generated executable MATLAB code, then register exactly that trusted root:
+
+```matlab
+pluginRegistry = lmz.registry.ModelRegistry.discoverWithPlugins( ...
+    pluginRoot, 'IncludeBuiltIns', false);
+pluginModel = pluginRegistry.createModel('example_hopper');
+results = runtests(fullfile(pluginRoot, 'tests', 'generated'), ...
+    'IncludeSubfolders', true);
+assert(~any([results.Failed]));
+delete(pluginRegistry);  % releases the temporary plugin path lease
+```
+
+For a maintained built-in model, add a package below `models/+lmzmodels`, implement `lmz.api.LeggedModel`, and add `catalog/<model-id>/manifest.json`, one descriptor per problem, and a scene only when visualization is enabled. The catalog ID/directory, implementation identity/version, maturity, validation status, and capabilities must agree. Numerical problems expose named schemas and `ProblemEvaluation`/objective terms; model code never calls GUI widgets or generic solvers directly. Legacy matrix indexing belongs in one adapter, and scientific claims require immutable source provenance, hashes, baselines, and separate source-equivalence tests.
+
+Start with [the model-author guide](docs/model-author-guide.md), then use the [configuration reference](docs/configuration-reference.md), [service API](docs/service-api.md), [visualization guide](docs/visualization-authoring.md), [artifact reference](docs/artifact-reference.md), and [model testing checklist](docs/testing-a-model.md). The built-in `tutorial_hopper` and the isolated `tests/fixtures/external_plugins/analytic_hopper` fixture are executable examples of generic hybrid, event/reset, solve, continuation, scene, artifact, GUI-capability, discovery, and clean-removal integration without any `src/+lmz` modification.
 
 ## Testing
 
-Run all tests:
+Start a fresh MATLAB session in the repository root. The canonical local gate is:
 
 ```matlab
+startup;
 results = run_tests;
+assert(~any([results.Failed]));
+assert(~any([results.Incomplete]));
 ```
 
-Batch form:
+Its unattended batch equivalent is:
 
 ```bash
 matlab -batch "cd('/path/to/Legged_Model_Zoo'); results=run_tests; assert(~any([results.Failed]));"
 ```
 
-Run the documentation contract during development:
+Run every top-level public example and the clean-copy all-scientific-model isolation workflow separately because they are release gates as well as test fixtures:
 
 ```matlab
 startup;
-addpath(fullfile(lmz.util.ProjectPaths.root(), 'tools'));
-check_readme_contract;
+toolsPath = fullfile(lmz.util.ProjectPaths.root(), 'tools');
+addpath(toolsPath);
+exampleReport = run_public_examples;
+isolationReport = run_standalone_all_scientific_models;
 ```
 
-Regenerate the registry-derived tables and execute every public example:
+Documentation, architecture, static R2019b-target, redistribution, and code-quality checks are available independently for faster feedback:
+
+```matlab
+check_readme_contract;
+architectureViolations = static_architecture_check( ...
+    lmz.util.ProjectPaths.root());
+assert(isempty(architectureViolations));
+[compatibilityViolations, compatibilityReport] = ...
+    check_matlab_compatibility(lmz.util.ProjectPaths.root());
+assert(isempty(compatibilityViolations));
+qualityReport = run_code_quality(lmz.util.ProjectPaths.root());
+assert(isempty(qualityReport.Violations));
+addpath(fullfile(lmz.util.ProjectPaths.root(), 'tools', 'release'));
+redistributionReport = scan_redistribution;
+```
+
+The registry-derived model/problem tables in this README are generated content. After an intentional catalog change, regenerate and immediately validate them:
 
 ```matlab
 generate_readme_tables(true);
-exampleReport = run_public_examples;
+check_readme_contract;
 ```
 
-Round 6 retains every quadruped RoadMap regression and adds biped/load manifest and exact-layout tests, residual/trajectory/event/GRF/tugline/objective/R-squared equivalence, solve/continuation/checkpoint and objective-decrease workflows, cross-model GUI tests, maturity/capability/artifact contracts, active/inactive homotopy rules, forced continuation terminations, R2019b static compatibility, README generation/contract checks, and all-model isolation. See [docs/TEST_STATUS.md](docs/TEST_STATUS.md) for the executed commands, exact totals, numerical tolerances, success markers, and remaining display/release blockers.
+Run the measured performance gate from a fresh process. `GateOnly=true` is the routine budget check; omit it for the complete release profile and use at least three repetitions:
+
+```matlab
+addpath(fullfile(lmz.util.ProjectPaths.root(), 'benchmarks'));
+quickPerformance = run_benchmarks(struct( ...
+    'Repetitions', 1, 'GateOnly', true));
+fullPerformance = run_benchmarks(struct( ...
+    'Repetitions', 3, ...
+    'OutputPath', fullfile(tempdir, 'lmz-benchmarks.json')));
+```
+
+On MATLAB R2023a or newer, collect statement coverage for every runtime MATLAB file below `src/+lmz` and `models/+lmzmodels`, and enforce the measured stable-package policy when it is present:
+
+```matlab
+[coverageReport, coverageResults] = run_coverage(struct( ...
+    'OutputPath', fullfile(tempdir, 'lmz-coverage.json'), ...
+    'EnforceBaseline', true));
+assert(~any([coverageResults.Failed]));
+assert(~any([coverageResults.Incomplete]));
+```
+
+The MATLAB-free CI equivalent validates JSON, README/architecture contracts, the static compatibility rules, release-inventory completeness/hashes, and whitespace:
+
+```bash
+python3 tools/ci/static_checks.py --all
+git diff --check
+```
+
+Release commands are authorization gates, not instructions to bypass licensing. These commands scan the current inventory and report both profiles without retaining a package:
+
+```matlab
+addpath(fullfile(lmz.util.ProjectPaths.root(), 'tools', 'release'));
+scan = scan_redistribution;
+coreDryRun = build_release('core', struct('DryRun', true));
+scientificDryRun = build_release('scientific', struct('DryRun', true));
+coreToolboxDryRun = build_toolbox('core', struct('DryRun', true));
+```
+
+Maintainers may exercise deterministic ZIP or `.mltbx` construction with `Mode='technical-validation'` and `RunInstallTest=true`. That mode labels the package `NOT_FOR_REDISTRIBUTION`, tests registry discovery, the permitted tutorial workflow, hidden GUI construction, artifact round trip, and path removal in an unrelated temporary MATLAB process, and deletes the package before returning. Only `Mode='public'` can retain output, and it fails before writing when the profile or project decision is unresolved. Do not edit decision fields or add a root license without owner-supplied authority. See [release/README.md](release/README.md), [docs/CI.md](docs/CI.md), [the benchmark guide](benchmarks/README.md), [the coverage policy](docs/COVERAGE.md), and [docs/TEST_STATUS.md](docs/TEST_STATUS.md).
+
+The audited Round 7 suite completed `195 run, 0 failed, 0 incomplete` in
+348.302462 seconds. The separate example gate passed all 25 public examples,
+and the clean-copy all-scientific-model test passed in a separate MATLAB
+process. The measured coverage run passed 194 tests (excluding only the policy
+test that required the measurement being created) and covered 7,401 of 9,792
+runtime statements, or 75.5821%. The pre-edit scientific baseline was
+`117 run, 0 failed, 0 incomplete`; it remains an explicit non-regression floor.
 
 ## Troubleshooting
 
 - **Undefined `lmz` package:** run `startup` from the repository root.
-- **GUI cannot construct:** verify MATLAB R2019b or newer and desktop graphics availability.
+- **GUI cannot construct or display:** first verify the locally tested R2025b environment and graphics availability. R2019b is only a static compatibility target until runtime evidence exists.
+- **GUI layout/palette is stale:** choose **Reset preferences** in the header or call `app.resetPreferences()`. This clears the versioned window/palette/recent-folder preferences, not model data.
 - **Solver controls fail:** verify Optimization Toolbox is licensed and the selected model advertises the requested capability.
+- **A service button is disabled:** inspect the problem badge/capabilities; simulation, solve, continuation, homotopy, and optimization are advertised per problem rather than inferred from the model name.
 - **Artifact uses an old model ID:** load it to migrate the ID, then save a new canonical artifact.
+- **Run reproduction reports an unresolved hash:** restore the recorded built-in source/data file or register the reviewed external plugin root explicitly; do not replace the expected digest by hand.
+- **External model is not discovered:** confirm the reviewed root contains `plugin.json`, `models`, and `catalog`, then keep the registry returned by `discoverWithPlugins` alive for as long as its path lease is needed.
 - **Cyclic time rejected:** its named period must be finite and positive.
 - **Homotopy parameter disabled:** the parameter is marked inactive because the migrated equations do not use it; choose an active field such as quadruped `k_leg`.
 - **Bounded fit returns exit flag 0:** inspect objective decrease and solver diagnostics; the documented one-iteration load fit is intentionally budget-limited.
-- **Preparing a public package:** stop and resolve every pending row in `docs/REDISTRIBUTION_STATUS.md`; local migration authorization is not a redistribution license.
+- **MAT/JSON input is rejected:** inspect the named schema/type/dimension/path/hash error. Do not weaken the safe loader or deserialize untrusted files with a general `load` call.
+- **Preparing a public package:** stop and resolve every pending row in `docs/REDISTRIBUTION_STATUS.md`; local migration authorization and a successful technical-validation build are not redistribution licenses.
+- **CI files exist but no check is visible:** the workflows still need to be pushed and run on GitHub. Local-equivalent success is not remote CI evidence.
 
 ## Project structure
 
@@ -442,19 +627,29 @@ src/+lmz/                 Generic APIs, services, data, GUI, and utilities
 models/+lmzmodels/        Canonically named standalone model packages
 catalog/                  Model, problem, and scene descriptors
 examples/                 Public API examples and built-in demonstrations
-tests/                    Unit, GUI, documentation, and architecture tests
-tools/                    README validation and maintainer utilities
-docs/                     Architecture, provenance, and evidence records
+tests/                    Unit, integration, GUI, release, security, and performance tests
+tools/                    Validation, authoring, coverage, CI, and release utilities
+release/                  Redistribution inventory and reproducible package definitions
+benchmarks/               Measured workflows, budgets, and platform baselines
+coverage/                 Measured stable-package regression policy when finalized
+docs/                     Architecture, API, authoring, security, provenance, and evidence records
+.github/workflows/        Static, MATLAB-matrix, and non-publishing release-audit CI
 ```
 
 ## License and provenance
 
-Scientific inputs are pinned to three immutable commits: quadruped `SLIP_Model_Zoo` commit `2c106101383ecee1b2a9d695efe09fbd72d5718a`, biped `2022_A_Template_Model_Explains_Jerboa_Gait_Transitions` commit `4595146c5881a5313bc8fe92de85099193ef9be9`, and load-pulling `2025_Gait_Transitions_in_Load_Pulling_Quadrupeds_Insights` commit `19f3133073c988cc0c3424a647b4adbb60a90b99`. Normal runtime and tests require only this repository.
+Scientific inputs are pinned to three immutable commits: quadruped `SLIP_Model_Zoo` commit `2c106101383ecee1b2a9d695efe09fbd72d5718a`, biped `2022_A_Template_Model_Explains_Jerboa_Gait_Transitions` commit `4595146c5881a5313bc8fe92de85099193ef9be9`, and load-pulling `2025_Gait_Transitions_in_Load_Pulling_Quadrupeds_Insights` commit `19f3133073c988cc0c3424a647b4adbb60a90b99`. Normal source-tree runtime and tests require only this repository.
 
-Public release packaging is blocked pending explicit owner decisions. The quadruped checkout has no license/notice; the biped readme states CC BY-NC 4.0 but does not include a standalone file clarifying its exact code/data scope; the load readme claims BSD 3-Clause but its linked license file is absent at the audited commit. User authorization to perform this migration is recorded but is not treated as a public redistribution grant. See [docs/REDISTRIBUTION_STATUS.md](docs/REDISTRIBUTION_STATUS.md), [docs/REDISTRIBUTION_OWNER_DECISION_TEMPLATE.md](docs/REDISTRIBUTION_OWNER_DECISION_TEMPLATE.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and [docs/provenance.md](docs/provenance.md).
+There is no root `LICENSE`, and no owner-supplied project grant currently authorizes a public core or scientific package. Public release packaging therefore remains blocked. The quadruped checkout has no license/notice; the biped readme states CC BY-NC 4.0 but does not include a standalone file clarifying its exact code/data scope; the load readme claims BSD 3-Clause but its linked license file is absent at the audited commit. User authorization to perform this migration is recorded but is not treated as a public redistribution grant.
+
+The machine-readable inventory records every candidate file's digest, category, source repository/commit, decision, notice, derivation, profile, and release role. Derived native artifacts and fixtures inherit their source-material decision. Both public builders fail before retaining output while the project decision is unresolved. Temporary internal builds use `technical-validation`, embed `NOT_FOR_REDISTRIBUTION`, and are deleted by the builder/tests. See [docs/REDISTRIBUTION_STATUS.md](docs/REDISTRIBUTION_STATUS.md), [docs/REDISTRIBUTION_OWNER_DECISION_TEMPLATE.md](docs/REDISTRIBUTION_OWNER_DECISION_TEMPLATE.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [release/README.md](release/README.md), and [docs/provenance.md](docs/provenance.md).
 
 Scientific attribution: Ding and Gan, “Breaking Symmetries Leads to Diverse Quadrupedal Gaits,” *IEEE Robotics and Automation Letters* 9(5), 4782–4789 (2024), DOI `10.1109/LRA.2024.3384908`.
 
 ## Current verified status
 
-Under MATLAB R2025b Update 5, all three scientific data catalogs and native artifacts verify: quadruped 9 branches/3,443 points, biped 6 branches/2,967 points, and load 2 datasets (one and two strides). Source-equivalent residual/trajectory/event/force/objective regressions, biped/quadruped solve and continuation, load and biped objective decrease, continuation edge cases, cross-model GUI/controller workflows, recording, artifact round-trips, static architecture/R2019b audits, generated README contracts, and a clean-copy child-process isolation workflow are green. The canonical suite reports `117 run, 0 failed, 0 incomplete`; all 24 top-level public examples pass. Exact commands, tolerances, hashes, markers, isolated-process evidence, and the remaining human-desktop/R2019b/redistribution limitations are recorded in [docs/TEST_STATUS.md](docs/TEST_STATUS.md).
+The untouched Round 6 baseline was rerun under MATLAB R2025b Update 5 before Round 7 edits: `117 run, 0 failed, 0 incomplete`, with all 24 then-existing public examples and the three-scientific-model clean-copy workflow passing. Its scientific catalogs remain quadruped 9 branches/3,443 points, biped 6 branches/2,967 points, and load 2 datasets (one and two strides). No Round 7 work changes a scientific equation, source fixture, or regression tolerance.
+
+Round 7 adds version/API/artifact compatibility tests, a complete componentized GUI/event/preferences layer, centralized compatibility fallbacks, deterministic release tooling, the built-in and external analytic hopper proofs, stable generic hybrid/scene contracts, safe-input tests, run reproduction, code-quality checks, benchmarks, measured coverage, CI definitions, and governance/authoring documentation. The authoritative expanded suite passed 195/195, all 25 public examples passed, the clean-copy isolation gate passed, and the measured runtime statement rate is 75.5821%. Exact evidence is recorded in [docs/TEST_STATUS.md](docs/TEST_STATUS.md) and [docs/RELEASE_CANDIDATE_STATUS.md](docs/RELEASE_CANDIDATE_STATUS.md).
+
+Release qualifications remain explicit: the human MATLAB desktop walkthrough is not executed; R2019b runtime is not executed; GitHub Actions workflows have not run remotely; and public core/scientific packaging is blocked by the missing project license and unresolved owner decisions. The present recommendation is an internal, numerically testable release candidate—not a public release.

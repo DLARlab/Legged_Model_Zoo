@@ -2,6 +2,10 @@ classdef DataService
     %DATASERVICE Load repository-contained declarative example data.
     methods
         function ids = listBuiltInExamples(~, modelId)
+            if ~ischar(modelId) || isempty(regexp(modelId, ...
+                    '^[a-z][a-z0-9_]*$', 'once'))
+                error('lmz:Data:ModelId', 'Built-in model ID is invalid.');
+            end
             folder = fullfile(lmz.util.ProjectPaths.examples(), 'data', modelId);
             files = dir(fullfile(folder, '*.json'));
             ids = cell(numel(files), 1);
@@ -17,9 +21,14 @@ classdef DataService
                 error('lmz:Data:UnknownBuiltInExample', ...
                     'Unknown example %s for %s.', exampleId, modelId);
             end
-            path = fullfile(lmz.util.ProjectPaths.examples(), 'data', ...
-                modelId, [exampleId '.json']);
-            example = jsondecode(fileread(path));
+            if ~ischar(exampleId) || isempty(regexp(exampleId, ...
+                    '^[A-Za-z][A-Za-z0-9_.-]*$', 'once'))
+                error('lmz:Data:ExampleId', 'Built-in example ID is invalid.');
+            end
+            dataRoot = fullfile(lmz.util.ProjectPaths.examples(), 'data', modelId);
+            path = lmz.util.PathGuard.resolveWithin( ...
+                dataRoot, [exampleId '.json'], true);
+            example = lmz.io.SafeJson.read(path, 'Root', dataRoot);
             required = {'schemaVersion','id','modelId','problemId', ...
                 'options','provenance','license'};
             for index = 1:numel(required)

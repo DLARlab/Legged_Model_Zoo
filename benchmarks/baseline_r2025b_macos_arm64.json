@@ -1,0 +1,200 @@
+{
+  "schemaVersion": "1.0.0",
+  "frameworkVersion": "1.0.0-rc.1",
+  "matlabRelease": "2025b",
+  "matlabVersion": "25.2.0.3177638 (R2025b) Update 5",
+  "hardware": {
+    "architecture": "maca64",
+    "computer": "MACA64",
+    "operatingSystem": "macOS",
+    "logicalCores": 18
+  },
+  "repetitions": 3,
+  "gateOnly": false,
+  "measuredAt": "2026-07-19T18:31:52.461Z",
+  "records": [
+    {
+      "Name": "startup_registry",
+      "MedianSeconds": 0.097883625,
+      "SpreadSeconds": 0.0015122499999999928,
+      "MemoryBytes": 8,
+      "Samples": [
+        0.099395875,
+        0.097883625,
+        0.085697083333333327
+      ],
+      "BudgetSeconds": 10,
+      "Fixture": "startup + built-in registry discovery"
+    },
+    {
+      "Name": "roadmap_one_branch",
+      "MedianSeconds": 0.13307875,
+      "SpreadSeconds": 0.00097800000000000664,
+      "MemoryBytes": 5.155442E+6,
+      "Samples": [
+        0.14818741666666665,
+        0.13307875,
+        0.13210075
+      ],
+      "BudgetSeconds": 20,
+      "Fixture": "default quadruped RoadMap branch"
+    },
+    {
+      "Name": "roadmap_all_branches",
+      "MedianSeconds": 0.63217866666666667,
+      "SpreadSeconds": 0.014930416666666613,
+      "MemoryBytes": 1152,
+      "Samples": [
+        0.64710908333333328,
+        0.59108908333333332,
+        0.63217866666666667
+      ],
+      "BudgetSeconds": 60,
+      "Fixture": "all quadruped RoadMap branches"
+    },
+    {
+      "Name": "gaitmap_all_branches",
+      "MedianSeconds": 0.4703385,
+      "SpreadSeconds": 0.0018895833333333334,
+      "MemoryBytes": 768,
+      "Samples": [
+        0.49581975,
+        0.46844891666666666,
+        0.4703385
+      ],
+      "BudgetSeconds": 60,
+      "Fixture": "all biped GaitMap branches"
+    },
+    {
+      "Name": "load_multi_stride_dataset",
+      "MedianSeconds": 0.016292333333333332,
+      "SpreadSeconds": 0.0023899583333333325,
+      "MemoryBytes": 117366,
+      "Samples": [
+        0.022962875,
+        0.016292333333333332,
+        0.013902375
+      ],
+      "BudgetSeconds": 20,
+      "Fixture": "default load-pulling multi-stride dataset"
+    },
+    {
+      "Name": "evaluate_biped_scientific",
+      "MedianSeconds": 0.016411,
+      "SpreadSeconds": 0.0015374999999999989,
+      "MemoryBytes": 837806,
+      "Samples": [
+        0.085110083333333336,
+        0.016411,
+        0.0148735
+      ],
+      "BudgetSeconds": 60,
+      "Fixture": "recommended W1 biped point"
+    },
+    {
+      "Name": "evaluate_quadruped_scientific",
+      "MedianSeconds": 0.021760875,
+      "SpreadSeconds": 0.0010439583333333308,
+      "MemoryBytes": 1.338757E+6,
+      "Samples": [
+        0.23646345833333332,
+        0.020716916666666668,
+        0.021760875
+      ],
+      "BudgetSeconds": 60,
+      "Fixture": "recommended quadruped RoadMap point"
+    },
+    {
+      "Name": "evaluate_load_scientific",
+      "MedianSeconds": 0.056893291666666665,
+      "SpreadSeconds": 0.00461375,
+      "MemoryBytes": 3.833048E+6,
+      "Samples": [
+        0.3121585,
+        0.056893291666666665,
+        0.052279541666666665
+      ],
+      "BudgetSeconds": 90,
+      "Fixture": "default load-pulling multi-stride decision"
+    },
+    {
+      "Name": "render_100_frames",
+      "MedianSeconds": 0.39165558333333333,
+      "SpreadSeconds": 0.054999124999999982,
+      "MemoryBytes": 8,
+      "Samples": [
+        2.4963974166666665,
+        0.39165558333333333,
+        0.33665645833333335
+      ],
+      "BudgetSeconds": 60,
+      "Fixture": "quadruped scientific simulation"
+    },
+    {
+      "Name": "short_biped_solve",
+      "MedianSeconds": 0.031560041666666663,
+      "SpreadSeconds": 0.0052693749999999963,
+      "MemoryBytes": 1.063018E+6,
+      "Samples": [
+        0.10184491666666666,
+        0.031560041666666663,
+        0.026290666666666667
+      ],
+      "BudgetSeconds": 120,
+      "Fixture": "recommended W1 biped seed"
+    },
+    {
+      "Name": "short_quadruped_continuation",
+      "MedianSeconds": 1.7024882916666666,
+      "SpreadSeconds": 0.078751000000000015,
+      "MemoryBytes": 228274,
+      "Samples": [
+        3.0010423333333334,
+        1.7024882916666666,
+        1.6237372916666666
+      ],
+      "BudgetSeconds": 180,
+      "Fixture": "three-point quadruped continuation"
+    },
+    {
+      "Name": "evaluate_load_objective",
+      "MedianSeconds": 0.6726675,
+      "SpreadSeconds": 0.004252041666666595,
+      "MemoryBytes": 106325,
+      "Samples": [
+        1.0386074583333333,
+        0.6726675,
+        0.66841545833333338
+      ],
+      "BudgetSeconds": 90,
+      "Fixture": "default load-pulling objective"
+    },
+    {
+      "Name": "build_gui",
+      "MedianSeconds": 2.8292425833333334,
+      "SpreadSeconds": 0.57405554166666661,
+      "MemoryBytes": 586,
+      "Samples": [
+        4.234614333333333,
+        2.8292425833333334,
+        2.2551870416666668
+      ],
+      "BudgetSeconds": 30,
+      "Fixture": "headless controller and all GUI components"
+    },
+    {
+      "Name": "artifact_save_load",
+      "MedianSeconds": 0.055344625,
+      "SpreadSeconds": 0.0013917500000000041,
+      "MemoryBytes": 146369,
+      "Samples": [
+        0.084096708333333339,
+        0.055344625,
+        0.053952875
+      ],
+      "BudgetSeconds": 15,
+      "Fixture": "recommended quadruped solution"
+    }
+  ],
+  "notes": "Warm-process timings; spread is median absolute deviation; memory is the shallow size of the returned MATLAB value."
+}

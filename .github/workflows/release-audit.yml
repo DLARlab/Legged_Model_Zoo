@@ -1,0 +1,25 @@
+name: Release authorization audit
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Validate inventory without MATLAB
+        run: python3 tools/ci/static_checks.py json manifest whitespace
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v3
+      - name: Run release gates without publishing
+        uses: matlab-actions/run-command@v3
+        with:
+          command: startup; addpath(fullfile(pwd,'tools','release')); scan_redistribution; build_release('core',struct('DryRun',true)); build_release('scientific',struct('DryRun',true)); technical = build_release('core',struct('Mode','technical-validation')); assert(technical.Verification.Valid); assert(~technical.Retained); assert(isempty(technical.ArchivePath));
+      - name: Explain artifact policy
+        run: echo "No package is uploaded or published until redistribution decisions authorize it."

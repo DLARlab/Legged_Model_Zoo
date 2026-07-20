@@ -130,7 +130,7 @@ classdef TrajectoryFitProblem < lmz.api.OptimizationProblem
         end
         function value=sourceSeed(obj)
             seedPath=fullfile(fileparts(obj.DatasetPath),'sim_1802_j30.mat');
-            loaded=load(seedPath,'X');
+            loaded=lmz.io.SafeMat.loadVariables(seedPath,{'X'});
             if ~isfield(loaded,'X')||numel(loaded.X)~=16
                 error('lmz:slip_biped:FitSeed','Source fit seed is missing or invalid.');
             end
@@ -154,7 +154,9 @@ classdef TrajectoryFitProblem < lmz.api.OptimizationProblem
             if exist(path,'file')~=2
                 error('lmz:slip_biped:FitDataset','Trajectory-fit dataset is missing: %s',path);
             end
-            loaded=load(path);required={'To','footsequence','ob_data'};
+            variables=whos('-file',path);names={variables.name};
+            loaded=lmz.io.SafeMat.loadVariables(path,names);
+            required={'To','footsequence','ob_data'};
             for index=1:numel(required)
                 if ~isfield(loaded,required{index})
                     error('lmz:slip_biped:FitDataset','Dataset is missing %s.',required{index});

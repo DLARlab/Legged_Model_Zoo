@@ -1,0 +1,7 @@
+classdef ParameterSchema
+    methods (Static)
+        function value = create()
+            value = lmz.schema.VariableSchema();
+        end
+    end
+end

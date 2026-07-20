@@ -1,5 +1,11 @@
 # Third-party notices
 
+This notice is informational and does not grant a license. The Legged Model
+Zoo framework itself has no owner-supplied root license at this release
+candidate. Consequently, neither the core profile nor the scientific profile
+is authorized for public redistribution. Temporary packaging tests do not
+change that status.
+
 ## DLARlab SLIP quadruped RoadMap and compatibility equations
 
 - Source: `https://github.com/DLARlab/SLIP_Model_Zoo.git`

@@ -14,6 +14,116 @@ MATLAB R2019b is the compatibility target, but no R2019b installation is
 available. Runtime verification is therefore R2025b-only; the R2019b result
 below is a static audit and is not described as execution evidence.
 
+## Final Round 7 release-candidate gates
+
+Canonical command:
+
+```matlab
+started = tic;
+results = run_tests;
+duration = toc(started);
+assert(~any([results.Failed]));
+assert(~any([results.Incomplete]));
+```
+
+Final expanded-suite result:
+
+```text
+Legged Model Zoo: 195 run, 0 failed, 0 incomplete.
+ROUND7_FINAL_SUITE_OK tests=195 failed=0 incomplete=0 duration=348.302462
+```
+
+The 195 methods retain the untouched 117-test Round 6 scientific floor and
+add version/artifact compatibility, release inventory/profiles, deterministic
+packaging, toolbox/ZIP clean installs, CI/governance contracts, complete GUI
+components/events/preferences/accessibility, R2019b compatibility fallbacks,
+safe-input boundaries, built-in/external analytic model authoring, generic
+hybrid/scene contracts, run reproduction, code quality, coverage policy, and
+performance budgets. No scientific tolerance was weakened.
+
+Every top-level public example then ran in its own temporary output workspace:
+
+```text
+LMZ_PUBLIC_EXAMPLES_OK files=25
+ROUND7_PUBLIC_EXAMPLES_OK files=25 failures=0 duration=164.501629
+```
+
+Representative new and retained markers include:
+
+```text
+LMZ_TUTORIAL_HOPPER_OK residual=1.22e-14 points=4
+LMZ_BIPED_SOLVE_OK residual=2.708e-13
+LMZ_BIPED_CONTINUATION_OK points=3 reason=maximum_points
+LMZ_QUAD_LOAD_FIT_OK initial=63.5580630419 final=63.4193407268 decrease=0.138722315113
+LMZ_ROADMAP_WORKFLOW_OK seed=267 residual=2.91e-11 solve=accepted-existing-seed continuation=20
+```
+
+The separate clean-copy integration test copied the entire repository beneath
+an otherwise empty temporary parent and ran a child MATLAB process:
+
+```text
+ISOLATED_ALL_SCIENTIFIC_MODELS_OK
+ROUND7_CLEAN_COPY_ISOLATION_OK tests=1 failed=0 incomplete=0 duration=30.521080
+```
+
+## Round 7 coverage and performance
+
+Programmatic coverage instrumented every MATLAB runtime file below `src/+lmz`
+and `models/+lmzmodels`. It ran the complete then-current suite except the one
+policy test that required the measurement being generated:
+
+```text
+ROUND7_COVERAGE_SUITE_START tests=194
+LMZ_COVERAGE_OK files=174 packages=24 statements=7401/9792 rate=0.7558
+ROUND7_COVERAGE_MEASURED_OK tests=194 files=174 covered=7401 total=9792 rate=0.75582108 duration=332.977845
+ROUND7_COVERAGE_POLICY_OK run=1
+```
+
+| Stable package | Measured statement rate | Regression floor |
+|---|---:|---:|
+| `lmz.api` | 78.5714% | 73.5714% |
+| `lmz.data` | 82.5397% | 77.5397% |
+| `lmz.io` | 85.9504% | 80.9504% |
+| `lmz.registry` | 83.4356% | 78.4356% |
+| `lmz.services` | 74.4932% | 69.4932% |
+
+The tracked R2025b/macOS-arm64 performance baseline contains 14 workflows and
+three warm-process repetitions. Every median is below its conservative budget.
+Selected medians are short quadruped continuation 1.702488 seconds, real GUI
+construction 2.829243 seconds, load objective 0.672667 seconds, 100 rendered
+frames 0.391656 seconds, and artifact save/load 0.055345 seconds. Profiling did
+not justify an evaluation cache.
+
+## Round 7 quality, release, and authority evidence
+
+```text
+LMZ_CODE_QUALITY files=176 violations=0 allowed=150 missingHelp=36 complexity=2 excludedLegacy=5
+README contract valid for 4 canonical models.
+LMZ_STATIC_CHECKS_OK checks=6
+```
+
+`missingHelp` and `complexity` are visible informational findings; stable APIs
+with missing primary help would fail the gate. The 150 Code Analyzer findings
+are accepted only by identifier plus an exact path-scoped rationale. Five
+source-preserved compatibility evaluators remain visible to numerical
+regression and coverage, but are excluded from style-driven Code Analyzer
+enforcement.
+
+Both public release profiles remain blocked. Focused and full-suite packaging
+tests show that temporary core technical-validation ZIP and MLTBX artifacts
+are deterministic and pass preflight/final unrelated-directory discovery,
+`tutorial_hopper`, invisible full-GUI construction, artifact round trip,
+uninstall/path removal, and public-symbol unload checks. The builders return
+`Retained=false`; no public artifact was written or uploaded. The hash-checked
+redistribution inventory has no stale, missing, or unlisted entries after its
+final refresh, while every unresolved project/scientific decision remains a
+blocking entry.
+
+The three GitHub Actions workflows pass local YAML and contract checks only.
+No remote GitHub Actions execution occurred, so remote CI remains unexecuted.
+Human desktop QA and R2019b runtime execution also remain unexecuted and are
+not inferred from automated R2025b batch evidence.
+
 ## Final Round 6 release gates
 
 Canonical test command:
@@ -244,6 +354,10 @@ execution was approximately 31.3 seconds.
   screenshots are not available in this display-less process.
 - MATLAB R2019b runtime execution is not available; only the static audit is
   complete.
+- Remote GitHub Actions execution has not occurred; workflow configuration and
+  local-equivalent checks are not reported as remote CI success.
+- The repository has no owner-supplied root project license, so public core
+  packaging is blocked independently of the scientific-source decisions.
 - Public redistribution/packaging is blocked pending explicit owner decisions
   for quadruped code/data, biped code/data scope, and load code/data. See
   `docs/REDISTRIBUTION_STATUS.md`.

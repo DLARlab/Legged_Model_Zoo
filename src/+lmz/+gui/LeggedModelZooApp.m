@@ -1,5 +1,5 @@
 classdef LeggedModelZooApp < handle
-    %LEGGEDMODELZOOAPP Standalone model browser and RoadMap workbench.
+    %LEGGEDMODELZOOAPP Lifecycle and composition root for the workbench.
     properties (SetAccess=private)
         Controller
         Figure
@@ -7,6 +7,16 @@ classdef LeggedModelZooApp < handle
         ProblemDropDown
         ExampleDropDown
         SimulateButton
+        PaletteDropDown
+        CapabilityLabel
+        StatusArea
+        TabGroup
+        TabComponents = struct()
+        Preferences
+    end
+
+    % Read-only compatibility aliases. Complete ownership remains in each tab.
+    properties (SetAccess=private, Hidden)
         SendToSolveButton
         SendToContinuationButton
         SolveButton
@@ -15,12 +25,6 @@ classdef LeggedModelZooApp < handle
         FamilyScanButton
         OptimizationButton
         OptimizationCancelButton
-        SolveControls = {}
-        ContinuationControls = {}
-        OptimizationControls = {}
-        CapabilityLabel
-        StatusArea
-
         Axes
         TorsoAxes
         BackLegAxes
@@ -34,9 +38,6 @@ classdef LeggedModelZooApp < handle
         AnimationLoopCheckBox
         AnimationForceCheckBox
         TrajectoryModeDropDown
-        AnimationRenderer
-        AnimationPlayer
-
         BranchAxes
         RoadMapBranchDropDown
         BranchDatasetList
@@ -54,7 +55,6 @@ classdef LeggedModelZooApp < handle
         BranchZLimitsField
         BranchIndexSpinner
         BranchPercentSlider
-
         SolutionTable
         EventTable
         ParameterTable
@@ -63,7 +63,6 @@ classdef LeggedModelZooApp < handle
         DiagnosticsTable
         ProvenanceTable
         ProjectionModeDropDown
-
         SolveStatus
         SeedAxes
         SeedDirectionDropDown
@@ -72,7 +71,6 @@ classdef LeggedModelZooApp < handle
         SecondSeedRadiusField
         NoiseMagnitudeField
         NoiseSeedSpinner
-
         ContinuationAxes
         ContinuationStatus
         ContinuationPointsSpinner
@@ -83,803 +81,293 @@ classdef LeggedModelZooApp < handle
         OptimizationSensitivityAxes
         OptimizationR2Axes
     end
+    properties (Access=private)
+        StatusPanel
+        EventSubscription
+        IsDisposed = false
+        HeaderBusy = false
+    end
 
     methods
         function obj=LeggedModelZooApp(varargin)
             parser=inputParser;
             addParameter(parser,'CreateFigure',true,@islogical);
+            addParameter(parser,'Controller',[], ...
+                @(value)isempty(value)||isa(value,'lmz.gui.AppController'));
+            addParameter(parser,'Preferences',[], ...
+                @(value)isempty(value)||isa(value,'lmz.gui.PreferencesStore'));
+            addParameter(parser,'Visible','on', ...
+                @(value)ischar(value)||(isstring(value)&&isscalar(value)));
             parse(parser,varargin{:});
-            obj.Controller=lmz.gui.AppController();
-            if any(strcmp('slip_quadruped',obj.Controller.modelIds()))
+            obj.Controller=parser.Results.Controller;
+            if isempty(obj.Controller),obj.Controller=lmz.gui.AppController();end
+            obj.Preferences=parser.Results.Preferences;
+            if isempty(obj.Preferences),obj.Preferences=lmz.gui.PreferencesStore();end
+            if any(strcmp('slip_quadruped',obj.Controller.modelIds()))&& ...
+                    isempty(parser.Results.Controller)
                 obj.Controller.selectModel('slip_quadruped');
             end
             if parser.Results.CreateFigure
-                obj.buildFigure();
-                obj.refreshModel();
+                obj.buildFigure(char(parser.Results.Visible));
+                obj.EventSubscription=obj.Controller.Events.subscribe({ ...
+                    lmz.gui.PresentationEvents.ModelChanged, ...
+                    lmz.gui.PresentationEvents.ProblemChanged, ...
+                    lmz.gui.PresentationEvents.ExampleChanged, ...
+                    lmz.gui.PresentationEvents.RunStateChanged, ...
+                    lmz.gui.PresentationEvents.StatusChanged}, ...
+                    @(batch)obj.presentationChanged(batch));
+                obj.refreshHeader();obj.applyPalette(obj.Preferences.palette());
+                obj.appendStatus(obj.Controller.State.Status);
             end
         end
 
+        function component=tab(obj,id)
+            id=char(id);
+            if ~isfield(obj.TabComponents,id)
+                error('lmz:GUI:Tab','Unknown tab %s.',id);
+            end
+            component=obj.TabComponents.(id);
+        end
+
+        function resetPreferences(obj)
+            obj.Preferences.reset();
+            obj.PaletteDropDown.Value='default';obj.applyPalette('default');
+            obj.appendStatus('Preferences reset to defaults.');
+        end
+
         function delete(obj)
-            obj.stopAnimation();
-            obj.Controller.stopCurrentRun();
-            obj.Controller.stopRecording();
-            if ~isempty(obj.Figure)&&isvalid(obj.Figure),delete(obj.Figure);end
+            obj.dispose();
         end
     end
 
     methods (Access=private)
-        function buildFigure(obj)
+        function buildFigure(obj,visible)
+            position=obj.Preferences.windowPosition([40 40 1460 900]);
             obj.Figure=uifigure('Name','Legged Model Zoo — Scientific Workbench', ...
-                'Position',[40 40 1460 900]);
+                'Position',position,'Visible',visible,'Tag','lmz-main-window');
+            obj.Figure.AutoResizeChildren='off';
             obj.Figure.CloseRequestFcn=@(~,~)obj.closeRequested();
-            obj.Figure.WindowButtonMotionFcn=@(~,~)obj.branchHovered();
-            obj.Figure.KeyPressFcn=@(~,event)obj.navigateBranch(event);
-            root=uigridlayout(obj.Figure,[3 1]);root.RowHeight={52,'1x',82};
-            header=uigridlayout(root,[1 8]);header.ColumnWidth={145,165,75,165,70,170,'1x',110};
+            obj.Figure.SizeChangedFcn=@(~,~)lmz.gui.Accessibility.enforceMinimumWindow(obj.Figure);
+            lmz.gui.Accessibility.enforceMinimumWindow(obj.Figure);
+            root=uigridlayout(obj.Figure,[3 1]);root.RowHeight={52,'1x',88};
+            header=uigridlayout(root,[1 10]);
+            header.ColumnWidth={145,155,68,155,62,145,100,'1x',105,105};
             uilabel(header,'Text','Legged Model Zoo','FontWeight','bold','FontSize',16);
             obj.ModelDropDown=uidropdown(header,'Items',obj.Controller.modelIds(), ...
+                'Tag','lmz-model-selector','Tooltip','Select a registered legged model.', ...
                 'ValueChangedFcn',@(~,~)obj.modelChanged());
             uilabel(header,'Text','Problem');
-            obj.ProblemDropDown=uidropdown(header,'ValueChangedFcn',@(~,~)obj.problemChanged());
+            obj.ProblemDropDown=uidropdown(header,'Tag','lmz-problem-selector', ...
+                'Tooltip','Select a problem and its scientific capability contract.', ...
+                'ValueChangedFcn',@(~,~)obj.problemChanged());
             uilabel(header,'Text','Example');
-            obj.ExampleDropDown=uidropdown(header,'Items',obj.Controller.builtInExamples(), ...
+            obj.ExampleDropDown=uidropdown(header,'Tag','lmz-example-selector', ...
+                'Tooltip','Select a built-in demonstration input.', ...
                 'ValueChangedFcn',@(~,~)obj.exampleChanged());
-            obj.CapabilityLabel=uilabel(header,'Text','');
-            obj.SimulateButton=uibutton(header,'Text','Run demo', ...
+            obj.PaletteDropDown=uidropdown(header,'Items',{'default','high-contrast'}, ...
+                'Tag','lmz-palette-selector','Tooltip','Choose the default or high-contrast palette.', ...
+                'ValueChangedFcn',@(~,~)obj.paletteChanged());
+            obj.PaletteDropDown.Value=obj.Preferences.palette();
+            obj.CapabilityLabel=uilabel(header,'Text','','Tag','lmz-capability-label');
+            obj.SimulateButton=uibutton(header,'Text','Run demo','Tag','lmz-run-demo', ...
+                'Tooltip','Run the selected built-in demonstration.', ...
                 'ButtonPushedFcn',@(~,~)obj.simulateDemo());
-            tabs=uitabgroup(root);
-            obj.buildSimulationTab(tabs);
-            obj.buildBranchTab(tabs);
-            obj.buildSolutionTab(tabs);
-            obj.buildSolveTab(tabs);
-            obj.buildContinuationTab(tabs);
-            obj.buildOptimizationTab(tabs);
-            obj.StatusArea=uitextarea(root,'Editable','off','Value',{'Ready.'});
+            uibutton(header,'Text','Reset preferences','Tag','lmz-reset-preferences', ...
+                'Tooltip','Reset window, palette, and recent-folder preferences.', ...
+                'ButtonPushedFcn',@(~,~)obj.resetPreferences());
+            obj.TabGroup=uitabgroup(root,'Tag','lmz-main-tabs');
+            handlers={'ErrorHandler',@(exception)obj.showError(exception), ...
+                'StatusHandler',@(message)obj.appendStatus(message)};
+            bus=obj.Controller.Events;
+            obj.TabComponents.simulation=lmz.gui.tabs.SimulationTab(obj.TabGroup, ...
+                obj.Controller,bus,obj.Preferences,handlers{:});
+            obj.TabComponents.branches=lmz.gui.tabs.BranchTab(obj.TabGroup, ...
+                obj.Controller,bus,obj.Preferences,handlers{:});
+            obj.TabComponents.solution=lmz.gui.tabs.SolutionTab(obj.TabGroup, ...
+                obj.Controller,bus,obj.Preferences,handlers{:});
+            obj.TabComponents.solve=lmz.gui.tabs.SolveTab(obj.TabGroup, ...
+                obj.Controller,bus,obj.Preferences,handlers{:});
+            obj.TabComponents.continuation=lmz.gui.tabs.ContinuationTab(obj.TabGroup, ...
+                obj.Controller,bus,obj.Preferences,handlers{:});
+            obj.TabComponents.optimization=lmz.gui.tabs.OptimizationTab(obj.TabGroup, ...
+                obj.Controller,bus,obj.Preferences,handlers{:});
+            obj.StatusPanel=lmz.gui.components.StatusPanel(root);
+            obj.StatusArea=obj.StatusPanel.Area;
+            obj.assignCompatibilityAliases();
         end
 
-        function buildSimulationTab(obj,tabs)
-            tab=lmz.gui.tabs.SimulationTab.create(tabs);
-            grid=uigridlayout(tab,[3 2]);grid.RowHeight={'1x','1x',82};grid.ColumnWidth={'1.12x','1x'};
-            obj.Axes=uiaxes(grid);place(obj.Axes,[1 2],1);title(obj.Axes,'Select and simulate a RoadMap point');
+        function assignCompatibilityAliases(obj)
+            simulation=obj.TabComponents.simulation;branches=obj.TabComponents.branches;
+            solution=obj.TabComponents.solution;solveTab=obj.TabComponents.solve;
+            continuation=obj.TabComponents.continuation;optimization=obj.TabComponents.optimization;
+            obj.Axes=simulation.Axes;obj.TorsoAxes=simulation.TorsoAxes;
+            obj.BackLegAxes=simulation.BackLegAxes;obj.FrontLegAxes=simulation.FrontLegAxes;
+            obj.GRFAxes=simulation.GRFAxes;obj.OscillatorAxes=simulation.OscillatorAxes;
+            obj.TimeSlider=simulation.TimeSlider;obj.NormalizedTimeField=simulation.NormalizedTimeField;
+            obj.AnimationFPSSpinner=simulation.FPSSpinner;obj.AnimationSpeedSpinner=simulation.SpeedSpinner;
+            obj.AnimationLoopCheckBox=simulation.LoopCheckBox;obj.AnimationForceCheckBox=simulation.ForceCheckBox;
+            obj.TrajectoryModeDropDown=simulation.TrajectoryModeDropDown;
+            obj.BranchAxes=branches.Axes;obj.RoadMapBranchDropDown=branches.CatalogDropDown;
+            obj.BranchDatasetList=branches.DatasetList;obj.BranchVisibilityCheckBox=branches.VisibilityCheckBox;
+            obj.BranchMetadataArea=branches.MetadataArea;obj.BranchXDropDown=branches.XDropDown;
+            obj.BranchYDropDown=branches.YDropDown;obj.BranchZDropDown=branches.ZDropDown;
+            obj.BranchDimensionDropDown=branches.DimensionDropDown;
+            obj.BranchAzimuthSpinner=branches.AzimuthSpinner;obj.BranchElevationSpinner=branches.ElevationSpinner;
+            obj.BranchAspectDropDown=branches.AspectDropDown;obj.BranchXLimitsField=branches.XLimitsField;
+            obj.BranchYLimitsField=branches.YLimitsField;obj.BranchZLimitsField=branches.ZLimitsField;
+            obj.BranchIndexSpinner=branches.IndexSpinner;obj.BranchPercentSlider=branches.PercentSlider;
+            obj.SolutionTable=solution.SolutionTable;obj.EventTable=solution.EventTable;
+            obj.ParameterTable=solution.ParameterTable;obj.ObservableTable=solution.ObservableTable;
+            obj.ResidualTable=solution.ResidualTable;obj.DiagnosticsTable=solution.DiagnosticsTable;
+            obj.ProvenanceTable=solution.ProvenanceTable;obj.ProjectionModeDropDown=solution.ProjectionModeDropDown;
+            obj.SendToSolveButton=solution.SendToSolveButton;
+            obj.SendToContinuationButton=solution.SendToContinuationButton;
+            obj.SolveButton=solveTab.SolveButton;obj.SolveStatus=solveTab.StatusLabel;
+            obj.SeedAxes=solveTab.SeedAxes;obj.SeedDirectionDropDown=solveTab.DirectionDropDown;
+            obj.SeedFirstIndexSpinner=solveTab.FirstIndexSpinner;
+            obj.SeedSecondIndexSpinner=solveTab.SecondIndexSpinner;
+            obj.SecondSeedRadiusField=solveTab.SecondSeedRadiusField;
+            obj.NoiseMagnitudeField=solveTab.NoiseMagnitudeField;obj.NoiseSeedSpinner=solveTab.NoiseSeedSpinner;
+            obj.ContinuationButton=continuation.RunButton;obj.HomotopyButton=continuation.HomotopyButton;
+            obj.FamilyScanButton=continuation.FamilyScanButton;obj.ContinuationAxes=continuation.Axes;
+            obj.ContinuationStatus=continuation.StatusLabel;obj.ContinuationPointsSpinner=continuation.PointsSpinner;
+            obj.ContinuationCheckpointField=continuation.CheckpointField;
+            obj.ContinuationParameterDropDown=continuation.ParameterDropDown;
+            obj.ContinuationTargetsField=continuation.TargetsField;
+            obj.OptimizationButton=optimization.RunButton;
+            obj.OptimizationCancelButton=optimization.CancelButton;
+            obj.OptimizationAxes=optimization.ObjectiveAxes;
+            obj.OptimizationSensitivityAxes=optimization.SensitivityAxes;
+            obj.OptimizationR2Axes=optimization.R2Axes;
+        end
 
-            trajectories=uitabgroup(grid);place(trajectories,1,2);
-            torsoTab=uitab(trajectories,'Title','Torso');obj.TorsoAxes=uiaxes(torsoTab,'Position',[8 8 500 260]);
-            backTab=uitab(trajectories,'Title','Back legs');obj.BackLegAxes=uiaxes(backTab,'Position',[8 8 500 260]);
-            frontTab=uitab(trajectories,'Title','Front legs');obj.FrontLegAxes=uiaxes(frontTab,'Position',[8 8 500 260]);
-            lower=uigridlayout(grid,[1 2]);place(lower,2,2);obj.GRFAxes=uiaxes(lower);obj.OscillatorAxes=uiaxes(lower);
-
-            controls=uigridlayout(grid,[2 12]);place(controls,3,[1 2]);
-            controls.RowHeight={30,34};controls.ColumnWidth={110,'1x','1x','1x',72,36,64,42,48,55,70,100};
-            label=uilabel(controls,'Text','Normalized stride');place(label,1,1);
-            obj.TimeSlider=uislider(controls,'Limits',[0 1], ...
-                'ValueChangingFcn',@(~,event)obj.setAnimationTime(event.Value), ...
-                'ValueChangedFcn',@(~,~)obj.setAnimationTime(obj.TimeSlider.Value));place(obj.TimeSlider,1,[2 4]);
-            obj.NormalizedTimeField=uieditfield(controls,'numeric','Limits',[0 1],'Value',0, ...
-                'ValueChangedFcn',@(~,~)obj.setAnimationTime(obj.NormalizedTimeField.Value));place(obj.NormalizedTimeField,1,5);
-            label=uilabel(controls,'Text','FPS');place(label,1,6);
-            obj.AnimationFPSSpinner=uispinner(controls,'Limits',[1 120],'Value',25,'Step',1);place(obj.AnimationFPSSpinner,1,7);
-            label=uilabel(controls,'Text','Speed');place(label,1,8);
-            obj.AnimationSpeedSpinner=uispinner(controls,'Limits',[0.1 10],'Value',1,'Step',0.1);place(obj.AnimationSpeedSpinner,1,9);
-            obj.AnimationLoopCheckBox=uicheckbox(controls,'Text','Loop','Value',false);place(obj.AnimationLoopCheckBox,1,10);
-            obj.AnimationForceCheckBox=uicheckbox(controls,'Text','Forces','Value',true, ...
-                'ValueChangedFcn',@(~,~)obj.forceDisplayChanged());place(obj.AnimationForceCheckBox,1,11);
-            obj.TrajectoryModeDropDown=uidropdown(controls,'Items',{'Complete','Progressive'}, ...
-                'Value','Complete','ValueChangedFcn',@(~,~)obj.animationFrameChanged(obj.NormalizedTimeField.Value,[]));place(obj.TrajectoryModeDropDown,1,12);
-
-            labels={'Play','Pause','Stop','Reset','Simulate point','GIF…','MP4…','Keyframes…','Export plots…','Oscillator GIF…','Cancel export'};
-            callbacks={@()obj.playAnimation(),@()obj.pauseAnimation(),@()obj.stopAnimation(),@()obj.resetAnimation(), ...
-                @()obj.simulateSelected(),@()obj.recordGif(),@()obj.recordMP4(),@()obj.recordKeyframes(), ...
-                @()obj.exportSimulationPlots(),@()obj.recordOscillatorGif(),@()obj.Controller.stopRecording()};
-            for index=1:numel(labels)
-                button=uibutton(controls,'Text',labels{index},'ButtonPushedFcn',@(~,~)callbacks{index}());
-                place(button,2,index);
+        function presentationChanged(obj,batch)
+            if obj.IsDisposed,return,end
+            names={batch.Name};
+            if any(ismember(names,{lmz.gui.PresentationEvents.ModelChanged, ...
+                    lmz.gui.PresentationEvents.ProblemChanged, ...
+                    lmz.gui.PresentationEvents.ExampleChanged}))
+                obj.refreshHeader();
+            end
+            runIndex=find(strcmp(names,lmz.gui.PresentationEvents.RunStateChanged),1,'last');
+            if ~isempty(runIndex)
+                payload=batch(runIndex).Payload;busy=~isempty(obj.Controller.State.CurrentRun);
+                if isstruct(payload)&&isfield(payload,'Busy'),busy=payload.Busy;end
+                obj.setBusy(busy);
+            end
+            statusIndex=find(strcmp(names,lmz.gui.PresentationEvents.StatusChanged),1,'last');
+            if ~isempty(statusIndex)
+                obj.appendStatus(obj.Controller.State.Status,batch(statusIndex).Timestamp);
             end
         end
 
-        function buildBranchTab(obj,tabs)
-            tab=lmz.gui.tabs.RoadMapBranchTab.create(tabs);
-            grid=uigridlayout(tab,[3 2]);grid.RowHeight={84,'1x',116};grid.ColumnWidth={'1x',315};
-            buttons=uigridlayout(grid,[2 9]);place(buttons,1,[1 2]);buttons.ColumnWidth={165,95,85,92,105,90,105,105,'1x'};
-            obj.RoadMapBranchDropDown=uidropdown(buttons);place(obj.RoadMapBranchDropDown,1,1);
-            button=uibutton(buttons,'Text','Load selected','ButtonPushedFcn',@(~,~)obj.loadSelectedRoadMap());place(button,1,2);
-            button=uibutton(buttons,'Text','Load all','ButtonPushedFcn',@(~,~)obj.loadAllBranches());place(button,1,3);
-            button=uibutton(buttons,'Text','Open folder…','ButtonPushedFcn',@(~,~)obj.openBranchFolder());place(button,1,4);
-            button=uibutton(buttons,'Text','Open MAT/artifact…','ButtonPushedFcn',@(~,~)obj.openBranchFile());place(button,1,5);
-            button=uibutton(buttons,'Text','Reload','ButtonPushedFcn',@(~,~)obj.reloadActiveBranch());place(button,1,6);
-            button=uibutton(buttons,'Text','Remove selected','ButtonPushedFcn',@(~,~)obj.removeActiveDataset());place(button,1,7);
-            button=uibutton(buttons,'Text','Save native…','ButtonPushedFcn',@(~,~)obj.saveActiveBranch());place(button,1,8);
-            button=uibutton(buttons,'Text','Export legacy…','ButtonPushedFcn',@(~,~)obj.exportLegacyBranch());place(button,1,9);
-            button=uibutton(buttons,'Text','Plot selected','ButtonPushedFcn',@(~,~)obj.plotSelectedDataset());place(button,2,1);
-            button=uibutton(buttons,'Text','Plot all','ButtonPushedFcn',@(~,~)obj.plotAllDatasets());place(button,2,2);
-            button=uibutton(buttons,'Text','Clear plot','ButtonPushedFcn',@(~,~)obj.clearBranchPlot());place(button,2,3);
-            button=uibutton(buttons,'Text','RoadMap preset','ButtonPushedFcn',@(~,~)obj.roadMapPreset());place(button,2,4);
-            button=uibutton(buttons,'Text','Export plot…','ButtonPushedFcn',@(~,~)obj.exportBranchPlot());place(button,2,5);
-
-            obj.BranchAxes=uiaxes(grid);place(obj.BranchAxes,2,1);obj.BranchAxes.XGrid='on';obj.BranchAxes.YGrid='on';title(obj.BranchAxes,'SLIP quadruped RoadMap');
-            side=uigridlayout(grid,[4 1]);place(side,2,2);side.RowHeight={24,'1x',28,112};
-            uilabel(side,'Text','Datasets (active selection)','FontWeight','bold');
-            obj.BranchDatasetList=uilistbox(side,'ValueChangedFcn',@(~,~)obj.datasetChanged());
-            obj.BranchVisibilityCheckBox=uicheckbox(side,'Text','Visible','Value',true, ...
-                'ValueChangedFcn',@(~,~)obj.visibilityChanged());
-            obj.BranchMetadataArea=uitextarea(side,'Editable','off','Value',{'No dataset'});
-
-            axesControls=uigridlayout(grid,[3 10]);place(axesControls,3,[1 2]);
-            axesControls.ColumnWidth={24,'1x',24,'1x',24,'1x',64,52,62,92};
-            label=uilabel(axesControls,'Text','X');place(label,1,1);obj.BranchXDropDown=uidropdown(axesControls,'ValueChangedFcn',@(~,~)obj.axesChanged());place(obj.BranchXDropDown,1,2);
-            label=uilabel(axesControls,'Text','Y');place(label,1,3);obj.BranchYDropDown=uidropdown(axesControls,'ValueChangedFcn',@(~,~)obj.axesChanged());place(obj.BranchYDropDown,1,4);
-            label=uilabel(axesControls,'Text','Z');place(label,1,5);obj.BranchZDropDown=uidropdown(axesControls,'ValueChangedFcn',@(~,~)obj.axesChanged());place(obj.BranchZDropDown,1,6);
-            obj.BranchDimensionDropDown=uidropdown(axesControls,'Items',{'2-D','3-D'},'ValueChangedFcn',@(~,~)obj.axesChanged());place(obj.BranchDimensionDropDown,1,7);
-            label=uilabel(axesControls,'Text','Index');place(label,1,8);obj.BranchIndexSpinner=uispinner(axesControls,'Limits',[1 Inf],'Step',1,'RoundFractionalValues','on','ValueChangedFcn',@(~,~)obj.indexChanged());place(obj.BranchIndexSpinner,1,9);
-            obj.BranchPercentSlider=uislider(axesControls,'Limits',[0 100],'ValueChangedFcn',@(~,~)obj.percentChanged());place(obj.BranchPercentSlider,1,10);
-
-            label=uilabel(axesControls,'Text','Az');place(label,2,1);obj.BranchAzimuthSpinner=uispinner(axesControls,'Limits',[-180 180],'Value',0,'ValueChangedFcn',@(~,~)obj.viewChanged());place(obj.BranchAzimuthSpinner,2,2);
-            label=uilabel(axesControls,'Text','El');place(label,2,3);obj.BranchElevationSpinner=uispinner(axesControls,'Limits',[-90 90],'Value',90,'ValueChangedFcn',@(~,~)obj.viewChanged());place(obj.BranchElevationSpinner,2,4);
-            label=uilabel(axesControls,'Text','Aspect');place(label,2,5);obj.BranchAspectDropDown=uidropdown(axesControls,'Items',{'auto','equal'},'Value','auto','ValueChangedFcn',@(~,~)obj.viewChanged());place(obj.BranchAspectDropDown,2,6);
-            label=uilabel(axesControls,'Text','Branch %');place(label,2,8);
-
-            label=uilabel(axesControls,'Text','X lim');place(label,3,1);obj.BranchXLimitsField=uieditfield(axesControls,'text','Value','auto','ValueChangedFcn',@(~,~)obj.applyAxisLimits());place(obj.BranchXLimitsField,3,2);
-            label=uilabel(axesControls,'Text','Y lim');place(label,3,3);obj.BranchYLimitsField=uieditfield(axesControls,'text','Value','auto','ValueChangedFcn',@(~,~)obj.applyAxisLimits());place(obj.BranchYLimitsField,3,4);
-            label=uilabel(axesControls,'Text','Z lim');place(label,3,5);obj.BranchZLimitsField=uieditfield(axesControls,'text','Value','auto','ValueChangedFcn',@(~,~)obj.applyAxisLimits());place(obj.BranchZLimitsField,3,6);
-            label=uilabel(axesControls,'Text','Use [min max] or auto');place(label,3,[8 10]);
-        end
-
-        function buildSolutionTab(obj,tabs)
-            tab=lmz.gui.tabs.SolutionTab.create(tabs);root=uigridlayout(tab,[2 1]);root.RowHeight={'1x',80};groups=uitabgroup(root);
-            [obj.SolutionTable,~]=obj.makeTableTab(groups,'Initial State',true);
-            [obj.EventTable,~]=obj.makeTableTab(groups,'Event Timing',true);
-            [obj.ParameterTable,~]=obj.makeTableTab(groups,'Parameters',true);
-            [obj.ObservableTable,~]=obj.makeTableTab(groups,'Observables',false);
-            [obj.ResidualTable,~]=obj.makeTableTab(groups,'Residual Blocks',false);
-            [obj.DiagnosticsTable,~]=obj.makeTableTab(groups,'Diagnostics',false);
-            [obj.ProvenanceTable,~]=obj.makeTableTab(groups,'Provenance',false);
-            controls=uigridlayout(root,[2 5]);
-            uibutton(controls,'Text','Validate/evaluate','ButtonPushedFcn',@(~,~)obj.evaluateSelected());
-            uibutton(controls,'Text','Restore locked point','ButtonPushedFcn',@(~,~)obj.restoreSolution());
-            obj.ProjectionModeDropDown=uidropdown(controls,'Items',{'Wrap cyclic times','Project ground contact'},'Value','Wrap cyclic times');
-            uibutton(controls,'Text','Project event schedule','ButtonPushedFcn',@(~,~)obj.projectSolution());
-            uibutton(controls,'Text','Simulate candidate','ButtonPushedFcn',@(~,~)obj.simulateSelected());
-            uibutton(controls,'Text','Save solution…','ButtonPushedFcn',@(~,~)obj.saveWorkingSolution());
-            uibutton(controls,'Text','Add candidate dataset','ButtonPushedFcn',@(~,~)obj.addWorkingDataset());
-            obj.SendToSolveButton=uibutton(controls,'Text','Send to Solve', ...
-                'ButtonPushedFcn',@(~,~)obj.solve());
-            obj.SendToContinuationButton=uibutton(controls, ...
-                'Text','Send to Continuation', ...
-                'ButtonPushedFcn',@(~,~)obj.sendWorkingToContinuation());
-            obj.SolveControls{end+1}=obj.SendToSolveButton;
-            obj.ContinuationControls{end+1}=obj.SendToContinuationButton;
-        end
-
-        function [tableHandle,tab]=makeTableTab(obj,group,titleText,editable)
-            tab=uitab(group,'Title',titleText);
-            tableHandle=lmz.gui.components.InspectorTable.create( ...
-                tab,editable,[]);
-            if editable
-                tableHandle.CellEditCallback= ...
-                    @(~,event)obj.solutionValueEdited(tableHandle,event);
-            end
-        end
-
-        function buildSolveTab(obj,tabs)
-            tab=lmz.gui.tabs.SolveTab.create(tabs);grid=uigridlayout(tab,[3 1]);grid.RowHeight={80,42,'1x'};
-            controls=uigridlayout(grid,[2 10]);controls.ColumnWidth={72,88,105,54,70,54,70,90,72,'1x'};
-            label=uilabel(controls,'Text','Direction');place(label,1,1);obj.SeedDirectionDropDown=uidropdown(controls,'Items',{'next','previous'},'Value','next');place(obj.SeedDirectionDropDown,1,2);
-            button=uibutton(controls,'Text','Adjacent pair','ButtonPushedFcn',@(~,~)obj.makeAdjacentSeed());place(button,1,3);obj.ContinuationControls{end+1}=button;
-            label=uilabel(controls,'Text','First');place(label,1,4);obj.SeedFirstIndexSpinner=uispinner(controls,'Limits',[1 Inf],'Value',1,'Step',1,'RoundFractionalValues','on');place(obj.SeedFirstIndexSpinner,1,5);
-            label=uilabel(controls,'Text','Second');place(label,1,6);obj.SeedSecondIndexSpinner=uispinner(controls,'Limits',[1 Inf],'Value',2,'Step',1,'RoundFractionalValues','on');place(obj.SeedSecondIndexSpinner,1,7);
-            button=uibutton(controls,'Text','Manual pair','ButtonPushedFcn',@(~,~)obj.makeManualSeed());place(button,1,8);obj.ContinuationControls{end+1}=button;
-            label=uilabel(controls,'Text','Radius');place(label,1,9);obj.SecondSeedRadiusField=uieditfield(controls,'numeric','Limits',[1e-6 Inf],'Value',0.01);place(obj.SecondSeedRadiusField,1,10);
-            button=uibutton(controls,'Text','Evaluate','ButtonPushedFcn',@(~,~)obj.evaluateSelected());place(button,2,1);
-            obj.SolveButton=uibutton(controls,'Text','Solve/refine','ButtonPushedFcn',@(~,~)obj.solve());place(obj.SolveButton,2,2);obj.SolveControls{end+1}=obj.SolveButton;
-            button=uibutton(controls,'Text','Generated second seed','ButtonPushedFcn',@(~,~)obj.makeSecondSeed());place(button,2,3);obj.ContinuationControls{end+1}=button;
-            label=uilabel(controls,'Text','Noise');place(label,2,4);obj.NoiseMagnitudeField=uieditfield(controls,'numeric','Limits',[0 Inf],'Value',0.001);place(obj.NoiseMagnitudeField,2,5);
-            label=uilabel(controls,'Text','Seed');place(label,2,6);obj.NoiseSeedSpinner=uispinner(controls,'Limits',[0 Inf],'Value',123,'Step',1,'RoundFractionalValues','on');place(obj.NoiseSeedSpinner,2,7);
-            button=uibutton(controls,'Text','Apply noise','ButtonPushedFcn',@(~,~)obj.applyNoise());place(button,2,8);obj.SolveControls{end+1}=button;
-            button=uibutton(controls,'Text','Simulate solved','ButtonPushedFcn',@(~,~)obj.simulateSelected());place(button,2,9);
-            obj.SolveControls=[obj.SolveControls {obj.NoiseMagnitudeField obj.NoiseSeedSpinner}];
-            obj.ContinuationControls=[obj.ContinuationControls {obj.SeedDirectionDropDown ...
-                obj.SeedFirstIndexSpinner obj.SeedSecondIndexSpinner ...
-                obj.SecondSeedRadiusField}];
-            obj.SolveStatus=uilabel(grid,'Text','Ready','WordWrap','on');place(obj.SolveStatus,2,1);
-            obj.SeedAxes=uiaxes(grid);place(obj.SeedAxes,3,1);title(obj.SeedAxes,'RoadMap seed-pair overlay');obj.SeedAxes.XGrid='on';obj.SeedAxes.YGrid='on';
-        end
-
-        function buildContinuationTab(obj,tabs)
-            tab=lmz.gui.tabs.ContinuationTab.create(tabs);grid=uigridlayout(tab,[3 1]);grid.RowHeight={'1x',84,38};
-            obj.ContinuationAxes=uiaxes(grid);obj.ContinuationAxes.XGrid='on';obj.ContinuationAxes.YGrid='on';title(obj.ContinuationAxes,'Live RoadMap continuation overlay');
-            controls=uigridlayout(grid,[2 9]);controls.ColumnWidth={62,64,105,65,65,65,115,'1x',105};
-            label=uilabel(controls,'Text','Points');place(label,1,1);obj.ContinuationPointsSpinner=uispinner(controls,'Limits',[3 1000],'Value',20,'Step',1,'RoundFractionalValues','on');place(obj.ContinuationPointsSpinner,1,2);
-            obj.ContinuationButton=uibutton(controls,'Text','Run continuation','ButtonPushedFcn',@(~,~)obj.continueBranch());place(obj.ContinuationButton,1,3);obj.ContinuationControls{end+1}=obj.ContinuationButton;
-            button=uibutton(controls,'Text','Pause','ButtonPushedFcn',@(~,~)obj.pauseContinuation());place(button,1,4);
-            button=uibutton(controls,'Text','Resume','ButtonPushedFcn',@(~,~)obj.resumeContinuation());place(button,1,5);
-            button=uibutton(controls,'Text','Stop','ButtonPushedFcn',@(~,~)obj.stopContinuation());place(button,1,6);
-            button=uibutton(controls,'Text','Add result dataset','ButtonPushedFcn',@(~,~)obj.addContinuationDataset());place(button,1,7);
-            button=uibutton(controls,'Text','Save result…','ButtonPushedFcn',@(~,~)obj.saveContinuationResult());place(button,1,9);
-            obj.ContinuationControls=[obj.ContinuationControls {button}];
-            label=uilabel(controls,'Text','Checkpoint');place(label,2,1);
-            obj.ContinuationCheckpointField=uieditfield(controls,'text','Value','');place(obj.ContinuationCheckpointField,2,[2 4]);
-            button=uibutton(controls,'Text','Choose…','ButtonPushedFcn',@(~,~)obj.chooseCheckpoint());place(button,2,5);
-            button=uibutton(controls,'Text','Resume file','ButtonPushedFcn',@(~,~)obj.resumeCheckpoint());place(button,2,6);
-            obj.ContinuationParameterDropDown=uidropdown(controls, ...
-                'Tooltip','Only active parameters are shown; inactive and derived parameters cannot be transported.');place(obj.ContinuationParameterDropDown,2,7);
-            obj.ContinuationTargetsField=uieditfield(controls,'text','Value','0 0.05');place(obj.ContinuationTargetsField,2,8);
-            familyGrid=uigridlayout(controls,[1 2]);place(familyGrid,2,9);
-            obj.HomotopyButton=uibutton(familyGrid,'Text','Homotopy','ButtonPushedFcn',@(~,~)obj.runHomotopy());
-            obj.FamilyScanButton=uibutton(familyGrid,'Text','Family','ButtonPushedFcn',@(~,~)obj.runFamilyScan());
-            obj.ContinuationControls=[obj.ContinuationControls {obj.ContinuationPointsSpinner ...
-                obj.ContinuationCheckpointField obj.ContinuationParameterDropDown ...
-                obj.ContinuationTargetsField obj.HomotopyButton obj.FamilyScanButton}];
-            buttons=findall(controls,'Type','uibutton');
-            for index=1:numel(buttons)
-                if ~any(cellfun(@(item)isequal(item,buttons(index)), ...
-                        obj.ContinuationControls))
-                    obj.ContinuationControls{end+1}=buttons(index);
-                end
-            end
-            obj.ContinuationStatus=uilabel(grid,'Text','Ready','WordWrap','on');
-        end
-
-        function buildOptimizationTab(obj,tabs)
-            tab=lmz.gui.tabs.OptimizationTab.create(tabs);grid=uigridlayout(tab,[2 3]);
-            grid.RowHeight={'1x',40};
-            obj.OptimizationAxes=uiaxes(grid);title(obj.OptimizationAxes,'Objective history');
-            obj.OptimizationSensitivityAxes=uiaxes(grid);title(obj.OptimizationSensitivityAxes,'Sensitivity / terms');
-            obj.OptimizationR2Axes=uiaxes(grid);title(obj.OptimizationR2Axes,'Fit quality');
-            controls=uigridlayout(grid,[1 2]);place(controls,2,[1 3]);
-            obj.OptimizationButton=uibutton(controls, ...
-                'Text','Run fit (supported models)','ButtonPushedFcn',@(~,~)obj.optimize());
-            obj.OptimizationCancelButton=uibutton(controls,'Text','Cancel fit', ...
-                'ButtonPushedFcn',@(~,~)obj.Controller.stopCurrentRun());
-            obj.OptimizationControls={obj.OptimizationButton obj.OptimizationCancelButton};
-        end
-
-        function modelChanged(obj)
-            obj.stopAnimation();obj.Controller.selectModel(obj.ModelDropDown.Value);obj.refreshModel();
-        end
-        function problemChanged(obj)
-            obj.stopAnimation();
-            obj.Controller.selectProblem(obj.ProblemDropDown.Value);
-            obj.ProblemDropDown.Value=obj.Controller.State.ProblemId;
-            obj.refreshProblemBadge();
-            obj.selectionChanged();
-        end
-        function exampleChanged(obj),obj.Controller.State.ExampleId=obj.ExampleDropDown.Value;end
-
-        function refreshModel(obj)
-            obj.ModelDropDown.Value=obj.Controller.State.ModelId;
-            problems=obj.Controller.problemIds();
-            manifest=obj.Controller.Registry.getManifest(obj.Controller.State.ModelId);
+        function refreshHeader(obj)
+            if isempty(obj.Figure)||~isvalid(obj.Figure),return,end
+            modelId=obj.Controller.State.ModelId;obj.ModelDropDown.Value=modelId;
+            problems=obj.Controller.problemIds();manifest=obj.Controller.Registry.getManifest(modelId);
             labels=cell(size(problems));
             for index=1:numel(problems)
                 descriptor=problemDescriptor(manifest,problems{index});
                 labels{index}=lmz.gui.components.ProblemBadge.selectorLabel(descriptor);
             end
             obj.ProblemDropDown.Items=labels;obj.ProblemDropDown.ItemsData=problems;
-            if any(strcmp(obj.Controller.State.ProblemId,problems)),obj.ProblemDropDown.Value=obj.Controller.State.ProblemId;else,obj.ProblemDropDown.Value=problems{1};end
-            examples=obj.Controller.builtInExamples();obj.ExampleDropDown.Items=examples;obj.ExampleDropDown.Value=examples{1};obj.Controller.State.ExampleId=examples{1};
-            obj.refreshProblemBadge();
-            obj.refreshRoadMapSelector();obj.refreshParameterSelector();obj.refreshDatasetControls();obj.renderBranch();obj.renderSolution();obj.StatusArea.Value={obj.Controller.State.Status};
-        end
-
-        function refreshProblemBadge(obj)
-            manifest=obj.Controller.Registry.getManifest(obj.Controller.State.ModelId);
-            descriptor=problemDescriptor(manifest,obj.Controller.State.ProblemId);
-            capabilities=obj.Controller.capabilities();
-            if isfield(descriptor,'capabilities'),capabilities=descriptor.capabilities;end
-            if ~isempty(obj.SimulateButton)&&isfield(capabilities,'simulate')
-                obj.SimulateButton.Enable=onOff(capabilities.simulate);
-            end
-            setControlsEnabled(obj.SolveControls,capabilities.solve);
-            setControlsEnabled(obj.ContinuationControls,capabilities.('continue'));
-            setControlsEnabled(obj.OptimizationControls,capabilities.optimize);
-            obj.HomotopyButton.Enable=onOff(capabilities.parameterHomotopy);
-            obj.FamilyScanButton.Enable=onOff(capabilities.branchFamilyScan);
-            optionalContinuation=capabilities.parameterHomotopy|| ...
-                capabilities.branchFamilyScan;
-            obj.ContinuationParameterDropDown.Enable=onOff(optionalContinuation);
-            obj.ContinuationTargetsField.Enable=onOff(optionalContinuation);
-            obj.CapabilityLabel.Text=sprintf('%s  |  %s', ...
-                lmz.gui.components.ProblemBadge.label(descriptor), ...
-                capabilityText(capabilities,obj.Controller.State.ModelId));
-        end
-
-        function refreshRoadMapSelector(obj)
-            switch obj.Controller.State.ModelId
-                case 'slip_quadruped'
-                    catalog=lmzmodels.slip_quadruped.RoadMapCatalog.default();
-                    files=catalog.listBranches();defaultPath=catalog.defaultBranchPath();
-                    title(obj.BranchAxes,'SLIP quadruped RoadMap');
-                case 'slip_biped'
-                    catalog=lmzmodels.slip_biped.GaitMapCatalog.default();
-                    files=catalog.listBranches();defaultPath=catalog.defaultBranchPath();
-                    title(obj.BranchAxes,'SLIP biped GaitMap');
-                case 'slip_quad_load'
-                    catalog=lmzmodels.slip_quad_load.ScientificDatasetCatalog.default();
-                    records=catalog.records();files=cell(1,numel(records));
-                    for recordIndex=1:numel(records),files{recordIndex}=catalog.pathFor(records(recordIndex).id);end
-                    defaultPath=catalog.defaultMultiPath();
-                    title(obj.BranchAxes,'SLIP quadruped-with-load datasets');
-                otherwise
-                    obj.RoadMapBranchDropDown.Items={'Scientific data unavailable'};
-                    obj.RoadMapBranchDropDown.ItemsData={''};return
-            end
-            labels=cell(size(files));
-            for index=1:numel(files),[~,name,extension]=fileparts(files{index});labels{index}=[name extension];end
-            obj.RoadMapBranchDropDown.Items=labels;obj.RoadMapBranchDropDown.ItemsData=files;obj.RoadMapBranchDropDown.Value=defaultPath;
-        end
-
-        function refreshParameterSelector(obj)
-            if isempty(obj.Controller.State.WorkingSolution),obj.ContinuationParameterDropDown.Items={'parameter'};return,end
-            names=obj.Controller.homotopyParameterNames();
-            if isempty(names),names={'No active transport parameter'};end
-            obj.ContinuationParameterDropDown.Items=names;
-            if any(strcmp('k_leg',names)),obj.ContinuationParameterDropDown.Value='k_leg'; ...
-            else,obj.ContinuationParameterDropDown.Value=names{1};end
-        end
-
-        function refreshDatasetControls(obj)
-            datasets=obj.Controller.State.Datasets;items=cell(1,numel(datasets));ids=cell(1,numel(datasets));
-            for index=1:numel(datasets)
-                visible='○';if datasets{index}.Visible,visible='●';end
-                gait=metadataField(datasets{index}.Metadata,'GaitSummary','');status=metadataField(datasets{index}.Metadata,'Status','');
-                items{index}=sprintf('%s %s — %d points — %s — %s',visible,datasets{index}.Name,datasets{index}.Branch.pointCount(),shortText(gait,20),status);ids{index}=datasets{index}.Id;
-            end
-            obj.BranchDatasetList.Items=items;obj.BranchDatasetList.ItemsData=ids;
-            if isempty(datasets)
-                obj.BranchMetadataArea.Value={'No dataset loaded.'};return
-            end
-            obj.BranchDatasetList.Value=obj.Controller.State.ActiveDatasetId;dataset=obj.Controller.activeDataset();obj.BranchVisibilityCheckBox.Value=dataset.Visible;
-            obj.BranchMetadataArea.Value=datasetMetadataLines(dataset);
-            names=dataset.Branch.coordinateNames();obj.BranchXDropDown.Items=names;obj.BranchYDropDown.Items=names;obj.BranchZDropDown.Items=names;
-            selected=obj.Controller.State.AxisVariables;while numel(selected)<3,selected{end+1}=names{min(numel(selected)+1,numel(names))};end
-            for index=1:3,if ~any(strcmp(selected{index},names)),selected{index}=names{min(index,numel(names))};end,end
-            obj.Controller.setAxisVariables(selected{1},selected{2},selected{3});
-            obj.BranchXDropDown.Value=selected{1};obj.BranchYDropDown.Value=selected{2};obj.BranchZDropDown.Value=selected{3};
-            n=dataset.Branch.pointCount();obj.BranchIndexSpinner.Limits=[1 n];
-            selectedIndex=1;if ~isempty(obj.Controller.State.LockedSelection),selectedIndex=min(n,obj.Controller.State.LockedSelection.PointIndex);end
-            obj.BranchIndexSpinner.Value=selectedIndex;obj.BranchPercentSlider.Value=100*(selectedIndex-1)/max(1,n-1);
-            obj.SeedFirstIndexSpinner.Limits=[1 n];obj.SeedSecondIndexSpinner.Limits=[1 n];obj.SeedFirstIndexSpinner.Value=selectedIndex;obj.SeedSecondIndexSpinner.Value=min(n,selectedIndex+1);
-            obj.refreshParameterSelector();
-        end
-
-        function simulateDemo(obj)
-            try
-                result=obj.Controller.simulate(struct());names=obj.Controller.bodyTrajectoryNames();
-                plot(obj.Axes,result.state(names{1}),result.state(names{2}),'LineWidth',2);grid(obj.Axes,'on');xlabel(obj.Axes,names{1});ylabel(obj.Axes,names{2});title(obj.Axes,[obj.Controller.State.ModelId ' demonstration'],'Interpreter','none');obj.StatusArea.Value={obj.Controller.State.Status};
-            catch exception,obj.showError(exception);end
-        end
-
-        function simulateSelected(obj)
-            try
-                obj.stopAnimation();simulation=obj.Controller.simulateWorkingSolution();
-                switch obj.Controller.State.ModelId
-                    case 'slip_quadruped'
-                        obj.AnimationRenderer=lmzmodels.slip_quadruped.QuadrupedRenderer(obj.Axes,simulation);
-                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotTorso(obj.TorsoAxes,simulation);
-                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotBackLegs(obj.BackLegAxes,simulation);
-                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotFrontLegs(obj.FrontLegAxes,simulation);
-                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotGRF(obj.GRFAxes,simulation);
-                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotOscillator(obj.OscillatorAxes,simulation);
-                    case 'slip_biped'
-                        obj.AnimationRenderer=lmzmodels.slip_biped.BipedRenderer(obj.Axes,simulation);
-                        lmzmodels.slip_biped.BipedPlotProvider.plotBody(obj.TorsoAxes,simulation);
-                        lmzmodels.slip_biped.BipedPlotProvider.plotLegs(obj.BackLegAxes,simulation);
-                        lmzmodels.slip_biped.BipedPlotProvider.plotFootfall(obj.FrontLegAxes,simulation);
-                        lmzmodels.slip_biped.BipedPlotProvider.plotGRF(obj.GRFAxes,simulation);
-                        lmzmodels.slip_biped.BipedPlotProvider.plotFootfall(obj.OscillatorAxes,simulation);
-                    case 'slip_quad_load'
-                        obj.AnimationRenderer=lmzmodels.slip_quad_load.QuadLoadRenderer(obj.Axes,simulation);
-                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotBodyAndLegs(obj.TorsoAxes,simulation);
-                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotLoad(obj.BackLegAxes,simulation);
-                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotFootfall(obj.FrontLegAxes,simulation);
-                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotGRF(obj.GRFAxes,simulation);
-                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotTugline(obj.OscillatorAxes,simulation);
-                end
-                if isprop(obj.AnimationRenderer,'ShowForces')
-                    obj.AnimationRenderer.ShowForces=obj.AnimationForceCheckBox.Value;
-                end
-                obj.AnimationPlayer=lmz.gui.AnimationController(simulation,obj.AnimationRenderer);obj.AnimationPlayer.FrameChangedFcn=@(value,index)obj.animationFrameChanged(value,index);
-                obj.animationFrameChanged(0,1);obj.StatusArea.Value={obj.Controller.State.Status};
-            catch exception,obj.showError(exception);end
-        end
-
-        function setAnimationTime(obj,value)
-            if isempty(obj.AnimationPlayer),return,end
-            if obj.AnimationPlayer.IsPlaying,obj.AnimationPlayer.pause();end
-            obj.AnimationPlayer.setNormalizedTime(value);
-        end
-        function animationFrameChanged(obj,value,~)
-            if isempty(value)||~isfinite(value),return,end
-            obj.TimeSlider.Value=max(0,min(1,value));obj.NormalizedTimeField.Value=obj.TimeSlider.Value;
-            if isempty(obj.Controller.State.Simulation),return,end
-            axesList=[obj.TorsoAxes obj.BackLegAxes obj.FrontLegAxes obj.GRFAxes];time=obj.Controller.State.Simulation.Time;
-            if strcmp(obj.TrajectoryModeDropDown.Value,'Progressive')
-                upper=time(1)+obj.TimeSlider.Value*(time(end)-time(1));upper=max(upper,time(min(2,numel(time))));
-                for index=1:numel(axesList),xlim(axesList(index),[time(1) upper]);end
+            problemId=obj.Controller.State.ProblemId;
+            if any(strcmp(problemId,problems)),obj.ProblemDropDown.Value=problemId;end
+            examples=obj.Controller.builtInExamples();
+            if isempty(examples),examples={'default_stride'};end
+            obj.ExampleDropDown.Items=examples;
+            if any(strcmp(obj.Controller.State.ExampleId,examples))
+                obj.ExampleDropDown.Value=obj.Controller.State.ExampleId;
             else
-                for index=1:numel(axesList),xlim(axesList(index),[time(1) time(end)]);end
+                obj.ExampleDropDown.Value=examples{1};obj.Controller.setExample(examples{1});
             end
-        end
-        function playAnimation(obj)
-            if isempty(obj.AnimationPlayer),obj.simulateSelected();end;if isempty(obj.AnimationPlayer),return,end
-            obj.AnimationPlayer.FPS=obj.AnimationFPSSpinner.Value;obj.AnimationPlayer.Speed=obj.AnimationSpeedSpinner.Value;obj.AnimationPlayer.Loop=obj.AnimationLoopCheckBox.Value;obj.AnimationPlayer.play();
-        end
-        function pauseAnimation(obj),if ~isempty(obj.AnimationPlayer),obj.AnimationPlayer.pause();end,end
-        function stopAnimation(obj),if ~isempty(obj.AnimationPlayer),obj.AnimationPlayer.stop();end,end
-        function resetAnimation(obj),if ~isempty(obj.AnimationPlayer),obj.AnimationPlayer.reset();end,end
-        function forceDisplayChanged(obj),if ~isempty(obj.AnimationRenderer)&&isprop(obj.AnimationRenderer,'ShowForces'),obj.AnimationRenderer.ShowForces=obj.AnimationForceCheckBox.Value;obj.AnimationRenderer.updateFrame(obj.AnimationRenderer.CurrentIndex);end,end
-
-        function recordGif(obj),obj.recordAnimationWithDialog('gif','*.gif','Save scientific animation',struct('FrameCount',40));end
-        function recordMP4(obj),obj.recordAnimationWithDialog('mp4','*.mp4','Save scientific video',struct('FrameCount',60,'FPS',obj.AnimationFPSSpinner.Value));end
-        function recordKeyframes(obj),obj.recordAnimationWithDialog('keyframes',{'*.png';'*.pdf'},'Export animation keyframes',struct('NormalizedTimes',[0 .25 .5 .75 1]));end
-        function recordAnimationWithDialog(obj,format,filter,titleText,options)
-            if isempty(obj.AnimationRenderer),obj.simulateSelected();end;if isempty(obj.AnimationRenderer),return,end
-            [file,path]=uiputfile(filter,titleText);if isequal(file,0),return,end
-            try,obj.Controller.recordAnimation(format,fullfile(path,file),obj.AnimationRenderer,options);obj.animationFrameChanged(obj.AnimationPlayer.NormalizedTime,[]);obj.StatusArea.Value={['Saved ' fullfile(path,file)]};catch exception,obj.showError(exception);end
-        end
-        function recordOscillatorGif(obj)
-            if isempty(obj.Controller.State.Simulation),obj.simulateSelected();end;if isempty(obj.Controller.State.Simulation),return,end
-            [file,path]=uiputfile('*.gif','Save oscillator GIF');if isequal(file,0),return,end
-            try
-                obj.Controller.recordAxesGif(obj.OscillatorAxes,@(phase)obj.updateOscillatorCursor(phase),fullfile(path,file),struct('FrameCount',40));
-                obj.updateOscillatorCursor(obj.NormalizedTimeField.Value);obj.StatusArea.Value={['Saved ' fullfile(path,file)]};
-            catch exception,obj.showError(exception);end
-        end
-        function updateOscillatorCursor(obj,phase)
-            delete(findobj(obj.OscillatorAxes,'Tag','OscillatorCursor'));cursor=xline(obj.OscillatorAxes,phase,'r-','LineWidth',2);cursor.Tag='OscillatorCursor';
-        end
-        function exportSimulationPlots(obj)
-            if isempty(obj.Controller.State.Simulation),obj.simulateSelected();end;if isempty(obj.Controller.State.Simulation),return,end
-            [file,path]=uiputfile({'*.png';'*.pdf'},'Export trajectory and force plots');if isequal(file,0),return,end
-            [~,name,extension]=fileparts(file);axesList={obj.TorsoAxes,obj.BackLegAxes,obj.FrontLegAxes,obj.GRFAxes,obj.OscillatorAxes};suffix={'torso','back_legs','front_legs','grf','oscillator'};
-            try,for index=1:numel(axesList),obj.Controller.exportPlot(axesList{index},fullfile(path,sprintf('%s_%s%s',name,suffix{index},extension)));end;obj.StatusArea.Value={sprintf('Exported five plot files to %s.',path)};catch exception,obj.showError(exception);end
+            descriptor=problemDescriptor(manifest,problemId);capabilities=obj.Controller.capabilities();
+            obj.CapabilityLabel.Text=sprintf('%s  |  %s', ...
+                lmz.gui.components.ProblemBadge.label(descriptor),capabilityText(capabilities));
+            setEnable(obj.SimulateButton,capabilities.simulate&& ...
+                obj.Controller.canSimulateDemo()&&~obj.HeaderBusy);
+            components=struct2cell(obj.TabComponents);
+            for index=1:numel(components),components{index}.setCapabilities(capabilities);end
         end
 
-        function loadSelectedRoadMap(obj)
-            try
-                switch obj.Controller.State.ModelId
-                    case 'slip_quadruped',obj.Controller.loadRoadMap(obj.RoadMapBranchDropDown.Value);
-                    case 'slip_biped',obj.Controller.loadGaitMap(obj.RoadMapBranchDropDown.Value);
-                    case 'slip_quad_load',obj.Controller.loadScientificLoadDataset(obj.RoadMapBranchDropDown.Value);
-                end
-                obj.selectionChanged();
-            catch exception,obj.showError(exception);end
+        function modelChanged(obj)
+            try,obj.Controller.selectModel(obj.ModelDropDown.Value);catch exception,obj.showError(exception);end
         end
-        function loadAllBranches(obj)
-            try
-                switch obj.Controller.State.ModelId
-                    case 'slip_quadruped',obj.Controller.loadAllRoadMapBranches();
-                    case 'slip_biped',obj.Controller.loadAllGaitMapBranches();
-                    case 'slip_quad_load',obj.Controller.loadAllScientificLoadDatasets();
-                end
-                obj.selectionChanged();
-            catch exception,obj.showError(exception);end
+        function problemChanged(obj)
+            try,obj.Controller.selectProblem(obj.ProblemDropDown.Value);catch exception,obj.showError(exception);end
         end
-        function openBranchFolder(obj)
-            folder=uigetdir(pwd,'Open folder containing MAT/artifact branches');if isequal(folder,0),return,end
-            try,obj.Controller.openBranchFolder(folder);obj.selectionChanged();catch exception,obj.showError(exception);end
+        function exampleChanged(obj),obj.Controller.setExample(obj.ExampleDropDown.Value);end
+        function simulateDemo(obj)
+            try,obj.Controller.simulate(struct());catch exception,obj.showError(exception);end
         end
-        function openBranchFile(obj)
-            [file,path]=uigetfile({'*.mat','MAT or LMZ artifact'},'Open branch');if isequal(file,0),return,end
-            try,obj.Controller.openBranch(fullfile(path,file));obj.selectionChanged();catch exception,obj.showError(exception);end
+        function paletteChanged(obj)
+            value=obj.PaletteDropDown.Value;obj.Preferences.setPalette(value);obj.applyPalette(value);
         end
-        function reloadActiveBranch(obj),try,obj.Controller.reloadActiveDataset();obj.selectionChanged();catch exception,obj.showError(exception);end,end
-        function removeActiveDataset(obj)
-            if isempty(obj.Controller.State.Datasets),return,end
-            try,obj.Controller.removeDataset(obj.Controller.State.ActiveDatasetId);obj.selectionChanged();catch exception,obj.showError(exception);end
+        function applyPalette(obj,value)
+            palette=lmz.gui.Palette.named(value);
+            axesHandles=[obj.Axes obj.TorsoAxes obj.BackLegAxes obj.FrontLegAxes ...
+                obj.GRFAxes obj.OscillatorAxes obj.BranchAxes obj.SeedAxes ...
+                obj.ContinuationAxes obj.OptimizationAxes ...
+                obj.OptimizationSensitivityAxes obj.OptimizationR2Axes];
+            lmz.gui.Accessibility.applyPalette(obj.Figure,axesHandles,palette);
+            obj.TabComponents.branches.setPalette(palette);
         end
-        function datasetChanged(obj),try,obj.Controller.setActiveDataset(obj.BranchDatasetList.Value);obj.selectionChanged();catch exception,obj.showError(exception);end,end
-        function visibilityChanged(obj),try,obj.Controller.setDatasetVisibility(obj.Controller.State.ActiveDatasetId,obj.BranchVisibilityCheckBox.Value);obj.refreshDatasetControls();obj.renderBranch();catch exception,obj.showError(exception);end,end
-        function plotSelectedDataset(obj)
-            for index=1:numel(obj.Controller.State.Datasets),obj.Controller.setDatasetVisibility(obj.Controller.State.Datasets{index}.Id,strcmp(obj.Controller.State.Datasets{index}.Id,obj.Controller.State.ActiveDatasetId));end
-            obj.refreshDatasetControls();obj.renderBranch();
+        function setBusy(obj,value)
+            obj.HeaderBusy=logical(value);state=~obj.HeaderBusy;
+            setEnable(obj.ModelDropDown,state);setEnable(obj.ProblemDropDown,state);
+            setEnable(obj.ExampleDropDown,state);setEnable(obj.PaletteDropDown,state);
+            capabilities=obj.Controller.capabilities();setEnable(obj.SimulateButton, ...
+                state&&capabilities.simulate&&obj.Controller.canSimulateDemo());
         end
-        function plotAllDatasets(obj),for index=1:numel(obj.Controller.State.Datasets),obj.Controller.setDatasetVisibility(obj.Controller.State.Datasets{index}.Id,true);end;obj.refreshDatasetControls();obj.renderBranch();end
-        function clearBranchPlot(obj),for index=1:numel(obj.Controller.State.Datasets),obj.Controller.setDatasetVisibility(obj.Controller.State.Datasets{index}.Id,false);end;obj.refreshDatasetControls();obj.renderBranch();end
-
-        function axesChanged(obj)
-            try,obj.Controller.setAxisVariables(obj.BranchXDropDown.Value,obj.BranchYDropDown.Value,obj.BranchZDropDown.Value);obj.renderBranch();catch exception,obj.showError(exception);end
+        function appendStatus(obj,message,timestamp)
+            if nargin<3,timestamp=[];end
+            if isempty(obj.StatusPanel),return,end
+            obj.StatusPanel.append(message,'info','',timestamp);
         end
-        function roadMapPreset(obj)
-            switch obj.Controller.State.ModelId
-                case 'slip_quadruped'
-                    names={'dx','dphi','y'};limits={'[0 10]','[-0.05 0.15]','[0.6 1.2]'};
-                case 'slip_biped'
-                    names={'dx','alphaL','y'};limits={'auto','auto','auto'};
-                otherwise
-                    names={'quad_dx','tAPEX','tugline_stiffness'};limits={'auto','auto','auto'};
+        function showError(obj,exception)
+            details=lmz.gui.components.ErrorDetailsDialog.technicalDetails(exception);
+            if ~isempty(obj.StatusPanel)
+                obj.StatusPanel.append(exception.message,'error',details);
             end
-            obj.BranchXDropDown.Value=names{1};obj.BranchYDropDown.Value=names{2};obj.BranchZDropDown.Value=names{3};obj.BranchDimensionDropDown.Value='2-D';obj.BranchAzimuthSpinner.Value=0;obj.BranchElevationSpinner.Value=90;
-            obj.BranchXLimitsField.Value=limits{1};obj.BranchYLimitsField.Value=limits{2};obj.BranchZLimitsField.Value=limits{3};obj.axesChanged();obj.applyAxisLimits();
+            lmz.gui.components.ErrorDetailsDialog.show(obj.Figure,exception);
         end
-        function viewChanged(obj)
-            if strcmp(obj.BranchDimensionDropDown.Value,'3-D'),view(obj.BranchAxes,obj.BranchAzimuthSpinner.Value,obj.BranchElevationSpinner.Value);else,view(obj.BranchAxes,2);end
-            if strcmp(obj.BranchAspectDropDown.Value,'equal'),axis(obj.BranchAxes,'equal');else,axis(obj.BranchAxes,'normal');end
-        end
-        function applyAxisLimits(obj)
-            try,applyLimit(obj.BranchAxes,'x',obj.BranchXLimitsField.Value);applyLimit(obj.BranchAxes,'y',obj.BranchYLimitsField.Value);applyLimit(obj.BranchAxes,'z',obj.BranchZLimitsField.Value);catch exception,obj.showError(exception);end
-        end
-
-        function renderBranch(obj)
-            if isempty(obj.BranchAxes),return,end
-            cla(obj.BranchAxes);if isempty(obj.Controller.State.Datasets),return,end
-            hold(obj.BranchAxes,'on');names=obj.Controller.State.AxisVariables;is3=strcmp(obj.BranchDimensionDropDown.Value,'3-D');
-            for index=1:numel(obj.Controller.State.Datasets)
-                dataset=obj.Controller.State.Datasets{index};if ~dataset.Visible,continue,end
-                x=dataset.Branch.coordinate(names{1});y=dataset.Branch.coordinate(names{2});style=dataset.DisplayStyle;
-                if is3
-                    z=dataset.Branch.coordinate(names{3});line=plot3(obj.BranchAxes,x,y,z,'Color',style.Color,'LineStyle',style.LineStyle,'LineWidth',1.8);
-                else
-                    line=plot(obj.BranchAxes,x,y,'Color',style.Color,'LineStyle',style.LineStyle,'LineWidth',1.8);
-                end
-                line.UserData=dataset.Id;line.ButtonDownFcn=@(~,event)obj.branchClicked(dataset.Id,event);
-            end
-            obj.plotLockedMarker();hold(obj.BranchAxes,'off');grid(obj.BranchAxes,'on');xlabel(obj.BranchAxes,names{1},'Interpreter','none');ylabel(obj.BranchAxes,names{2},'Interpreter','none');
-            if is3,zlabel(obj.BranchAxes,names{3},'Interpreter','none');end;obj.viewChanged();obj.applyAxisLimits();
-        end
-
-        function plotLockedMarker(obj)
-            selection=obj.Controller.State.LockedSelection;if isempty(selection),return,end
-            dataset=obj.Controller.activeDataset();if ~strcmp(selection.DatasetId,dataset.Id)||~dataset.Visible,return,end
-            names=obj.Controller.State.AxisVariables;index=selection.PointIndex;x=dataset.Branch.coordinate(names{1});y=dataset.Branch.coordinate(names{2});
-            if strcmp(obj.BranchDimensionDropDown.Value,'3-D'),z=dataset.Branch.coordinate(names{3});plot3(obj.BranchAxes,x(index),y(index),z(index),'kp','MarkerFaceColor',[1 .85 0],'MarkerSize',12,'Tag','LockedPoint');else,plot(obj.BranchAxes,x(index),y(index),'kp','MarkerFaceColor',[1 .85 0],'MarkerSize',12,'Tag','LockedPoint');end
-        end
-
-        function branchHovered(obj)
-            if isempty(obj.BranchAxes)||~isgraphics(obj.BranchAxes)||isempty(obj.Controller.State.Datasets),return,end
-            try
-                hit=hittest(obj.Figure);hitAxes=ancestor(hit,'axes');if isempty(hitAxes)||~isequal(hitAxes,obj.BranchAxes),return,end
-                point=obj.BranchAxes.CurrentPoint;dimensions=2;if strcmp(obj.BranchDimensionDropDown.Value,'3-D'),dimensions=3;end
-                coordinates=obj.Controller.State.AxisVariables(1:dimensions);[selection,details]=obj.Controller.hoverNearestVisiblePoint(coordinates,point(1,1:dimensions));
-                delete(findobj(obj.BranchAxes,'Tag','HoverPoint'));delete(findobj(obj.BranchAxes,'Tag','HoverDataTip'));holdState=ishold(obj.BranchAxes);hold(obj.BranchAxes,'on');values=cell2mat(details.Values);
-                if dimensions==3
-                    plot3(obj.BranchAxes,values(1),values(2),values(3),'ko','MarkerFaceColor','w','MarkerSize',7,'Tag','HoverPoint');tip=text(obj.BranchAxes,values(1),values(2),values(3),hoverText(details,selection),'BackgroundColor','w','Margin',3,'Tag','HoverDataTip','Interpreter','none');
-                else
-                    plot(obj.BranchAxes,values(1),values(2),'ko','MarkerFaceColor','w','MarkerSize',7,'Tag','HoverPoint');tip=text(obj.BranchAxes,values(1),values(2),hoverText(details,selection),'BackgroundColor','w','Margin',3,'Tag','HoverDataTip','Interpreter','none');
-                end
-                tip.VerticalAlignment='bottom';if ~holdState,hold(obj.BranchAxes,'off');end
-            catch
-            end
-        end
-
-        function branchClicked(obj,datasetId,event)
-            try
-                if isprop(event,'IntersectionPoint'),target=event.IntersectionPoint;else,point=obj.BranchAxes.CurrentPoint;target=point(1,:);end
-                dimensions=2;if strcmp(obj.BranchDimensionDropDown.Value,'3-D'),dimensions=3;end
-                coordinates=obj.Controller.State.AxisVariables(1:dimensions);selection=obj.Controller.hoverNearestPoint(datasetId,coordinates,target(1:dimensions));obj.Controller.lockBranchPoint(datasetId,selection.PointIndex);obj.selectionChanged();
-            catch exception,obj.showError(exception);end
-        end
-
-        function navigateBranch(obj,event)
-            if isempty(obj.Controller.State.LockedSelection),return,end
-            switch event.Key
-                case {'leftarrow','downarrow'},delta=-1;
-                case {'rightarrow','uparrow'},delta=1;
-                otherwise,return
-            end
-            n=obj.Controller.activeDataset().Branch.pointCount();index=max(1,min(n,obj.Controller.State.LockedSelection.PointIndex+delta));obj.Controller.selectByIndex(index);obj.selectionChanged();
-        end
-        function indexChanged(obj),obj.Controller.selectByIndex(obj.BranchIndexSpinner.Value);obj.selectionChanged();end
-        function percentChanged(obj),obj.Controller.selectByPercentage(obj.BranchPercentSlider.Value);obj.selectionChanged();end
-
-        function selectionChanged(obj)
-            obj.stopAnimation();obj.AnimationRenderer=[];obj.AnimationPlayer=[];
-            if ~isempty(obj.ProblemDropDown)&& ...
-                    ~strcmp(obj.ProblemDropDown.Value,obj.Controller.State.ProblemId)
-                obj.ProblemDropDown.Value=obj.Controller.State.ProblemId;
-                obj.refreshProblemBadge();
-            end
-            axesList=[obj.Axes obj.TorsoAxes obj.BackLegAxes obj.FrontLegAxes obj.GRFAxes obj.OscillatorAxes obj.SeedAxes obj.ContinuationAxes];
-            for index=1:numel(axesList),if isgraphics(axesList(index)),cla(axesList(index));end,end
-            obj.refreshDatasetControls();obj.renderBranch();obj.renderSolution();obj.StatusArea.Value={obj.Controller.State.Status};
-        end
-
-        function renderSolution(obj)
-            if isempty(obj.SolutionTable)||isempty(obj.Controller.State.WorkingSolution),return,end
-            solution=obj.Controller.State.WorkingSolution;locked=obj.Controller.lockedSolution();
-            obj.SolutionTable.Data=obj.schemaRows(solution.DecisionSchema,solution.DecisionValues,'initial_state',locked);
-            obj.EventTable.Data=obj.schemaRows(solution.DecisionSchema,solution.DecisionValues,'event_timing',locked);
-            obj.ParameterTable.Data=obj.schemaRows(solution.ParameterSchema,solution.ParameterValues,'parameter',locked);
-            fields=fieldnames(solution.Observables);observableData=cell(numel(fields),2);for index=1:numel(fields),observableData{index,1}=fields{index};observableData{index,2}=displayValue(solution.Observables.(fields{index}));end
-            obj.ObservableTable.Data=observableData;obj.ObservableTable.ColumnName={'Observable','Value'};
-            rows=cell(numel(solution.ResidualBlocks),3);for index=1:numel(solution.ResidualBlocks),rows(index,:)={solution.ResidualBlocks(index).Name,displayValue(solution.ResidualBlocks(index).Values),norm(solution.ResidualBlocks(index).Values)};end
-            obj.ResidualTable.Data=rows;obj.ResidualTable.ColumnName={'Residual block','Values','Norm'};
-            diagnostics=solution.Diagnostics;diagnostics.Feasibility=solution.Feasibility;diagnostics.Classification=solution.Classification;
-            obj.DiagnosticsTable.Data=structRows(diagnostics);obj.DiagnosticsTable.ColumnName={'Field','Value'};
-            obj.ProvenanceTable.Data=structRows(solution.Provenance);obj.ProvenanceTable.ColumnName={'Field','Value'};
-        end
-
-        function rows=schemaRows(~,schema,values,group,locked)
-            selected=arrayfun(@(spec)strcmp(spec.Group,group),schema.Specs);
-            if ~any(selected)
-                groups=arrayfun(@(spec)spec.Group,schema.Specs,'UniformOutput',false);
-                switch group
-                    case 'initial_state',selected=~contains(groups,'event');
-                    case 'event_timing',selected=contains(groups,'event');
-                    case 'parameter',selected=true(size(groups));
-                end
-            end
-            specs=schema.Specs(selected);indices=find(selected);rows=cell(numel(specs),7);
-            lockedValues=[];if ~isempty(locked),if isequal(schema.names(),locked.ParameterSchema.names()),lockedValues=locked.ParameterValues;else,lockedValues=locked.DecisionValues;end,end
-            for index=1:numel(specs)
-                spec=specs(index);edited=false;if ~isempty(lockedValues),edited=abs(values(indices(index))-lockedValues(indices(index)))>1e-12*max(1,abs(lockedValues(indices(index))));end
-                rows(index,:)={spec.Name,spec.Label,values(indices(index)),spec.Unit,sprintf('[%g, %g] • %s',spec.LowerBound,spec.UpperBound,spec.Activity),spec.Scale,edited};
-            end
-        end
-
-        function solutionValueEdited(obj,tableHandle,event)
-            try
-                if event.Indices(2)~=3,return,end;name=tableHandle.Data{event.Indices(1),1};value=event.NewData;if ischar(value)||isstring(value),value=str2double(value);end
-                if ~isscalar(value)||~isfinite(value),error('lmz:GUI:EditValue','Edited values must be finite numeric scalars.');end
-                obj.Controller.editWorkingValue(name,value);obj.selectionChanged();obj.StatusArea.Value={sprintf('Edited working-copy value %s.',name)};
-            catch exception,obj.renderSolution();obj.showError(exception);end
-        end
-
-        function evaluateSelected(obj)
-            try
-                evaluation=obj.Controller.evaluateWorkingSolution(true);
-                if isfield(evaluation.Diagnostics,'GaitAbbreviation')
-                    obj.SolveStatus.Text=sprintf('Residual %.6g • gait %s', ...
-                        evaluation.ScaledResidualNorm,evaluation.Diagnostics.GaitAbbreviation);
-                elseif isfield(evaluation.Diagnostics,'Objective')
-                    obj.SolveStatus.Text=sprintf('Objective %.6g',evaluation.Diagnostics.Objective);
-                else
-                    obj.SolveStatus.Text=sprintf('Residual %.6g',evaluation.ScaledResidualNorm);
-                end
-                obj.StatusArea.Value={obj.SolveStatus.Text};obj.renderSolution();
-            catch exception,obj.showError(exception);end
-        end
-        function restoreSolution(obj),obj.Controller.restoreWorkingSolution();obj.selectionChanged();obj.StatusArea.Value={'Restored the locked source point.'};end
-        function projectSolution(obj)
-            try
-                options=struct('EnforceGroundContact',strcmp(obj.ProjectionModeDropDown.Value,'Project ground contact'));
-                [~,diagnostics]=obj.Controller.projectWorkingSolution(options);obj.selectionChanged();obj.StatusArea.Value={sprintf('%s; event-time change %.3g',diagnostics.Method,diagnostics.ChangeNorm)};
-            catch exception,obj.showError(exception);end
-        end
-        function saveWorkingSolution(obj)
-            [file,path]=uiputfile('*.lmz.mat','Save working solution');if isequal(file,0),return,end
-            try,obj.Controller.saveWorkingSolution(fullfile(path,file));obj.StatusArea.Value={obj.Controller.State.Status};catch exception,obj.showError(exception);end
-        end
-        function addWorkingDataset(obj)
-            try,name=['candidate_' datestr(now,'yyyymmdd_HHMMSS')];obj.Controller.addWorkingSolutionToDataset(name);obj.selectionChanged();catch exception,obj.showError(exception);end
-        end
-        function sendWorkingToContinuation(obj),obj.makeSecondSeed();end
-
-        function solve(obj)
-            try
-                original=obj.Controller.State.WorkingSolution;result=obj.Controller.solveWorkingSolution(struct());comparison=obj.Controller.compareSolutions(original,result.Solution);
-                iterations=outputField(result.Output,'iterations',NaN);gait=classificationField(result.Solution.Classification,'Abbreviation','');status=sprintf('%s • exit %d • iterations %g • residual %.3g • gait %s • change %.3g',result.Output.algorithm,result.ExitFlag,iterations,result.Evaluation.ScaledResidualNorm,gait,norm(comparison.decisionDifference));obj.selectionChanged();obj.SolveStatus.Text=status;obj.StatusArea.Value={status};
-            catch exception,obj.showError(exception);end
-        end
-        function applyNoise(obj)
-            try,obj.Controller.perturbWorkingSolution(obj.NoiseMagnitudeField.Value,'schema-scaled',obj.NoiseSeedSpinner.Value);status=obj.Controller.State.Status;obj.selectionChanged();obj.StatusArea.Value={status};catch exception,obj.showError(exception);end
-        end
-        function makeAdjacentSeed(obj)
-            try,direction=1;if strcmp(obj.SeedDirectionDropDown.Value,'previous'),direction=-1;end;pair=obj.Controller.makeAdjacentSeedPair(direction,struct());obj.describeSeedPair(pair);catch exception,obj.showError(exception);end
-        end
-        function makeManualSeed(obj)
-            try,pair=obj.Controller.makeManualSeedPair(obj.SeedFirstIndexSpinner.Value,obj.SeedSecondIndexSpinner.Value,struct());obj.describeSeedPair(pair);catch exception,obj.showError(exception);end
-        end
-        function makeSecondSeed(obj)
-            try,pair=obj.Controller.makeSecondSeed(obj.SecondSeedRadiusField.Value);obj.describeSeedPair(pair);catch exception,obj.showError(exception);end
-        end
-        function describeSeedPair(obj,pair)
-            indices=diagnosticField(pair.Diagnostics,'SourceIndices',[NaN NaN]);residual=diagnosticField(pair.Diagnostics,'ResidualNorm',NaN);
-            obj.SolveStatus.Text=sprintf('Seed pair %g → %g • radius %.5g • generated residual %.3g',indices(1),indices(2),pair.AchievedRadius,residual);obj.plotSeedPair(pair);obj.StatusArea.Value={obj.SolveStatus.Text};
-        end
-        function plotSeedPair(obj,pair)
-            cla(obj.SeedAxes);hold(obj.SeedAxes,'on');names=obj.Controller.State.AxisVariables(1:2);dataset=obj.Controller.activeDataset();plot(obj.SeedAxes,dataset.Branch.coordinate(names{1}),dataset.Branch.coordinate(names{2}),'Color',[.75 .75 .75]);
-            first=[solutionCoordinate(pair.First,names{1}) solutionCoordinate(pair.First,names{2})];second=[solutionCoordinate(pair.Second,names{1}) solutionCoordinate(pair.Second,names{2})];plot(obj.SeedAxes,first(1),first(2),'bo','MarkerFaceColor','b','DisplayName','first seed');plot(obj.SeedAxes,second(1),second(2),'ro','MarkerFaceColor','r','DisplayName','second seed');quiver(obj.SeedAxes,first(1),first(2),second(1)-first(1),second(2)-first(2),0,'k','LineWidth',1.5,'DisplayName','predictor');hold(obj.SeedAxes,'off');grid(obj.SeedAxes,'on');xlabel(obj.SeedAxes,names{1},'Interpreter','none');ylabel(obj.SeedAxes,names{2},'Interpreter','none');legend(obj.SeedAxes,'show','Location','best');
-        end
-
-        function continueBranch(obj)
-            try
-                if isempty(obj.Controller.State.SeedPair),obj.makeAdjacentSeed();end;if isempty(obj.Controller.State.SeedPair),return,end
-                obj.initializeContinuationPlot();options=struct('MaximumPoints',obj.ContinuationPointsSpinner.Value,'BothDirections',false,'InitialStep',obj.Controller.State.SeedPair.AchievedRadius,'PredictionFcn',@(state)obj.continuationPrediction(state),'AcceptedFcn',@(state)obj.continuationAccepted(state),'RejectedFcn',@(state)obj.continuationRejected(state));
-                if ~isempty(strtrim(obj.ContinuationCheckpointField.Value)),options.CheckpointPath=obj.ContinuationCheckpointField.Value;end
-                result=obj.Controller.runContinuation(options);obj.renderContinuationResult(result);obj.ContinuationStatus.Text=sprintf('%s • %d accepted • %d rejected',result.TerminationReason,result.Branch.pointCount(),result.Diagnostics.rejectedAttempts);obj.StatusArea.Value={obj.ContinuationStatus.Text};
-            catch exception,obj.showError(exception);end
-        end
-        function initializeContinuationPlot(obj)
-            cla(obj.ContinuationAxes);hold(obj.ContinuationAxes,'on');names=obj.Controller.State.AxisVariables(1:2);dataset=obj.Controller.activeDataset();plot(obj.ContinuationAxes,dataset.Branch.coordinate(names{1}),dataset.Branch.coordinate(names{2}),'Color',[.78 .78 .78],'DisplayName','source RoadMap');pair=obj.Controller.State.SeedPair;first=[solutionCoordinate(pair.First,names{1}) solutionCoordinate(pair.First,names{2})];second=[solutionCoordinate(pair.Second,names{1}) solutionCoordinate(pair.Second,names{2})];plot(obj.ContinuationAxes,[first(1) second(1)],[first(2) second(2)],'bo-','LineWidth',1.5,'Tag','ContinuationAccepted','DisplayName','accepted');hold(obj.ContinuationAxes,'off');grid(obj.ContinuationAxes,'on');xlabel(obj.ContinuationAxes,names{1},'Interpreter','none');ylabel(obj.ContinuationAxes,names{2},'Interpreter','none');legend(obj.ContinuationAxes,'show','Location','best');
-        end
-        function continuationPrediction(obj,state)
-            obj.Controller.State.ContinuationPreview=state;delete(findobj(obj.ContinuationAxes,'Tag','ContinuationPrediction'));names=obj.Controller.State.AxisVariables(1:2);
-            try,x=predictedCoordinate(state.DecisionValues,obj.Controller.State.SeedPair.Second,names{1});y=predictedCoordinate(state.DecisionValues,obj.Controller.State.SeedPair.Second,names{2});holdState=ishold(obj.ContinuationAxes);hold(obj.ContinuationAxes,'on');plot(obj.ContinuationAxes,x,y,'kx','MarkerSize',10,'LineWidth',2,'Tag','ContinuationPrediction','DisplayName','prediction');if ~holdState,hold(obj.ContinuationAxes,'off');end;catch,end
-            obj.ContinuationStatus.Text=sprintf('Predicting point %d • step %.4g • direction %+d',state.PointIndex,state.StepSize,state.Direction);drawnow limitrate
-        end
-        function continuationAccepted(obj,state)
-            line=findobj(obj.ContinuationAxes,'Tag','ContinuationAccepted');names=obj.Controller.State.AxisVariables(1:2);x=solutionCoordinate(state.Solution,names{1});y=solutionCoordinate(state.Solution,names{2});set(line,'XData',[line.XData x],'YData',[line.YData y]);delete(findobj(obj.ContinuationAxes,'Tag','ContinuationPrediction'));gait=classificationField(state.Solution.Classification,'Abbreviation','');obj.ContinuationStatus.Text=sprintf('Accepted point %d • residual %.3g • step %.4g • gait %s',state.PointIndex,state.ResidualNorm,state.StepSize,gait);drawnow limitrate
-        end
-        function continuationRejected(obj,state),obj.ContinuationStatus.Text=sprintf('Rejected point %d • residual %.3g • step %.4g • %s',state.PointIndex,state.ResidualNorm,state.StepSize,state.Reason);drawnow limitrate,end
-        function renderContinuationResult(obj,result)
-            names=obj.Controller.State.AxisVariables(1:2);hold(obj.ContinuationAxes,'on');plot(obj.ContinuationAxes,result.Branch.coordinate(names{1}),result.Branch.coordinate(names{2}),'mo-','LineWidth',1.5,'DisplayName','result');hold(obj.ContinuationAxes,'off');
-        end
-        function pauseContinuation(obj),obj.Controller.pauseCurrentRun();obj.ContinuationStatus.Text='Paused';drawnow,end
-        function resumeContinuation(obj),obj.Controller.resumeCurrentRun();obj.ContinuationStatus.Text='Running';drawnow,end
-        function stopContinuation(obj),obj.Controller.stopCurrentRun();obj.ContinuationStatus.Text='Controlled stop requested';drawnow,end
-        function chooseCheckpoint(obj),[file,path]=uiputfile('*.lmz.mat','Choose continuation checkpoint');if ~isequal(file,0),obj.ContinuationCheckpointField.Value=fullfile(path,file);end,end
-        function resumeCheckpoint(obj)
-            path=obj.ContinuationCheckpointField.Value;if isempty(path),[file,folder]=uigetfile('*.lmz.mat','Resume continuation checkpoint');if isequal(file,0),return,end;path=fullfile(folder,file);obj.ContinuationCheckpointField.Value=path;end
-            try,result=obj.Controller.resumeCheckpoint(path,struct('MaximumPoints',obj.ContinuationPointsSpinner.Value));obj.initializeContinuationPlot();obj.renderContinuationResult(result);obj.ContinuationStatus.Text=sprintf('Resumed checkpoint: %s (%d points)',result.TerminationReason,result.Branch.pointCount());catch exception,obj.showError(exception);end
-        end
-        function addContinuationDataset(obj)
-            try,result=obj.Controller.State.ContinuationResult;if isempty(result),error('lmz:GUI:ContinuationResult','No continuation result is available.');end;obj.Controller.addBranchDataset(['continuation_' datestr(now,'yyyymmdd_HHMMSS')],result.Branch);obj.selectionChanged();catch exception,obj.showError(exception);end
-        end
-        function saveContinuationResult(obj)
-            result=obj.Controller.State.ContinuationResult;if isempty(result),obj.showError(MException('lmz:GUI:ContinuationResult','No continuation result is available.'));return,end
-            [file,path]=uiputfile('*.lmz.mat','Save continuation branch');if isequal(file,0),return,end;try,obj.Controller.saveBranch(fullfile(path,file),result.Branch);obj.StatusArea.Value={['Saved ' fullfile(path,file)]};catch exception,obj.showError(exception);end
-        end
-        function runHomotopy(obj)
-            try,targets=parseNumericList(obj.ContinuationTargetsField.Value);result=obj.Controller.runParameterHomotopy(obj.ContinuationParameterDropDown.Value,targets,struct());obj.ContinuationStatus.Text=sprintf('Homotopy completed %d targets.',result.Completed);catch exception,obj.showError(exception);end
-        end
-        function runFamilyScan(obj)
-            try,targets=parseNumericList(obj.ContinuationTargetsField.Value);options=struct('SecondSeedRadius',obj.SecondSeedRadiusField.Value,'ContinuationOptions',struct('MaximumPoints',obj.ContinuationPointsSpinner.Value,'BothDirections',false));report=obj.Controller.runBranchFamilyScan(obj.ContinuationParameterDropDown.Value,targets,options);obj.ContinuationStatus.Text=sprintf('Family completed %d, skipped %d, failed %d, blocked %d.',report.Completed,report.Skipped,report.Failed,report.Blocked);catch exception,obj.showError(exception);end
-        end
-
-        function optimize(obj)
-            if ~obj.Controller.capabilities().optimize,obj.StatusArea.Value={'Selected model does not support optimization.'};return,end
-            try
-                result=obj.Controller.runOptimization(struct());
-                history=result.History;if isempty(history),history=result.Objective;end
-                semilogy(obj.OptimizationAxes,max(history,eps),'o-');grid(obj.OptimizationAxes,'on');
-                xlabel(obj.OptimizationAxes,'Iteration');ylabel(obj.OptimizationAxes,'Objective');
-                if strcmp(obj.Controller.State.ModelId,'slip_quad_load')
-                    problem=obj.Controller.Registry.createModel('slip_quad_load').createProblem('multi_stride_fit',struct());
-                    lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotSensitivity( ...
-                        obj.OptimizationSensitivityAxes,problem.Dataset.SensitivityStudyData);
-                    diagnostics=result.Provenance.diagnostics;
-                    lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotR2( ...
-                        obj.OptimizationR2Axes,diagnostics.R2);
-                else
-                    plotObjectiveTerms(obj.OptimizationSensitivityAxes,result.Terms);
-                    cla(obj.OptimizationR2Axes);text(obj.OptimizationR2Axes,.5,.5, ...
-                        'R-squared is not defined for this fit','HorizontalAlignment','center');
-                    axis(obj.OptimizationR2Axes,'off');
-                end
-                obj.StatusArea.Value={sprintf('Objective %.6g',result.Objective)};obj.renderSolution();
-            catch exception,obj.showError(exception);end
-        end
-        function saveActiveBranch(obj),[file,path]=uiputfile('*.lmz.mat','Save native branch');if isequal(file,0),return,end;try,obj.Controller.saveBranch(fullfile(path,file),obj.Controller.activeDataset().Branch);obj.StatusArea.Value={['Saved ' fullfile(path,file)]};catch exception,obj.showError(exception);end,end
-        function exportLegacyBranch(obj),[file,path]=uiputfile('*.mat','Export legacy Results29 branch');if isequal(file,0),return,end;try,obj.Controller.exportLegacyBranch(fullfile(path,file),obj.Controller.activeDataset().Branch);obj.StatusArea.Value={['Saved ' fullfile(path,file)]};catch exception,obj.showError(exception);end,end
-        function exportBranchPlot(obj),[file,path]=uiputfile({'*.png';'*.pdf'},'Export RoadMap plot');if isequal(file,0),return,end;try,obj.Controller.exportPlot(obj.BranchAxes,fullfile(path,file));obj.StatusArea.Value={['Saved ' fullfile(path,file)]};catch exception,obj.showError(exception);end,end
-
         function closeRequested(obj)
-            obj.stopAnimation();obj.Controller.stopCurrentRun();obj.Controller.stopRecording();obj.Figure.CloseRequestFcn=[];delete(obj.Figure);obj.Figure=[];
+            obj.dispose();
         end
-        function showError(obj,exception),obj.StatusArea.Value={['ERROR: ' exception.message]};end
+        function dispose(obj)
+            if obj.IsDisposed,return,end
+            obj.IsDisposed=true;
+            if ~isempty(obj.Figure)&&isvalid(obj.Figure)
+                try,obj.Preferences.setWindowPosition(obj.Figure.Position);catch,end
+            end
+            obj.Controller.stopCurrentRun();obj.Controller.stopRecording();
+            if ~isempty(obj.EventSubscription)&&isvalid(obj.EventSubscription)
+                delete(obj.EventSubscription);
+            end
+            obj.EventSubscription=[];
+            names=fieldnames(obj.TabComponents);
+            for index=1:numel(names)
+                component=obj.TabComponents.(names{index});
+                if ~isempty(component)&&isvalid(component),component.dispose();end
+            end
+            obj.TabComponents=struct();
+            if ~isempty(obj.StatusPanel)&&isvalid(obj.StatusPanel),delete(obj.StatusPanel);end
+            obj.StatusPanel=[];
+            if ~isempty(obj.Figure)&&isvalid(obj.Figure)
+                obj.Figure.CloseRequestFcn=[];obj.Figure.SizeChangedFcn=[];
+                obj.Figure.WindowButtonMotionFcn=[];obj.Figure.KeyPressFcn=[];
+                delete(obj.Figure);
+            end
+            obj.Figure=[];
+        end
     end
 end
 
-function place(control,row,column),control.Layout.Row=row;control.Layout.Column=column;end
-function value=onOff(condition),if condition,value='on';else,value='off';end,end
-function setControlsEnabled(controls,enabled)
-for index=1:numel(controls)
-    control=controls{index};
-    if ~isempty(control)&&isvalid(control)&&isprop(control,'Enable')
-        control.Enable=onOff(enabled);
-    end
-end
-end
-function plotObjectiveTerms(ax,terms)
-names=fieldnames(terms);values=zeros(numel(names),1);
-for index=1:numel(names)
-    item=terms.(names{index});
-    if isnumeric(item)&&isscalar(item)
-        values(index)=item;
-    elseif isstruct(item)&&isfield(item,'Value')
-        values(index)=item.Value;
-        if isfield(item,'Weight'),values(index)=values(index)*item.Weight;end
-    end
-end
-cla(ax);bar(ax,values);grid(ax,'on');title(ax,'Objective terms');
-xticks(ax,1:numel(names));xticklabels(ax,strrep(names,'_',' '));xtickangle(ax,25);
-end
 function descriptor=problemDescriptor(manifest,problemId)
 descriptor=struct('id',problemId,'maturity','experimental', ...
-    'validationStatus','untested');
+    'validationStatus','untested','capabilities',struct());
 if ~isfield(manifest,'problemDescriptors'),return,end
-values=manifest.problemDescriptors;
-if ~iscell(values),values=num2cell(values);end
+values=manifest.problemDescriptors;if ~iscell(values),values=num2cell(values);end
 for index=1:numel(values)
     if isstruct(values{index})&&isfield(values{index},'id')&& ...
             strcmp(values{index}.id,problemId)
@@ -887,46 +375,14 @@ for index=1:numel(values)
     end
 end
 end
-function text=capabilityText(capabilities,modelId) %#ok<INUSD>
-parts={};
-if isfield(capabilities,'simulate')&&capabilities.simulate,parts{end+1}='simulation';end
-if isfield(capabilities,'solve')&&capabilities.solve,parts{end+1}='solve';end
-if isfield(capabilities,'continue')&&capabilities.('continue'),parts{end+1}='continuation';end
-if isfield(capabilities,'optimize')&&capabilities.optimize,parts{end+1}='optimization';end
-if isfield(capabilities,'visualize')&&capabilities.visualize,parts{end+1}='visualization';end
-if isempty(parts),parts={'metadata only'};end
-text=strjoin(parts,' • ');
+function textValue=capabilityText(capabilities)
+names={'simulate','solve','continue','optimize'};shown={'Simulate','Solve','Continue','Optimize'};
+selected=false(size(names));
+for index=1:numel(names),selected(index)=isfield(capabilities,names{index})&&capabilities.(names{index});end
+labels=shown(selected);
+if isempty(labels),textValue='Inspect only';else,textValue=strjoin(labels,' · ');end
 end
-function text=displayValue(value)
-if isnumeric(value),if isscalar(value),text=sprintf('%.8g',value);else,text=mat2str(value,5);end;elseif ischar(value),text=value;elseif isstring(value),text=char(value);elseif islogical(value),text=mat2str(value);elseif isstruct(value),text=sprintf('struct (%d fields)',numel(fieldnames(value)));else,text=class(value);end
+function setEnable(control,value)
+state='off';if value,state='on';end
+if ~isempty(control)&&isvalid(control)&&isprop(control,'Enable'),control.Enable=state;end
 end
-function rows=structRows(value)
-if ~isstruct(value),rows={'value',displayValue(value)};return,end
-names=fieldnames(value);rows=cell(numel(names),2);for index=1:numel(names),rows(index,:)={names{index},displayValue(value.(names{index}))};end
-end
-function value=metadataField(metadata,name,fallback),if isstruct(metadata)&&isfield(metadata,name),value=metadata.(name);else,value=fallback;end;if isnumeric(value),value=mat2str(value,4);end;end
-function text=shortText(value,count),if isstring(value),value=char(value);end;if ~ischar(value),value=displayValue(value);end;if numel(value)>count,text=[value(1:count-1) '…'];else,text=value;end,end
-function lines=datasetMetadataLines(dataset)
-[~,file,extension]=fileparts(dataset.SourcePath);if isempty(file),source='in-memory';else,source=[file extension];end
-lines={sprintf('Source: %s',source),sprintf('Status: %s',metadataField(dataset.Metadata,'Status','')),sprintf('Gait: %s',metadataField(dataset.Metadata,'GaitSummary','')),sprintf('Parameters: %s',metadataField(dataset.Metadata,'ParameterSummary','')),sprintf('Style: %s, RGB %s',dataset.DisplayStyle.LineStyle,mat2str(dataset.DisplayStyle.Color,3)),sprintf('Read-only: %s',mat2str(dataset.ReadOnly))};
-end
-function applyLimit(ax,dimension,text)
-if strcmpi(strtrim(text),'auto'),switch dimension,case 'x',xlim(ax,'auto');case 'y',ylim(ax,'auto');case 'z',zlim(ax,'auto');end;return,end
-values=sscanf(regexprep(text,'[\[\],;]',' '),'%f');if numel(values)~=2||values(1)>=values(2),error('lmz:GUI:AxisLimits','Axis limits require [minimum maximum].');end
-switch dimension,case 'x',xlim(ax,values.');case 'y',ylim(ax,values.');case 'z',zlim(ax,values.');end
-end
-function text=hoverText(details,selection)
-solution=details.Solution;coordinates=cell(1,numel(details.Coordinates));for index=1:numel(coordinates),coordinates{index}=sprintf('%s=%.5g',details.Coordinates{index},details.Values{index});end
-parameterNames=solution.ParameterSchema.names();parameterParts=cell(1,numel(parameterNames));for index=1:numel(parameterNames),parameterParts{index}=sprintf('%s=%.4g',parameterNames{index},solution.ParameterValues(index));end
-gait=classificationField(solution.Classification,'Abbreviation','?');residual=diagnosticField(solution.Diagnostics,'ResidualNorm',NaN);text=sprintf('%s #%d\n%s\ngait=%s residual=%.3g\n%s',details.Dataset.Name,selection.PointIndex,strjoin(coordinates,', '),gait,residual,strjoin(parameterParts,', '));
-end
-function value=classificationField(classification,name,fallback),if isstruct(classification)&&isfield(classification,name),value=classification.(name);else,value=fallback;end,end
-function value=diagnosticField(diagnostics,name,fallback),if isstruct(diagnostics)&&isfield(diagnostics,name),value=diagnostics.(name);else,value=fallback;end,end
-function value=outputField(output,name,fallback),if isstruct(output)&&isfield(output,name),value=output.(name);else,value=fallback;end,end
-function value=solutionCoordinate(solution,name)
-if any(strcmp(name,solution.DecisionSchema.names())),value=solution.decision(name);elseif any(strcmp(name,solution.ParameterSchema.names())),value=solution.parameter(name);elseif isfield(solution.Observables,name)&&isscalar(solution.Observables.(name)),value=solution.Observables.(name);else,error('lmz:GUI:Coordinate','Coordinate %s is unavailable for this solution.',name);end
-end
-function value=predictedCoordinate(decision,reference,name)
-if any(strcmp(name,reference.DecisionSchema.names())),value=decision(reference.DecisionSchema.indexOf(name));elseif any(strcmp(name,reference.ParameterSchema.names())),value=reference.parameter(name);else,error('lmz:GUI:PredictionCoordinate','Prediction has no observable coordinate.');end
-end
-function values=parseNumericList(text),values=sscanf(strrep(text,',',' '),'%f').';if isempty(values)||any(~isfinite(values)),error('lmz:GUI:Targets','Enter one or more finite numeric targets.');end,end

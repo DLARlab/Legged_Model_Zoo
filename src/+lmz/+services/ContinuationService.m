@@ -1,4 +1,5 @@
 classdef ContinuationService
+    %CONTINUATIONSERVICE Run and resume generic numerical continuation.
     methods
         function result=run(~,problem,pair,options,context)
             if isstruct(options),options=lmz.continuation.ContinuationOptions(options);end
@@ -36,7 +37,13 @@ classdef ContinuationService
                 combined=resumed.Branch;
             end
             diagnostics=resumed.Diagnostics;diagnostics.ResumedFrom=path;diagnostics.CheckpointPointCount=branch.pointCount();
-            result=lmz.data.ContinuationResult(combined,resumed.Snapshots,resumed.TerminationReason,resumed.Options,diagnostics);
+            sourcePair=struct('First',pair.First.toStruct(), ...
+                'Second',pair.Second.toStruct(),'RequestedRadius',pair.RequestedRadius, ...
+                'AchievedRadius',pair.AchievedRadius,'Diagnostics',pair.Diagnostics);
+            provenance=resumed.Provenance;provenance.ResumedFrom=path;
+            result=lmz.data.ContinuationResult(combined,resumed.Snapshots, ...
+                resumed.TerminationReason,resumed.Options,diagnostics, ...
+                sourcePair,context.RandomSeed,provenance);
             checkpoint=combined.toArtifact();checkpoint.artifactType='checkpoint';checkpoint.checkpointState=struct( ...
                 'BranchId',combined.Id,'PointCount',combined.pointCount(),'StepSize',resumed.Diagnostics.finalStep,'SavedAt',datestr(now,30));
             checkpoint.algorithmOptions=lmz.continuation.ContinuationOptions(base).toStruct();checkpoint.terminationReason=resumed.TerminationReason;checkpoint.diagnostics=diagnostics;
@@ -45,6 +52,11 @@ classdef ContinuationService
                 snapshotValues{snapshotIndex}=resumed.Snapshots(snapshotIndex).toStruct();
             end
             checkpoint.continuationSnapshots=snapshotValues;
+            checkpoint=lmz.io.ArtifactStore.withRunMetadata(checkpoint,struct( ...
+                'Options',result.Options,'SourcePair',result.SourcePair, ...
+                'RandomSeed',result.RandomSeed,'Provenance',result.Provenance, ...
+                'ElapsedTime',NaN,'FunctionEvaluations',NaN, ...
+                'TerminationReason',result.TerminationReason,'Warnings',{{}}));
             lmz.io.ArtifactStore.save(path,checkpoint);
         end
     end

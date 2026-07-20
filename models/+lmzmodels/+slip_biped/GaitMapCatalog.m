@@ -11,11 +11,14 @@ classdef GaitMapCatalog
                 rootPath=fullfile(lmz.util.ProjectPaths.examples(),'data', ...
                     'slip_biped','GaitMap');
             end
-            obj.RootPath=rootPath;obj.ManifestPath=fullfile(rootPath,'gaitmap_manifest.json');
+            obj.RootPath=lmz.util.PathGuard.canonical(rootPath,true);
+            obj.ManifestPath=lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,'gaitmap_manifest.json',true);
             if exist(obj.ManifestPath,'file')~=2
                 error('lmz:GaitMap:MissingManifest','Biped GaitMap manifest is missing.');
             end
-            obj.Manifest=jsondecode(fileread(obj.ManifestPath));obj.validateManifest();
+            obj.Manifest=lmz.io.SafeJson.read(obj.ManifestPath, ...
+                'Root',obj.RootPath);obj.validateManifest();
         end
         function records=branchRecords(obj)
             if iscell(obj.Manifest.files),records=[obj.Manifest.files{:}]; ...
@@ -23,7 +26,8 @@ classdef GaitMapCatalog
         end
         function paths=listBranches(obj)
             records=obj.branchRecords();
-            paths=arrayfun(@(x)fullfile(obj.RootPath,x.relativePath),records, ...
+            paths=arrayfun(@(x)lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,x.relativePath,true),records, ...
                 'UniformOutput',false);
         end
         function record=record(obj,file)
@@ -33,16 +37,19 @@ classdef GaitMapCatalog
             record=records(index);
         end
         function path=defaultBranchPath(obj)
-            record=obj.record(obj.Manifest.defaultBranch);path=fullfile(obj.RootPath,record.relativePath);
+            record=obj.record(obj.Manifest.defaultBranch);path= ...
+                lmz.util.PathGuard.resolveWithin(obj.RootPath,record.relativePath,true);
         end
         function index=recommendedSeedIndex(obj,file)
             record=obj.record(file);index=record.recommendedDefaultIndex;
         end
         function path=nativePath(obj,file)
-            record=obj.record(file);path=fullfile(obj.RootPath,record.nativeArtifactPath);
+            record=obj.record(file);path=lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,record.nativeArtifactPath,false);
         end
         function valid=validateSourceHash(obj,file)
-            record=obj.record(file);path=fullfile(obj.RootPath,record.relativePath);
+            record=obj.record(file);path=lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,record.relativePath,true);
             valid=strcmpi(lmz.util.FileHash.sha256(path),record.sha256);
         end
         function branch=loadBranch(obj,file,problem,preferNative)
@@ -50,7 +57,8 @@ classdef GaitMapCatalog
             if nargin<3,problem=[];end
             if nargin<4,preferNative=true;end
             record=obj.record(file);
-            sourcePath=fullfile(obj.RootPath,record.relativePath);
+            sourcePath=lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,record.relativePath,true);
             if ~strcmpi(lmz.util.FileHash.sha256(sourcePath),record.sha256)
                 error('lmz:GaitMap:HashMismatch','Biped GaitMap source hash does not match its manifest.');
             end
@@ -107,7 +115,9 @@ classdef GaitMapCatalog
                             recordIndex,requiredRecord{fieldIndex});
                     end
                 end
-                path=fullfile(obj.RootPath,record.relativePath);
+                path=lmz.util.PathGuard.resolveWithin( ...
+                    obj.RootPath,record.relativePath,true);
+                lmz.util.PathGuard.validateRelative(record.nativeArtifactPath);
                 if record.rowCount~=14 || record.pointCount<1 || ...
                         ~strcmp(record.sourceVariable,'results') || ...
                         isempty(regexp(record.sha256,'^[0-9a-fA-F]{64}$','once')) || ...

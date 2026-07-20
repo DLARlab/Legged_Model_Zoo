@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Auditable toolbox-project metadata. tools/release/build_toolbox.m creates
+  MATLAB ToolboxOptions from the authorization-filtered staging directory so
+  that no unresolved file can enter through an implicit recursive fileset.
+-->
+<deployment-project plugin="plugin.toolbox" plugin-version="1.0">
+<configuration file="LeggedModelZoo.prj" location="." name="LeggedModelZoo" target="target.toolbox" target-name="Package Toolbox">
+  <param.appname>Legged Model Zoo</param.appname>
+  <param.version>1.0.0.1</param.version>
+  <param.guid>dlarlab-legged-model-zoo</param.guid>
+  <param.summary>Versioned framework for legged-model simulation and numerical workflows</param.summary>
+  <param.description>Profile-specific contents are selected by the redistribution manifest.</param.description>
+  <param.company></param.company>
+  <param.email></param.email>
+  <param.authnamewatermark></param.authnamewatermark>
+  <param.output>${PROJECT_ROOT}/out/LeggedModelZoo.mltbx</param.output>
+  <param.screenshot></param.screenshot>
+  <param.release_start>R2019b</param.release_start>
+  <param.release_end>latest</param.release_end>
+  <param.release_current_only>false</param.release_current_only>
+  <fileset.rootdir><file>${PROJECT_ROOT}/..</file></fileset.rootdir>
+  <fileset.depfun_included></fileset.depfun_included>
+</configuration>
+</deployment-project>

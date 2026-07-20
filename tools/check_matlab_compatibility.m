@@ -5,7 +5,12 @@ roots={'src','models','tests','examples','tools'};
 files={};
 for index=1:numel(roots)
     folder=fullfile(projectRoot,roots{index});
-    if exist(folder,'dir')==7,files=[files collectMFiles(folder)];end %#ok<AGROW>
+    if exist(folder,'dir')==7
+        entries=lmz.compat.Files.recursive(folder,'*.m',true);
+        current=arrayfun(@(item)fullfile(item.folder,item.name),entries, ...
+            'UniformOutput',false);
+        files=[files reshape(current,1,[])]; %#ok<AGROW>
+    end
 end
 topLevel={'startup.m','legged_model_zoo.m','run_tests.m'};
 for index=1:numel(topLevel)
@@ -17,11 +22,19 @@ violations={};counts=struct('Files',numel(files),'UIComponents',0, ...
     'OptimizationOptions',0,'JSONCalls',0,'TableCalls',0, ...
     'DatetimeCalls',0,'StringCalls',0,'UnitTestCalls',0, ...
     'GuardedExportGraphicsCalls',0, ...
-    'VideoWriterCalls',0,'RecursiveDirCalls',0);
+    'VideoWriterCalls',0,'RecursiveDirCalls',0, ...
+    'CompatibilityRoutedCalls',0);
 postR2019b={'exportapp','copygraphics','orderedcolors','clim','turbo'};
 for fileIndex=1:numel(files)
     path=files{fileIndex};raw=fileread(path);code=withoutComments(raw);
     relative=relativePath(projectRoot,path);
+    runtimeFile=strncmp(relative,['src' filesep],4)|| ...
+        strncmp(relative,['models' filesep],7);
+    compatibilityFile=contains(relative, ...
+        [filesep '+compat' filesep]);
+    jsonHelper=compatibilityFile||~isempty(regexp(relative, ...
+        ['[\\/]' '\+io' '[\\/]SafeJson\.m$'],'once'));
+    legacyFile=contains(relative,[filesep '+legacy' filesep]);
     counts.UIComponents=counts.UIComponents+countMatches(code, ...
         '\<(uifigure|uigridlayout|uiaxes|uispinner)\>');
     counts.OptimizationOptions=counts.OptimizationOptions+ ...
@@ -46,7 +59,7 @@ for fileIndex=1:numel(files)
     end
     exportCalls=countMatches(code,'\<exportgraphics\s*\(');
     if exportCalls>0
-        guarded=~isempty(regexp(code, ...
+        guarded=compatibilityFile&&~isempty(regexp(code, ...
             'exist\s*\(\s*[''" ]exportgraphics[''" ]\s*,\s*[''" ]file[''" ]\s*\)\s*==\s*2', ...
             'once'));
         if guarded
@@ -54,16 +67,37 @@ for fileIndex=1:numel(files)
                 counts.GuardedExportGraphicsCalls+exportCalls;
         else
             violations{end+1}=sprintf( ...
-                '%s: exportgraphics is not protected by an R2019b fallback.',relative); %#ok<AGROW>
+                '%s: exportgraphics must route through lmz.compat.Graphics.',relative); %#ok<AGROW>
         end
     end
     videoCalls=countMatches(code,'\<VideoWriter\s*\(');
     counts.VideoWriterCalls=counts.VideoWriterCalls+videoCalls;
-    if videoCalls>0&&~isempty(regexp(code,['VideoWriter\s*\([^\)]*' ...
-            '[''" ]MPEG-4[''" ]'],'once'))&& ...
-            isempty(regexp(code,'try[\s\S]*VideoWriter[\s\S]*catch','once'))
+    if videoCalls>0&&runtimeFile&&~compatibilityFile
         violations{end+1}=sprintf( ...
-            '%s: MPEG-4 profile construction needs a platform guard.',relative); %#ok<AGROW>
+            '%s: VideoWriter must route through lmz.compat.Video.',relative); %#ok<AGROW>
+    end
+    if runtimeFile&&~compatibilityFile&&~legacyFile&& ...
+            countMatches(code,'\<optimoptions\s*\(')>0
+        violations{end+1}=sprintf( ... %#ok<AGROW>
+            '%s: optimoptions must route through lmz.compat.Optimization.',relative);
+    end
+    if runtimeFile&&~jsonHelper&& ...
+            countMatches(code,'\<json(en|de)code\s*\(')>0
+        violations{end+1}=sprintf( ... %#ok<AGROW>
+            '%s: JSON operations must route through a guarded JSON helper.',relative);
+    end
+    if runtimeFile&&~compatibilityFile&& ...
+            countMatches(code,'\<dir\s*\([^\)]*["'']\*\*')>0
+        violations{end+1}=sprintf( ... %#ok<AGROW>
+            '%s: recursive discovery must route through lmz.compat.Files.',relative);
+    end
+    routedExpressions={'lmz\.compat\.Graphics','lmz\.compat\.Video', ...
+        'lmz\.compat\.Optimization','lmz\.compat\.Json', ...
+        'lmz\.io\.SafeJson','lmz\.compat\.Files', ...
+        'lmz\.compat\.Timestamp'};
+    for routedIndex=1:numel(routedExpressions)
+        counts.CompatibilityRoutedCalls=counts.CompatibilityRoutedCalls+ ...
+            countMatches(code,routedExpressions{routedIndex});
     end
 end
 
@@ -73,21 +107,9 @@ report=struct('TargetRelease','R2019b','RuntimeRelease',release, ...
     'Checks',{{'language syntax','uifigure/uigridlayout', ...
     'optimoptions names','exportgraphics','VideoWriter profiles', ...
     'datetime/string usage','JSON functions','table APIs','recursive dir syntax', ...
-    'matlab.unittest options'}},'Counts',counts, ...
+    'matlab.unittest options','central compatibility routing', ...
+    'forced-fallback unit tests'}},'Counts',counts, ...
     'ViolationCount',numel(violations));
-end
-
-function files=collectMFiles(folder)
-entries=dir(folder);files={};
-for index=1:numel(entries)
-    name=entries(index).name;
-    if entries(index).isdir
-        if strcmp(name,'.')||strcmp(name,'..'),continue,end
-        files=[files collectMFiles(fullfile(folder,name))]; %#ok<AGROW>
-    elseif numel(name)>=2&&strcmpi(name(end-1:end),'.m')
-        files{end+1}=fullfile(folder,name); %#ok<AGROW>
-    end
-end
 end
 
 function code=withoutComments(raw)

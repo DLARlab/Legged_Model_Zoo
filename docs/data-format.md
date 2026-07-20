@@ -69,3 +69,28 @@ step/curvature/backtracking, feasibility/gait, checkpoint, and termination
 candidate fields. Optimization artifacts retain the full decision schema even
 when exact fixed bounds allow `FminconSolver` to operate on a reduced free
 subvector; free and fixed indices are included in solver output.
+
+## Release-candidate version correction
+
+The quadruped catalog version is `2.0.0`, matching the implementation and
+existing Round 5/6 model/artifact metadata. Its earlier `1.0.0` catalog value
+was a metadata inconsistency; correcting the catalog does not change the model
+or scientific equations. Registry tests now require catalog and implementation
+identity/version agreement.
+
+## Hybrid event records
+
+Native hybrid simulations use strictly increasing public time and the `post`
+duplicate-time policy. Each event record contains ID/index, time, priority,
+from/to mode, pre-state, post-state, reset flag, terminal flag, and plain
+metadata. Multiple events at one time remain individually ordered in the event
+array while only the final post-state appears in the public trajectory.
+
+## Input safety
+
+JSON and MAT files are data inputs. Relative paths are canonicalized inside
+their manifest/catalog root. JSON is byte/depth/item bounded. MAT inputs are
+preflighted for requested variables, class, dimensions, bytes, nesting, and
+aggregate elements; only bounded numeric, logical, character, string, cell,
+and plain-struct graphs are accepted. Function handles and objects are rejected.
+Scientific layout and SHA-256 checks still run after these generic checks.

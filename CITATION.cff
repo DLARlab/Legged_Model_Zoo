@@ -1,0 +1,65 @@
+cff-version: 1.2.0
+message: >-
+  Cite the framework entry for use of this software and cite each applicable
+  scientific source below when using its model, code, or data.
+type: software
+title: Legged Model Zoo
+version: 1.0.0-rc.1
+authors:
+  - alias: JY-Din
+repository-code: https://github.com/DLARlab/Legged_Model_Zoo
+abstract: >-
+  A MATLAB framework for registered legged models, simulation, solving,
+  continuation, optimization, artifacts, and visualization. Redistribution
+  status is unresolved; this citation file is not a license grant.
+keywords:
+  - legged locomotion
+  - hybrid dynamics
+  - MATLAB
+  - numerical continuation
+  - optimization
+references:
+  - type: article
+    title: Breaking Symmetries Leads to Diverse Quadrupedal Gaits
+    authors:
+      - family-names: Ding
+        given-names: Jiayu
+      - family-names: Gan
+        given-names: Zhenyu
+    journal: IEEE Robotics and Automation Letters
+    volume: 9
+    issue: 5
+    start: 4782
+    end: 4789
+    year: 2024
+    doi: 10.1109/LRA.2024.3384908
+    notes: Scientific citation for the SLIP quadruped RoadMap model and data.
+  - type: dataset
+    title: A template model explains jerboa gait transitions across a broad range of speeds
+    authors:
+      - family-names: Ding
+        given-names: Jiayu
+      - family-names: Moore
+        given-names: Talia
+      - family-names: Gan
+        given-names: Zhenyu
+    year: 2021
+    doi: 10.7302/ewaa-qm16
+    notes: Scientific citation for the biped model, GaitMap, and fit data.
+  - type: article
+    title: Gait Transitions in Load-Pulling Quadrupeds
+    subtitle: Insights from Sled Dogs and a Minimal SLIP Model
+    authors:
+      - family-names: Ding
+        given-names: Jiayu
+      - family-names: Seleb
+        given-names: Benjamin
+      - family-names: Huson
+        given-names: Heather J.
+      - family-names: Bhamla
+        given-names: Saad
+      - family-names: Gan
+        given-names: Zhenyu
+    year: 2025
+    doi: 10.48550/arXiv.2507.14727
+    notes: Scientific citation for the quadruped-with-load model and datasets.

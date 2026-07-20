@@ -1,0 +1,69 @@
+name: MATLAB verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: ${{ matrix.os }} / MATLAB ${{ matrix.release }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            release: R2021a
+            extended: false
+          - os: ubuntu-latest
+            release: latest
+            extended: true
+          - os: macos-latest
+            release: latest
+            extended: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v3
+        with:
+          release: ${{ matrix.release }}
+          products: >
+            Optimization_Toolbox
+            Parallel_Computing_Toolbox
+      - name: Run complete test suite
+        uses: matlab-actions/run-command@v3
+        with:
+          command: startup; results = run_tests; assert(~any([results.Failed])); assert(~any([results.Incomplete]));
+      - name: Run public examples and clean-copy isolation
+        if: matrix.extended
+        uses: matlab-actions/run-command@v3
+        with:
+          command: startup; addpath(fullfile(pwd,'tools')); run_public_examples; run_standalone_all_scientific_models;
+      - name: Generate test and coverage artifacts
+        if: matrix.extended
+        uses: matlab-actions/run-tests@v3
+        env:
+          # The official action measures only source-folder entries.  These
+          # support folders are on MATLABPATH for tests, but are not counted
+          # as runtime coverage.
+          MATLABPATH: ${{ github.workspace }}/tools:${{ github.workspace }}/tests/fixtures
+        with:
+          source-folder: src; models
+          select-by-folder: tests
+          test-results-junit: test-results/results.xml
+          code-coverage-cobertura: code-coverage/coverage.xml
+      - name: Upload test and coverage reports
+        if: matrix.extended && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matlab-test-coverage-${{ matrix.os }}-${{ matrix.release }}
+          path: |
+            test-results/results.xml
+            code-coverage/coverage.xml
+          if-no-files-found: error
+          retention-days: 14

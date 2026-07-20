@@ -4,19 +4,32 @@ classdef AppController < handle
         Registry
         State
         Context
+        Events
+    end
+    properties (Access=private)
+        StateListeners = {}
     end
     methods
-        function obj=AppController(registry,context)
+        function obj=AppController(registry,context,eventBus)
             if nargin<1,registry=lmz.registry.ModelRegistry.discover();end
             if nargin<2,context=lmz.api.RunContext.synchronous(0);end
-            obj.Registry=registry;obj.Context=context;obj.State=lmz.gui.AppState();
+            if nargin<3||isempty(eventBus),eventBus=lmz.gui.PresentationEventBus();end
+            obj.Registry=registry;obj.Context=context;obj.Events=eventBus;
+            obj.State=lmz.gui.AppState();obj.observeState();
             ids=obj.Registry.listModels();obj.selectModel(ids{1});
         end
         function ids=modelIds(obj),ids=obj.Registry.listModels();end
         function selectModel(obj,modelId)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if obj.Context.Cancellation.IsCancellationRequested,obj.Context=lmz.api.RunContext.synchronous(obj.Context.RandomSeed);else,obj.Context.Pause.resume();end
             model=obj.Registry.createModel(modelId);manifest=model.getManifest();problems=model.listProblems();
             obj.State.ModelId=manifest.id;obj.State.ProblemId=problems{1};obj.State.Simulation=[];
+            examples=obj.builtInExamples();
+            if isempty(examples)
+                obj.State.ExampleId='';
+            elseif ~any(strcmp(obj.State.ExampleId,examples))
+                obj.State.ExampleId=examples{1};
+            end
             obj.State.CandidateSimulation=[];obj.State.Datasets={};obj.State.Selection=[];
             obj.State.LockedSelection=[];obj.State.HoverSelection=[];obj.State.WorkingSolution=[];
             obj.State.WorkingEvaluation=[];
@@ -32,11 +45,12 @@ classdef AppController < handle
                 case 'slip_quad_load'
                     obj.loadScientificLoadDataset();
                 otherwise
-                    obj.loadBuiltInBranch();
+                    obj.initializeGenericModel(model,problems{1});
             end
         end
         function ids=problemIds(obj),ids=obj.Registry.createModel(obj.State.ModelId).listProblems();end
         function solution=selectProblem(obj,problemId)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             model=obj.Registry.createModel(obj.State.ModelId);
             problemIds=model.listProblems();
             if ~any(strcmp(problemId,problemIds))
@@ -69,13 +83,33 @@ classdef AppController < handle
             obj.State.WorkingSolution=solution;
             obj.State.Status=sprintf('Selected %s.',problemId);
         end
-        function examples=builtInExamples(obj),examples=lmz.services.DataService().listBuiltInExamples(obj.State.ModelId);end
+        function setExample(obj,exampleId)
+            obj.State.ExampleId=char(exampleId);
+        end
+        function setContinuationPreview(obj,value)
+            obj.State.ContinuationPreview=value;
+        end
+        function examples=builtInExamples(obj)
+            try
+                examples=lmz.services.DataService().listBuiltInExamples(obj.State.ModelId);
+            catch
+                examples={};
+            end
+        end
+        function value=canSimulateDemo(obj)
+            value=~isempty(obj.simulationProblemIds());
+        end
         function result=simulate(obj,options)
-            dataService=lmz.services.DataService();example=dataService.loadBuiltInExample(obj.State.ModelId,obj.State.ExampleId);
-            if nargin<2||isempty(fieldnames(options)),options=example.options;end
-            model=obj.Registry.createModel(obj.State.ModelId);problem=model.createProblem('demo_stride',struct());
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            [problem,defaultOptions]=obj.demoProblem();
+            if nargin<2||isempty(options)|| ...
+                    (isstruct(options)&&isempty(fieldnames(options)))
+                options=defaultOptions;
+            end
             result=lmz.services.SimulationService().simulate(problem,struct(),options,obj.Context);
-            obj.State.Simulation=result;obj.State.Status='Demonstration simulation complete';
+            obj.State.Simulation=result;
+            obj.State.Status=sprintf('%s demonstration simulation complete.', ...
+                problem.Id);
         end
         function capabilities=capabilities(obj)
             capabilities=obj.problemCapabilities();
@@ -94,11 +128,13 @@ classdef AppController < handle
         end
 
         function dataset=loadBuiltInBranch(obj)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             branch=lmz.services.BranchService().loadBuiltInBranch(obj.Registry,obj.State.ModelId);
             dataset=lmz.data.BranchDataset([obj.State.ModelId ' built-in'],branch,'ReadOnly',true);
             obj.State.Datasets={dataset};obj.State.ActiveDatasetId=dataset.Id;obj.lockBranchPoint(dataset.Id,1);
         end
         function dataset=loadGaitMap(obj,file)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if ~strcmp(obj.State.ModelId,'slip_biped')
                 error('lmz:GUI:GaitMapModel','GaitMap is available for slip_biped.');
             end
@@ -123,6 +159,7 @@ classdef AppController < handle
                 dataset.Name,branch.pointCount());
         end
         function datasets=loadAllGaitMapBranches(obj)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if ~strcmp(obj.State.ModelId,'slip_biped')
                 error('lmz:GUI:GaitMapModel','GaitMap is available for slip_biped.');
             end
@@ -136,6 +173,7 @@ classdef AppController < handle
             obj.State.Status=sprintf('All %d biped GaitMap branches loaded.',numel(datasets));
         end
         function dataset=loadScientificLoadDataset(obj,file)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if ~strcmp(obj.State.ModelId,'slip_quad_load')
                 error('lmz:GUI:LoadDatasetModel', ...
                     'Scientific load datasets are available for slip_quad_load.');
@@ -161,6 +199,7 @@ classdef AppController < handle
                 source.Name,source.StrideCount);
         end
         function datasets=loadAllScientificLoadDatasets(obj)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if ~strcmp(obj.State.ModelId,'slip_quad_load')
                 error('lmz:GUI:LoadDatasetModel', ...
                     'Scientific load datasets are available for slip_quad_load.');
@@ -189,6 +228,7 @@ classdef AppController < handle
             obj.State.Status=sprintf('All %d scientific load datasets loaded.',numel(datasets));
         end
         function dataset=loadRoadMap(obj,file)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if ~strcmp(obj.State.ModelId,'slip_quadruped')
                 error('lmz:GUI:RoadMapModel','RoadMap is available for slip_quadruped.');
             end
@@ -211,6 +251,7 @@ classdef AppController < handle
             obj.State.Status=sprintf('RoadMap loaded: %s (%d points)',dataset.Name,branch.pointCount());
         end
         function datasets=loadAllRoadMapBranches(obj)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             catalog=lmzmodels.slip_quadruped.RoadMapCatalog.default();obj.State.RoadMapCatalog=catalog;
             datasets=lmz.services.BranchService().loadAllRoadMapBranches(obj.problem('periodic_apex'));
             obj.State.Datasets=[datasets obj.writableDatasets()];obj.State.ActiveDatasetId=datasets{1}.Id;
@@ -218,6 +259,7 @@ classdef AppController < handle
             obj.State.Status=sprintf('All %d RoadMap branches loaded.',numel(datasets));
         end
         function dataset=openBranch(obj,path)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             variables=whos('-file',path);names={variables.name};service=lmz.services.BranchService();
             if numel(names)==1&&strcmp(names{1},'artifact')
                 branch=service.loadNativeBranch(path);readOnly=false;
@@ -248,6 +290,7 @@ classdef AppController < handle
             obj.State.Datasets{end+1}=dataset;obj.State.ActiveDatasetId=dataset.Id;obj.lockBranchPoint(dataset.Id,1);
         end
         function datasets=openBranchFolder(obj,folder)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             entries=dir(fullfile(folder,'*.mat'));datasets={};errors={};
             for index=1:numel(entries)
                 path=fullfile(entries(index).folder,entries(index).name);
@@ -264,6 +307,7 @@ classdef AppController < handle
             obj.State.Status=sprintf('Loaded %d branch datasets from %s.',numel(datasets),folder);
         end
         function dataset=reloadActiveDataset(obj)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             dataset=obj.activeDataset();path=dataset.SourcePath;
             if isempty(path)||exist(path,'file')~=2,error('lmz:GUI:ReloadPath','The active dataset has no reloadable source file.');end
             variables=whos('-file',path);names={variables.name};service=lmz.services.BranchService();
@@ -276,23 +320,53 @@ classdef AppController < handle
             end
             oldIndex=1;if ~isempty(obj.State.LockedSelection)&&strcmp(obj.State.LockedSelection.DatasetId,dataset.Id),oldIndex=obj.State.LockedSelection.PointIndex;end
             dataset.Branch=branch;dataset.Metadata.PointCount=branch.pointCount();
+            obj.Events.publish(lmz.gui.PresentationEvents.DatasetsChanged, ...
+                struct('Reason','dataset-reloaded','DatasetId',dataset.Id));
             obj.lockBranchPoint(dataset.Id,min(oldIndex,branch.pointCount()));
             obj.State.Status=sprintf('Reloaded %s from disk.',dataset.Name);
         end
         function removeDataset(obj,datasetId)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             keep=true(1,numel(obj.State.Datasets));for index=1:numel(obj.State.Datasets),if strcmp(obj.State.Datasets{index}.Id,datasetId),keep(index)=false;end,end
             obj.State.Datasets=obj.State.Datasets(keep);
             if isempty(obj.State.Datasets),obj.State.ActiveDatasetId='';obj.State.LockedSelection=[];obj.State.Selection=[];obj.State.WorkingSolution=[];obj.invalidateDerived();return,end
             obj.State.ActiveDatasetId=obj.State.Datasets{1}.Id;obj.lockBranchPoint(obj.State.ActiveDatasetId,1);
         end
-        function setDatasetVisibility(obj,datasetId,visible),dataset=obj.findDataset(datasetId);dataset.Visible=logical(visible);obj.State.Status=sprintf('%s visibility: %s.',dataset.Name,onOff(dataset.Visible));end
+        function setDatasetVisibility(obj,datasetId,visible)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            dataset=obj.findDataset(datasetId);dataset.Visible=logical(visible);
+            obj.Events.publish(lmz.gui.PresentationEvents.DatasetsChanged, ...
+                struct('Reason','visibility','DatasetId',dataset.Id));
+            obj.State.Status=sprintf('%s visibility: %s.',dataset.Name,onOff(dataset.Visible));
+        end
+        function setAllDatasetsVisible(obj,visible)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            for index=1:numel(obj.State.Datasets)
+                obj.State.Datasets{index}.Visible=logical(visible);
+            end
+            obj.Events.publish(lmz.gui.PresentationEvents.DatasetsChanged, ...
+                struct('Reason','visibility-all'));
+            obj.State.Status=sprintf('All dataset visibility: %s.',onOff(visible));
+        end
+        function showOnlyActiveDataset(obj)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            for index=1:numel(obj.State.Datasets)
+                obj.State.Datasets{index}.Visible=strcmp( ...
+                    obj.State.Datasets{index}.Id,obj.State.ActiveDatasetId);
+            end
+            obj.Events.publish(lmz.gui.PresentationEvents.DatasetsChanged, ...
+                struct('Reason','visibility-active-only'));
+            obj.State.Status='Only the active dataset is visible.';
+        end
         function dataset=plotDataset(obj,datasetId,visible),if nargin<3,visible=true;end;dataset=obj.findDataset(datasetId);obj.setDatasetVisibility(datasetId,visible);end
         function dataset=addWorkingSolutionToDataset(obj,name)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             solution=obj.State.WorkingSolution;
             if isempty(solution),error('lmz:GUI:NoWorkingSolution','No working solution is available.');end
             branch=lmz.data.SolutionBranch.fromSolutions(solution);dataset=lmz.data.BranchDataset(name,branch,'ReadOnly',false,'Metadata',struct('Status','working/user'));obj.State.Datasets{end+1}=dataset;obj.State.ActiveDatasetId=dataset.Id;obj.lockBranchPoint(dataset.Id,1);
         end
         function dataset=addBranchDataset(obj,name,branch)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if ~isa(branch,'lmz.data.SolutionBranch'),error('lmz:GUI:BranchType','A native SolutionBranch is required.');end
             dataset=lmz.data.BranchDataset(name,branch,'ReadOnly',false,'Metadata',struct('Status','generated/user','PointCount',branch.pointCount()));
             obj.State.Datasets{end+1}=dataset;obj.State.ActiveDatasetId=dataset.Id;obj.lockBranchPoint(dataset.Id,1);
@@ -304,14 +378,17 @@ classdef AppController < handle
             solution=dataset.Branch.point(obj.State.LockedSelection.PointIndex);
         end
         function setActiveDataset(obj,datasetId)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             dataset=obj.findDataset(datasetId);obj.State.ActiveDatasetId=dataset.Id;
             index=1;if ~isempty(obj.State.LockedSelection)&&strcmp(obj.State.LockedSelection.DatasetId,dataset.Id),index=obj.State.LockedSelection.PointIndex;end
             obj.lockBranchPoint(dataset.Id,index);
         end
         function setAxisVariables(obj,x,y,z)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             dataset=obj.activeDataset();known=dataset.Branch.coordinateNames();
             values={x,y};if nargin>=4&&~isempty(z),values{3}=z;else,values{3}='';end
             for index=1:2+(~isempty(values{3})),if ~any(strcmp(values{index},known)),error('lmz:GUI:AxisVariable','Unknown coordinate %s.',values{index});end,end
+            if isequal(obj.State.AxisVariables,values),return,end
             obj.State.AxisVariables=values;
         end
         function values=axisValues(obj,datasetId)
@@ -349,6 +426,7 @@ classdef AppController < handle
             for axisIndex=1:dimensions,details.Values{axisIndex}=details.Values{axisIndex}(bestIndex);end
         end
         function solution=lockBranchPoint(obj,datasetId,index)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             dataset=obj.findDataset(datasetId);selection=lmz.services.BranchService().selectPoint(dataset,index);
             solution=dataset.Branch.point(index);obj.State.ActiveDatasetId=dataset.Id;
             obj.invalidateDerived();
@@ -365,6 +443,7 @@ classdef AppController < handle
         function solution=workingSolution(obj),solution=obj.State.WorkingSolution;end
         function comparison=compareSolutions(obj,first,second),comparison=lmz.services.SolutionService().compare(obj.problem(first.ProblemId),first,second);end
         function solution=editWorkingValue(obj,name,value)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             solution=obj.State.WorkingSolution;
             if any(strcmp(name,solution.DecisionSchema.names()))
                 values=solution.DecisionValues;values(solution.DecisionSchema.indexOf(name))=value;solution=solution.withDecisionValues(values);
@@ -374,11 +453,13 @@ classdef AppController < handle
             obj.invalidateDerived();obj.State.WorkingSolution=solution.withoutDerivedData();
         end
         function solution=restoreWorkingSolution(obj)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if isempty(obj.State.LockedSelection),error('lmz:GUI:NoSelection','No locked branch point.');end
             dataset=obj.findDataset(obj.State.LockedSelection.DatasetId);
             solution=dataset.Branch.point(obj.State.LockedSelection.PointIndex);obj.invalidateDerived();obj.State.WorkingSolution=solution;
         end
         function evaluation=evaluateWorkingSolution(obj,includeSimulation)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if nargin<2,includeSimulation=false;end
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
             if isa(problem,'lmz.api.OptimizationProblem')
@@ -402,6 +483,7 @@ classdef AppController < handle
             if includeSimulation,obj.State.CandidateSimulation=evaluation.Simulation;obj.State.Simulation=evaluation.Simulation;end
         end
         function simulation=simulateWorkingSolution(obj)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             solution=obj.State.WorkingSolution;
             if isempty(solution)||~strcmp(solution.ProblemId,obj.State.ProblemId)
                 error('lmz:GUI:WorkingProblemMismatch', ...
@@ -410,11 +492,9 @@ classdef AppController < handle
             end
             problem=obj.problem(obj.State.ProblemId);
             if isa(problem,'lmz.api.SimulationProblem')
-                dataService=lmz.services.DataService();
-                example=dataService.loadBuiltInExample( ...
-                    obj.State.ModelId,obj.State.ExampleId);
+                options=obj.simulationOptions(problem.Id);
                 simulation=lmz.services.SimulationService().simulate( ...
-                    problem,solution,example.options,obj.Context);
+                    problem,struct(),options,obj.Context);
             else
                 simulation=lmz.services.SolutionService().simulate( ...
                     problem,solution,obj.Context);
@@ -424,18 +504,21 @@ classdef AppController < handle
             obj.State.Status=sprintf('%s simulation complete.',obj.State.ProblemId);
         end
         function [solution,diagnostics]=projectWorkingSolution(obj,options)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if nargin<2,options=struct();end
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
             [solution,diagnostics]=lmz.services.SeedService().project(problem,obj.State.WorkingSolution,options,obj.Context);
             obj.invalidateDerived();obj.State.WorkingSolution=solution.withoutDerivedData();
         end
         function result=solveWorkingSolution(obj,options)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
             obj.State.SeedPair=[];obj.State.ContinuationPreview=[];obj.State.ContinuationResult=[];
             result=lmz.services.SolveService().solve(problem,obj.State.WorkingSolution,options,obj.Context);
             obj.State.SolveResult=result;obj.State.SolvedSolution=result.Solution;obj.State.WorkingSolution=result.Solution;obj.State.WorkingEvaluation=result.Evaluation;obj.State.Status='Solve complete';
         end
         function solution=perturbWorkingSolution(obj,magnitude,mode,seed)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if nargin<3||isempty(mode),mode='schema-scaled';end;if nargin<4,seed=0;end
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
             solution=lmz.services.SeedService().perturb(problem,obj.State.WorkingSolution,magnitude,mode,seed);
@@ -443,6 +526,7 @@ classdef AppController < handle
             obj.State.Status=sprintf('Applied reproducible %s noise (seed %d).',mode,seed);
         end
         function pair=makeAdjacentSeedPair(obj,direction,options)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if nargin<2,direction=1;end;if nargin<3,options=struct();end
             dataset=obj.findDataset(obj.State.LockedSelection.DatasetId);
             problem=obj.problem(dataset.Branch.ProblemId);
@@ -451,39 +535,68 @@ classdef AppController < handle
             obj.State.SeedPair=pair;obj.State.Status='Adjacent RoadMap seed pair ready';
         end
         function pair=makeManualSeedPair(obj,firstIndex,secondIndex,options)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if nargin<4,options=struct();end
             dataset=obj.activeDataset();problem=obj.problem(dataset.Branch.ProblemId);
             pair=lmz.services.SeedService().branchPair(problem,dataset.Branch,firstIndex,secondIndex,options,obj.Context);
             obj.State.SeedPair=pair;obj.State.Status=sprintf('Manual RoadMap seed pair %d to %d ready.',firstIndex,secondIndex);
         end
         function pair=makeSecondSeed(obj,radius)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
             pair=lmz.services.SeedService().makeSecondSeed(problem,obj.State.WorkingSolution,radius,struct(),obj.Context);obj.State.SeedPair=pair;
         end
         function result=runContinuation(obj,options)
             if isempty(obj.State.SeedPair),obj.makeAdjacentSeedPair(1,struct());end
             if obj.Context.Cancellation.IsCancellationRequested,obj.Context=lmz.api.RunContext.synchronous(obj.Context.RandomSeed);end
+            options=obj.wrapContinuationCallbacks(options);
             obj.Context.Pause.resume();problem=obj.problem(obj.State.SeedPair.First.ProblemId);obj.State.CurrentRun=struct('Kind','continuation','Context',obj.Context);
             cleanup=onCleanup(@()obj.finishCurrentRun());
             result=lmz.services.ContinuationService().run(problem,obj.State.SeedPair,options,obj.Context);
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             obj.State.ContinuationResult=result;obj.State.Status='Continuation complete';clear cleanup
         end
-        function pauseCurrentRun(obj),if ~isempty(obj.State.CurrentRun),obj.State.CurrentRun.Context.Pause.pause();obj.State.Status='Run paused';end,end
-        function resumeCurrentRun(obj),if ~isempty(obj.State.CurrentRun),obj.State.CurrentRun.Context.Pause.resume();obj.State.Status='Run resumed';end,end
-        function stopCurrentRun(obj),if ~isempty(obj.State.CurrentRun),obj.State.CurrentRun.Context.Cancellation.cancel();obj.State.Status='Stop requested';end,end
+        function pauseCurrentRun(obj)
+            if isempty(obj.State.CurrentRun),return,end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.State.CurrentRun.Context.Pause.pause();
+            obj.Events.publish(lmz.gui.PresentationEvents.RunStateChanged, ...
+                struct('Busy',true,'Paused',true,'Kind',obj.State.CurrentRun.Kind));
+            obj.State.Status='Run paused';
+        end
+        function resumeCurrentRun(obj)
+            if isempty(obj.State.CurrentRun),return,end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.State.CurrentRun.Context.Pause.resume();
+            obj.Events.publish(lmz.gui.PresentationEvents.RunStateChanged, ...
+                struct('Busy',true,'Paused',false,'Kind',obj.State.CurrentRun.Kind));
+            obj.State.Status='Run resumed';
+        end
+        function stopCurrentRun(obj)
+            if isempty(obj.State.CurrentRun),return,end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.State.CurrentRun.Context.Cancellation.cancel();
+            obj.Events.publish(lmz.gui.PresentationEvents.RunStateChanged, ...
+                struct('Busy',true,'CancellationRequested',true, ...
+                'Kind',obj.State.CurrentRun.Kind));
+            obj.State.Status='Stop requested';
+        end
         function result=resumeCheckpoint(obj,path,options)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if nargin<3,options=struct();end
             if obj.Context.Cancellation.IsCancellationRequested,obj.Context=lmz.api.RunContext.synchronous(obj.Context.RandomSeed);end
             problem=obj.problem('periodic_apex');result=lmz.services.ContinuationService().resumeCheckpoint(problem,path,options,obj.Context);
             obj.State.ContinuationResult=result;obj.State.Status='Checkpoint resumed';
         end
         function result=runParameterHomotopy(obj,parameterName,targets,options)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if nargin<4,options=struct();end
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
             result=lmz.services.ContinuationService().parameterHomotopy(problem,obj.State.WorkingSolution,parameterName,targets,options,obj.Context);
             obj.State.ContinuationResult=result;obj.State.Status='Parameter homotopy complete';
         end
         function report=runBranchFamilyScan(obj,parameterName,targets,options)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if nargin<4,options=struct();end
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
             report=lmz.services.ContinuationService().branchFamilyScan(problem,obj.State.WorkingSolution,parameterName,targets,options,obj.Context);
@@ -523,6 +636,7 @@ classdef AppController < handle
             obj.Context.Pause.resume();obj.State.CurrentRun=struct('Kind','optimization','Context',obj.Context);
             cleanup=onCleanup(@()obj.finishCurrentRun());
             result=lmz.services.OptimizationService().run(problem,seed,options,obj.Context);
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             obj.State.OptimizationResult=result;obj.State.WorkingSolution=result.Solution;
             obj.State.ProblemId=id;obj.State.Status='Optimization complete';clear cleanup
         end
@@ -556,6 +670,134 @@ classdef AppController < handle
         end
     end
     methods (Access=private)
+        function observeState(obj)
+            mappings={ ...
+                'ModelId',lmz.gui.PresentationEvents.ModelChanged; ...
+                'ProblemId',lmz.gui.PresentationEvents.ProblemChanged; ...
+                'ExampleId',lmz.gui.PresentationEvents.ExampleChanged; ...
+                'RoadMapCatalog',lmz.gui.PresentationEvents.DatasetsChanged; ...
+                'Datasets',lmz.gui.PresentationEvents.DatasetsChanged; ...
+                'ActiveDatasetId',lmz.gui.PresentationEvents.DatasetsChanged; ...
+                'HoverSelection',lmz.gui.PresentationEvents.HoverChanged; ...
+                'LockedSelection',lmz.gui.PresentationEvents.SelectionChanged; ...
+                'Selection',lmz.gui.PresentationEvents.SelectionChanged; ...
+                'WorkingSolution',lmz.gui.PresentationEvents.WorkingSolutionChanged; ...
+                'WorkingEvaluation',lmz.gui.PresentationEvents.WorkingSolutionChanged; ...
+                'Simulation',lmz.gui.PresentationEvents.SimulationChanged; ...
+                'CandidateSimulation',lmz.gui.PresentationEvents.SimulationChanged; ...
+                'SolvedSolution',lmz.gui.PresentationEvents.SolveResultChanged; ...
+                'SolveResult',lmz.gui.PresentationEvents.SolveResultChanged; ...
+                'SeedPair',lmz.gui.PresentationEvents.SeedPairChanged; ...
+                'ContinuationPreview',lmz.gui.PresentationEvents.ContinuationChanged; ...
+                'ContinuationResult',lmz.gui.PresentationEvents.ContinuationChanged; ...
+                'OptimizationResult',lmz.gui.PresentationEvents.OptimizationChanged; ...
+                'AxisVariables',lmz.gui.PresentationEvents.BranchViewChanged; ...
+                'OscillatorIndex',lmz.gui.PresentationEvents.SelectionChanged; ...
+                'CurrentRun',lmz.gui.PresentationEvents.RunStateChanged; ...
+                'RecordingState',lmz.gui.PresentationEvents.RunStateChanged; ...
+                'Status',lmz.gui.PresentationEvents.StatusChanged; ...
+                'StatusMessages',lmz.gui.PresentationEvents.StatusChanged};
+            bus=obj.Events;
+            for index=1:size(mappings,1)
+                propertyName=mappings{index,1};topic=mappings{index,2};
+                listener=addlistener(obj.State,propertyName,'PostSet', ...
+                    @(~,~)bus.publish(topic,struct('Property',propertyName)));
+                obj.StateListeners{end+1}=listener;
+            end
+        end
+
+        function initializeGenericModel(obj,model,problemId)
+            problem=model.createProblem(problemId,struct());
+            obj.State.RoadMapCatalog=[];obj.State.Datasets={};
+            obj.State.ActiveDatasetId='';obj.State.Selection=[];
+            obj.State.LockedSelection=[];obj.State.HoverSelection=[];
+            if isa(problem,'lmz.api.SimulationProblem')
+                obj.State.WorkingSolution=obj.makeTutorialSolution(problemId);
+            else
+                obj.State.WorkingSolution=problem.makeSolution( ...
+                    problem.getDecisionSchema().defaults(), ...
+                    problem.getParameterSchema().defaults(),[]);
+            end
+            obj.State.Status=sprintf('Selected %s; no built-in branch dataset.', ...
+                obj.State.ModelId);
+        end
+
+        function [problem,options]=demoProblem(obj)
+            problemIds=obj.simulationProblemIds();
+            if isempty(problemIds)
+                error('lmz:GUI:DemoUnavailable', ...
+                    ['The selected model does not provide an implemented ' ...
+                    'simulation problem.']);
+            end
+            examples=obj.builtInExamples();
+            if isempty(examples)
+                problemId=problemIds{1};
+                if any(strcmp(obj.State.ProblemId,problemIds))
+                    problemId=obj.State.ProblemId;
+                end
+                options=struct();
+            else
+                example=lmz.services.DataService().loadBuiltInExample( ...
+                    obj.State.ModelId,obj.State.ExampleId);
+                problemId=char(example.problemId);
+                options=example.options;
+                if ~any(strcmp(problemId,problemIds))
+                    error('lmz:GUI:InvalidDemoProblem', ...
+                        ['Built-in example %s targets %s, which is not an ' ...
+                        'implemented simulation problem for %s.'], ...
+                        obj.State.ExampleId,problemId,obj.State.ModelId);
+                end
+            end
+            model=obj.Registry.createModel(obj.State.ModelId);
+            problem=model.createProblem(problemId,struct());
+            if ~isa(problem,'lmz.api.SimulationProblem')
+                error('lmz:GUI:InvalidDemoProblem', ...
+                    ['Problem %s is declared as a simulation but does not ' ...
+                    'implement lmz.api.SimulationProblem.'],problemId);
+            end
+        end
+
+        function options=simulationOptions(obj,problemId)
+            options=struct();
+            examples=obj.builtInExamples();
+            if isempty(examples),return,end
+            example=lmz.services.DataService().loadBuiltInExample( ...
+                obj.State.ModelId,obj.State.ExampleId);
+            if strcmp(char(example.problemId),problemId)
+                options=example.options;
+            end
+        end
+
+        function ids=simulationProblemIds(obj)
+            candidates=obj.problemIds();
+            selected=false(size(candidates));
+            for index=1:numel(candidates)
+                descriptor=obj.Registry.getProblemDescriptor( ...
+                    obj.State.ModelId,candidates{index});
+                selected(index)=strcmp(descriptor.kind,'simulation')&& ...
+                    descriptor.implemented&&descriptor.capabilities.simulate;
+            end
+            ids=candidates(selected);
+        end
+
+        function options=wrapContinuationCallbacks(obj,options)
+            if nargin<2||isempty(options),options=struct();end
+            prediction=fieldOr(options,'PredictionFcn',[]);
+            accepted=fieldOr(options,'AcceptedFcn',[]);
+            rejected=fieldOr(options,'RejectedFcn',[]);
+            options.PredictionFcn=@(state)obj.continuationProgress( ...
+                'prediction',state,prediction);
+            options.AcceptedFcn=@(state)obj.continuationProgress( ...
+                'accepted',state,accepted);
+            options.RejectedFcn=@(state)obj.continuationProgress( ...
+                'rejected',state,rejected);
+        end
+
+        function continuationProgress(obj,phase,state,userCallback)
+            obj.State.ContinuationPreview=struct('Phase',phase,'State',state);
+            if isa(userCallback,'function_handle'),userCallback(state);end
+        end
+
         function invalidateDerived(obj)
             obj.State.WorkingEvaluation=[];obj.State.CandidateSimulation=[];obj.State.Simulation=[];
             obj.State.SolvedSolution=[];obj.State.SolveResult=[];obj.State.SeedPair=[];

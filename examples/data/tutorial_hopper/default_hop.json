@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "default_hop",
+  "modelId": "tutorial_hopper",
+  "problemId": "demo_hop",
+  "options": {},
+  "variables": [],
+  "units": [],
+  "provenance": {
+    "source": "Legged Model Zoo built-in analytic tutorial",
+    "generated": true,
+    "thirdPartyData": false
+  },
+  "license": "NOASSERTION"
+}

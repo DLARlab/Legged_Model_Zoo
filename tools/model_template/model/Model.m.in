@@ -1,0 +1,42 @@
+classdef Model < lmz.api.LeggedModel
+    methods
+        function value = getManifest(~), value = struct('id','{{MODEL_ID}}','version','1.0.0'); end
+        function value = getCapabilities(~)
+            value = struct('simulate',true,'solve',true,'continue',true, ...
+                'optimize',false,'visualize',true,'animate',true, ...
+                'parameterHomotopy',false,'branchFamilyScan',false);
+        end
+        function value = getPhysicalStateSchema(~), value = lmzmodels.{{MODEL_ID}}.PhysicalStateSchema.create(); end
+        function value = getParameterSchema(~), value = lmzmodels.{{MODEL_ID}}.ParameterSchema.create(); end
+        function value = listProblems(~), value = {'periodic_orbit','demo_stride'}; end
+        function value = createProblem(obj, id, configuration)
+            if nargin < 3, configuration = struct(); end
+            switch id
+                case 'periodic_orbit', value = lmzmodels.{{MODEL_ID}}.PeriodicProblem(obj, configuration);
+                case 'demo_stride', value = lmz.api.SimulationProblem(obj, id, configuration);
+                otherwise, error('{{MODEL_ID}}:Problem', 'Unknown problem %s.', id);
+            end
+        end
+        function result = simulate(obj, request, context)
+            speed = 1; offset = 0;
+            if isfield(request.Options, 'speed'), speed = request.Options.speed; end
+            if isfield(request.Options, 'offset'), offset = request.Options.offset; end
+            time = linspace(0, 1, 101).'; x = speed * time;
+            y = 1 + offset + 0.05 * cos(2*pi*time);
+            states = [x y];
+            result = lmz.api.SimulationResult(time, obj.getPhysicalStateSchema(), ...
+                states, repmat({'flight'}, numel(time), 1), ...
+                struct('speed', speed), struct(), struct('source','generated-template'), ...
+                struct('modelId','{{MODEL_ID}}','problemId',request.ProblemId), ...
+                'Kinematics', struct('Body', states));
+            context.progress(1, 'Generated model simulation complete.');
+        end
+        function value = kinematics(~, frame), value = frame; end
+        function value = getPlotDescriptors(~), value = struct('id','trajectory','label','Trajectory'); end
+        function value = getVisualizationPlugin(obj)
+            manifest = obj.registeredManifest();
+            value = lmzmodels.{{MODEL_ID}}.ModelPlotPlugin( ...
+                fullfile(manifest.catalogDirectory, 'scene.lmz.json'));
+        end
+    end
+end

@@ -1,0 +1,30 @@
+classdef PeriodicProblem < lmz.api.NonlinearEquationProblem
+    methods
+        function obj = PeriodicProblem(model, configuration)
+            decision = lmz.schema.VariableSchema([ ...
+                lmz.schema.VariableSpec('speed', 'DefaultValue', 1, 'Scale', 1); ...
+                lmz.schema.VariableSpec('periodicity_error', 'DefaultValue', 0, 'Scale', 1)]);
+            parameters = lmzmodels.{{MODEL_ID}}.ParameterSchema.create();
+            obj@lmz.api.NonlinearEquationProblem(model, 'periodic_orbit', ...
+                'nonlinear_equation', decision, parameters, [], configuration);
+        end
+        function value = optionalJacobian(~, varargin) %#ok<INUSD>
+            value = [0 1];
+        end
+        function evaluation = evaluate(obj, u, p, context, includeSimulation)
+            context.check(); obj.DecisionSchema.validateVector(u);
+            obj.ParameterSchema.validateVector(p);
+            block = lmz.data.ResidualBlock('periodicity', u(2), 1);
+            simulation = [];
+            if includeSimulation
+                request = lmz.api.SimulationRequest('{{MODEL_ID}}', ...
+                    'periodic_orbit', struct(), ...
+                    struct('speed', u(1), 'offset', u(2)));
+                simulation = obj.Model.simulate(request, context);
+            end
+            evaluation = lmz.data.ProblemEvaluation(block, ...
+                'Simulation', simulation, ...
+                'Diagnostics', struct('formulation', 'generated-line-v1'));
+        end
+    end
+end

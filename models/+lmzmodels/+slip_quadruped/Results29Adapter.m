@@ -6,7 +6,7 @@ classdef Results29Adapter
                 registry = lmz.registry.ModelRegistry.discover();
                 problem = registry.createModel('slip_quadruped').createProblem('periodic_apex',struct());
             end
-            loaded = load(path,'results');
+            loaded = lmz.io.SafeMat.loadVariables(path,{'results'});
             if ~isfield(loaded,'results')
                 error('lmz:slip_quadruped:LegacyFormat','Expected variable results.');
             end

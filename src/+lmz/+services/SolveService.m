@@ -1,6 +1,8 @@
 classdef SolveService
+    %SOLVESERVICE Execute a nonlinear solve through the public problem contract.
     methods
         function result=solve(~,problem,seed,options,context)
+            started=tic;
             if ~isa(problem,'lmz.api.NonlinearEquationProblem'),error('lmz:Services:ProblemType','SolveService requires a nonlinear problem.');end
             parameters=problem.getParameterSchema().defaults(); if isa(seed,'lmz.data.Solution'),parameters=seed.ParameterValues;end
             if isa(seed,'lmz.data.Solution')
@@ -13,7 +15,9 @@ classdef SolveService
                         'funcCount',2,'message','Seed already satisfies the requested tolerance.');
                     result=lmz.data.SolveResult(solution,evaluation,1,output,options, ...
                         seed.toStruct(),context.RandomSeed,struct('solver','accept-existing', ...
-                        'tolerance',tolerance,'matlabVersion',version));
+                        'tolerance',tolerance,'matlabVersion',version, ...
+                        'evaluations',2,'elapsedTime',toc(started), ...
+                        'problemMetadata',problem.getDescriptor()));
                     context.progress(1,'Existing seed accepted as solved.');return
                 end
             end

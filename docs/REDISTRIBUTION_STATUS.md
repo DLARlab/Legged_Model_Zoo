@@ -7,14 +7,15 @@ not contain an explicit grant.
 
 ## Release decision
 
-Public packaging or release of the copied scientific assets and adapted source
-code is **blocked pending a written owner decision**. The files remain in the
-working migration because they are required for scientific verification. Use
+Public packaging or release of the framework, copied scientific assets, and
+adapted source code is **blocked pending written owner decisions**. The local
+tree remains usable for development and scientific verification. Use
 `REDISTRIBUTION_OWNER_DECISION_TEMPLATE.md` to record an explicit grant,
 replacement-data decision, or removal requirement before release.
 
 | Material | Source owner | Source repository | Existing license / notice | User authorization recorded | Public redistribution status | Release action required |
 |---|---|---|---|---|---|---|
+| Framework, tutorials, documentation, tests, and release tooling | Project owner/authorized licensor is not identified by a signed record | `https://github.com/DLARlab/Legged_Model_Zoo.git` | No root `LICENSE` or owner-supplied redistribution grant is present | Yes—Rounds 1–7 request local implementation work; that is not a public copyright license | **Not authorized / pending owner review** | Obtain an owner-supplied project license or grant covering framework code, tutorials, documentation, tests, and tooling before retaining a public core archive |
 | Quadruped source code | Repository owner/maintainer: DLARlab; copyright ownership is not stated in the repository | `https://github.com/DLARlab/SLIP_Model_Zoo.git`, commit `2c106101383ecee1b2a9d695efe09fbd72d5718a` | No `LICENSE`, `COPYING`, `NOTICE`, or redistribution grant found | Yes—Round 5 requested the local migration and adaptation | **Not authorized / pending owner review** | Obtain a written code redistribution and modification grant, including attribution and license text, or exclude adapted code from a public package |
 | Quadruped RoadMap data and reference figures | Repository owner/maintainer: DLARlab; data copyright ownership is not stated | Same repository/commit; `SLIP_Quadruped/.../1_Roadmap` | No explicit data license or notice found | Yes—Round 5 explicitly requested copying the RoadMap for the local migration | **Not authorized / pending owner review** | Obtain a written data/figure redistribution grant defining permitted files and attribution, or replace/remove them from a public package |
 | Biped source code and gait-map data | Repository owner/maintainer: DLARlab; individual copyright ownership is not stated | `https://github.com/DLARlab/2022_A_Template_Model_Explains_Jerboa_Gait_Transitions.git`, commit `4595146c5881a5313bc8fe92de85099193ef9be9` | `READMEDing2021JerboaFrontier.txt` states CC BY-NC 4.0; the checkout has no standalone `LICENSE`, `COPYING`, or `NOTICE` file clarifying the precise code/data scope | Yes—Round 6 requests scientific migration and copying of required branch assets | **Noncommercial notice recorded; packaging scope pending owner review** | Preserve CC BY-NC attribution/noncommercial terms and obtain written confirmation that the notice covers the adapted equations, regression fixtures, and gait branches before public packaging |
@@ -32,6 +33,14 @@ replacement-data decision, or removal requirement before release.
   cannot include a disallowed source, fixture, cache, or screenshot.
 - Update this record and `THIRD_PARTY_NOTICES.md` together when a decision is
   received.
+- Both `core` and `scientific` final builders enforce these decisions. A
+  temporary `technical-validation` package may be built only to test package
+  mechanics; it is labeled `NOT_FOR_REDISTRIBUTION`, is not a permission
+  override, and must not remain as a release artifact.
+- The machine-readable per-file authority is
+  `release/redistribution_manifest.json`; `scan_redistribution` rejects stale
+  hashes, missing entries, unsafe paths, and derived artifacts whose recorded
+  decision conflicts with their sources.
 
 Status recorded: 2026-07-19. This is an engineering release gate, not legal
 advice.

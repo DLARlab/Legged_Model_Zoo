@@ -36,7 +36,8 @@ classdef XAccumAdapter
         end
         function dataset=loadDataset(path)
             if exist(path,'file')~=2,error('lmz:QuadLoad:DatasetMissing','Dataset does not exist: %s',path);end
-            loaded=load(path);
+            variables=whos('-file',path);names={variables.name};
+            loaded=lmz.io.SafeMat.loadVariables(path,names);
             if ~isfield(loaded,'X_accum'),error('lmz:QuadLoad:DatasetVariable','Dataset lacks X_accum.');end
             decoded=lmzmodels.slip_quad_load.XAccumAdapter.decode(loaded.X_accum);
             weights=struct('strideduration',10,'ft',10,'loadingforce',10);

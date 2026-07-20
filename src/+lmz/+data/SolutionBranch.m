@@ -182,7 +182,7 @@ classdef SolutionBranch
             artifact.decisionValues = obj.DecisionValues;
             artifact.parameterValues = obj.ParameterValues;
             artifact.branch = obj.toStruct();
-            artifact.codeVersion = 'round6';
+            artifact.codeVersion = lmz.util.Version.current();
         end
     end
     methods (Static)

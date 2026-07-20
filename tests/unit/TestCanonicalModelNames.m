@@ -3,7 +3,8 @@ classdef TestCanonicalModelNames < matlab.unittest.TestCase
         function registryUsesExactNames(testCase)
             registry = lmz.registry.ModelRegistry.discover();
             testCase.verifyEqual(registry.listModels(), ...
-                {'slip_biped','slip_quad_load','slip_quadruped'});
+                {'slip_biped','slip_quad_load','slip_quadruped', ...
+                'tutorial_hopper'});
         end
 
         function oldIdsResolveWithWarning(testCase)

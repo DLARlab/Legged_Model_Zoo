@@ -1,4 +1,5 @@
 classdef RunContext
+    %RUNCONTEXT Cancellation, pause, progress, logging, and reproducibility state.
     properties, Cancellation; Pause; ProgressFcn; LogFcn; CheckpointFcn; RandomSeed; end
     methods (Static)
         function obj=synchronous(seed)

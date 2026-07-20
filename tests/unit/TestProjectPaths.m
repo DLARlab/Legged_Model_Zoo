@@ -14,7 +14,7 @@ classdef TestProjectPaths < matlab.unittest.TestCase
             cleanup = onCleanup(@() cd(original));
             cd(tempdir());
             registry = lmz.registry.ModelRegistry.discover();
-            testCase.verifyEqual(numel(registry.listModels()), 3);
+            testCase.verifyEqual(numel(registry.listModels()), 4);
             clear cleanup
         end
     end

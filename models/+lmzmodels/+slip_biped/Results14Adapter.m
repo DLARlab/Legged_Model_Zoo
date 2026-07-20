@@ -7,7 +7,7 @@ classdef Results14Adapter
                 problem=registry.createModel('slip_biped').createProblem('periodic_apex',struct());
             end
             if nargin<3,gaitLabel=lmzmodels.slip_biped.Results14Adapter.labelFromPath(path);end
-            loaded=load(path,'results');
+            loaded=lmz.io.SafeMat.loadVariables(path,{'results'});
             if ~isfield(loaded,'results')
                 error('lmz:slip_biped:LegacyFormat','Expected variable results.');
             end

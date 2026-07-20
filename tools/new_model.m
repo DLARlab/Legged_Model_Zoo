@@ -1,0 +1,154 @@
+function report = new_model(modelId, outputRoot, varargin)
+%NEW_MODEL Generate an inactive external Legged Model Zoo model project.
+parser = inputParser;
+addRequired(parser, 'modelId', @(x) ischar(x) || ...
+    (isstring(x) && isscalar(x)));
+addRequired(parser, 'outputRoot', @(x) ischar(x) || ...
+    (isstring(x) && isscalar(x)));
+addParameter(parser, 'ActivateProductionCatalog', false, ...
+    @(x) islogical(x) && isscalar(x));
+parse(parser, modelId, outputRoot, varargin{:});
+modelId = lmz.compat.Text.character(modelId, 'model ID');
+if isempty(regexp(modelId, '^[a-z][a-z0-9_]*$', 'once'))
+    error('lmz:Template:ModelId', ...
+        'Model ID must be a lowercase MATLAB-safe identifier.');
+end
+outputRoot = lmz.compat.Text.character(outputRoot, 'output root');
+if exist(outputRoot, 'dir') ~= 7
+    error('lmz:Template:OutputRoot', ...
+        'Output root must already exist: %s', outputRoot);
+end
+outputRoot = lmz.util.PathGuard.canonical(outputRoot, true);
+projectRoot = lmz.util.ProjectPaths.root();
+assertModelIdAvailable(modelId, projectRoot);
+if strcmp(outputRoot, projectRoot) && ~parser.Results.ActivateProductionCatalog
+    error('lmz:Template:ProductionActivation', ...
+        ['Generating into the production repository would activate the ' ...
+        'catalog. Pass ActivateProductionCatalog=true explicitly.']);
+end
+
+packageDirectory = ['+' modelId];
+targets = { ...
+    fullfile('models', '+lmzmodels', packageDirectory); ...
+    fullfile('catalog', modelId); ...
+    fullfile('tests', 'generated', modelId); ...
+    fullfile('examples', ['demo_' modelId '.m']); ...
+    'plugin.json'};
+for index = 1:numel(targets)
+    target = lmz.util.PathGuard.resolveWithin( ...
+        outputRoot, targets{index}, false);
+    if exist(target, 'file') == 2 || exist(target, 'dir') == 7
+        error('lmz:Template:Collision', ...
+            'Generator target already exists: %s', target);
+    end
+end
+
+templateRoot = fullfile(projectRoot, 'tools', 'model_template');
+mapping = templateMapping(modelId);
+stageRoot = [tempname(outputRoot) '_lmz_model'];
+mkdir(stageRoot);
+stageCleanup = onCleanup(@() removeStage(stageRoot));
+for index = 1:size(mapping, 1)
+    source = fullfile(templateRoot, mapping{index, 1});
+    relativeTarget = mapping{index, 2};
+    text = fileread(source);
+    text = strrep(text, '{{MODEL_ID}}', modelId);
+    destination = fullfile(stageRoot, relativeTarget);
+    destinationFolder = fileparts(destination);
+    if exist(destinationFolder, 'dir') ~= 7
+        mkdir(destinationFolder);
+    end
+    writeText(destination, text);
+end
+
+installed = targets;
+try
+    for index = 1:size(mapping, 1)
+        relativeTarget = mapping{index, 2};
+        source = fullfile(stageRoot, relativeTarget);
+        destination = fullfile(outputRoot, relativeTarget);
+        destinationFolder = fileparts(destination);
+        if exist(destinationFolder, 'dir') ~= 7
+            mkdir(destinationFolder);
+        end
+        copyfile(source, destination);
+    end
+catch exception
+    removeInstalled(outputRoot, installed);
+    rethrow(exception);
+end
+clear stageCleanup
+report = struct('ModelId', modelId, 'OutputRoot', outputRoot, ...
+    'ActivatedProductionCatalog', parser.Results.ActivateProductionCatalog, ...
+    'GeneratedPaths', {targets}, ...
+    'DiscoveryCommand', sprintf( ...
+    ['lmz.registry.ModelRegistry.discoverWithPlugins(''%s'', ' ...
+    '''IncludeBuiltIns'', false)'], outputRoot));
+end
+
+function assertModelIdAvailable(modelId, projectRoot)
+reserved = {'lmz','lmzmodels','lmzplugins'};
+catalogPath = fullfile(projectRoot, 'catalog', modelId);
+packagePath = fullfile(projectRoot, 'models', '+lmzmodels', ['+' modelId]);
+if any(strcmp(modelId, reserved)) || exist(catalogPath, 'dir') == 7 || ...
+        exist(packagePath, 'dir') == 7
+    error('lmz:Template:ReservedModelId', ...
+        ['Model ID %s is reserved or already belongs to the built-in ' ...
+        'catalog. Choose a distinct external model ID.'], modelId);
+end
+end
+
+function mapping = templateMapping(modelId)
+package = fullfile('models', '+lmzmodels', ['+' modelId]);
+catalog = fullfile('catalog', modelId);
+mapping = { ...
+    fullfile('model', 'Model.m.in'), fullfile(package, 'Model.m'); ...
+    fullfile('model', 'PhysicalStateSchema.m.in'), ...
+        fullfile(package, 'PhysicalStateSchema.m'); ...
+    fullfile('model', 'ParameterSchema.m.in'), ...
+        fullfile(package, 'ParameterSchema.m'); ...
+    fullfile('model', 'PeriodicProblem.m.in'), ...
+        fullfile(package, 'PeriodicProblem.m'); ...
+    fullfile('model', 'PlotPlugin.m.in'), ...
+        fullfile(package, 'ModelPlotPlugin.m'); ...
+    fullfile('catalog', 'manifest.json.in'), ...
+        fullfile(catalog, 'manifest.json'); ...
+    fullfile('catalog', 'demo_stride.json.in'), ...
+        fullfile(catalog, 'problems', 'demo_stride.json'); ...
+    fullfile('catalog', 'periodic_orbit.json.in'), ...
+        fullfile(catalog, 'problems', 'periodic_orbit.json'); ...
+    fullfile('catalog', 'scene.lmz.json.in'), ...
+        fullfile(catalog, 'scene.lmz.json'); ...
+    fullfile('tests', 'TestGeneratedModel.m.in'), ...
+        fullfile('tests', 'generated', modelId, 'TestGeneratedModel.m'); ...
+    fullfile('examples', 'demo_model.m.in'), ...
+        fullfile('examples', ['demo_' modelId '.m']); ...
+    'plugin.json.in', 'plugin.json'};
+end
+
+function writeText(path, text)
+file = fopen(path, 'w');
+if file < 0
+    error('lmz:Template:Write', 'Could not create generated file %s.', path);
+end
+cleanup = onCleanup(@() fclose(file));
+fprintf(file, '%s', text);
+clear cleanup
+end
+
+function removeStage(path)
+if exist(path, 'dir') == 7
+    rmdir(path, 's');
+end
+end
+
+function removeInstalled(outputRoot, targets)
+for index = numel(targets):-1:1
+    path = fullfile(outputRoot, targets{index});
+    if exist(path, 'file') == 2
+        delete(path);
+    elseif exist(path, 'dir') == 7
+        rmdir(path, 's');
+    end
+end
+end

@@ -5,11 +5,11 @@ classdef RecorderService
             if nargin<4,options=struct();end
             if nargin<5,context=lmz.api.RunContext.synchronous(0);end
             [count,delay]=gifOptions(options);validateRenderer(renderer);target=validateTarget(path,'.gif');
-            original=renderer.CurrentIndex;temporary=[tempname(fileparts(target)) '.gif'];frameImage=[tempname '.png'];
+            original=renderer.CurrentIndex;temporary=lmz.compat.Files.temporary(fileparts(target),'.gif');frameImage=lmz.compat.Files.temporary(tempdir,'.png');
             cleanup=onCleanup(@()finishRendererExport(renderer,original,{temporary,frameImage}));
             for frame=1:count
                 context.check();renderer.updateFrame(frameIndex(frame,count,numel(renderer.Simulation.Time)));
-                exportAxes(renderer.Axes,frameImage,120);
+                lmz.compat.Graphics.exportAxes(renderer.Axes,frameImage,120);
                 [image,map]=rgb2ind(imread(frameImage),256);
                 if frame==1
                     imwrite(image,map,temporary,'gif','LoopCount',Inf,'DelayTime',delay);
@@ -21,14 +21,13 @@ classdef RecorderService
             commitTemporary(temporary,target);clear cleanup
         end
         function recordMP4(~,renderer,path,options,context)
-            if exist('VideoWriter','class')~=8,error('lmz:Recorder:MP4Unsupported','VideoWriter is unavailable.');end
             if nargin<4,options=struct();end
             if nargin<5,context=lmz.api.RunContext.synchronous(0);end
             count=positiveInteger(options,'FrameCount',60,2);fps=positiveScalar(options,'FPS',25);
             validateRenderer(renderer);target=validateTarget(path,'.mp4');original=renderer.CurrentIndex;
-            temporary=[tempname(fileparts(target)) '.mp4'];
+            temporary=lmz.compat.Files.temporary(fileparts(target),'.mp4');
             try
-                writer=VideoWriter(temporary,'MPEG-4');
+                writer=lmz.compat.Video.create(temporary,{'MPEG-4'});
             catch exception
                 deleteIfPresent(temporary);
                 error('lmz:Recorder:MP4Unsupported', ...
@@ -56,8 +55,8 @@ classdef RecorderService
             original=renderer.CurrentIndex;cleanup=onCleanup(@()renderer.updateFrame(original));paths=cell(1,numel(normalizedTimes));
             for index=1:numel(normalizedTimes)
                 context.check();renderer.updateFrame(1+round(normalizedTimes(index)*(numel(renderer.Simulation.Time)-1)));
-                paths{index}=fullfile(folder,sprintf('%s_%02d%s',name,index,extension));temporary=[tempname(folder) extension];temporaryCleanup=onCleanup(@()deleteIfPresent(temporary));
-                exportAxes(renderer.Axes,temporary,150);commitTemporary(temporary,paths{index});clear temporaryCleanup
+                paths{index}=fullfile(folder,sprintf('%s_%02d%s',name,index,extension));temporary=lmz.compat.Files.temporary(folder,extension);temporaryCleanup=onCleanup(@()deleteIfPresent(temporary));
+                lmz.compat.Graphics.exportAxes(renderer.Axes,temporary,150);commitTemporary(temporary,paths{index});clear temporaryCleanup
                 context.progress(index/numel(normalizedTimes),sprintf('Exported keyframe %d of %d',index,numel(normalizedTimes)));
             end
             clear cleanup
@@ -65,16 +64,16 @@ classdef RecorderService
         function exportPlot(~,axesHandle,path)
             if isempty(axesHandle)||~isgraphics(axesHandle,'axes'),error('lmz:Recorder:Axes','A valid axes is required.');end
             target=validateTarget(path,'');[folder,~,extension]=fileparts(target);if isempty(extension),error('lmz:Recorder:PlotType','Plot path needs an extension.');end
-            temporary=[tempname(folder) extension];cleanup=onCleanup(@()deleteIfPresent(temporary));
-            exportAxes(axesHandle,temporary,150);commitTemporary(temporary,target);clear cleanup
+            temporary=lmz.compat.Files.temporary(folder,extension);cleanup=onCleanup(@()deleteIfPresent(temporary));
+            lmz.compat.Graphics.exportAxes(axesHandle,temporary,150);commitTemporary(temporary,target);clear cleanup
         end
         function recordAxesGif(~,axesHandle,frameFcn,path,options,context)
             if nargin<5,options=struct();end
             if nargin<6,context=lmz.api.RunContext.synchronous(0);end
             if isempty(axesHandle)||~isgraphics(axesHandle,'axes')||~isa(frameFcn,'function_handle'),error('lmz:Recorder:AxesFrameSource','A valid axes and frame callback are required.');end
-            [count,delay]=gifOptions(options);target=validateTarget(path,'.gif');temporary=[tempname(fileparts(target)) '.gif'];frameImage=[tempname '.png'];cleanup=onCleanup(@()deleteMany({temporary,frameImage}));
+            [count,delay]=gifOptions(options);target=validateTarget(path,'.gif');temporary=lmz.compat.Files.temporary(fileparts(target),'.gif');frameImage=lmz.compat.Files.temporary(tempdir,'.png');cleanup=onCleanup(@()deleteMany({temporary,frameImage}));
             for frame=1:count
-                context.check();frameFcn((frame-1)/(count-1));drawnow limitrate;exportAxes(axesHandle,frameImage,120);
+                context.check();frameFcn((frame-1)/(count-1));drawnow limitrate;lmz.compat.Graphics.exportAxes(axesHandle,frameImage,120);
                 [image,map]=rgb2ind(imread(frameImage),256);
                 if frame==1,imwrite(image,map,temporary,'gif','LoopCount',Inf,'DelayTime',delay);else,imwrite(image,map,temporary,'gif','WriteMode','append','DelayTime',delay);end
                 context.progress(frame/count,sprintf('Recorded plot frame %d of %d',frame,count));
@@ -109,38 +108,8 @@ function finishVideoExport(writer,renderer,index,temporary),safeClose(writer);sa
 function safeClose(writer),try,close(writer);catch,end,end
 function safeRestore(renderer,index),try,if ~isempty(renderer)&&isvalid(renderer),renderer.updateFrame(index);end;catch,end,end
 function commitTemporary(temporary,target)
-[ok,message]=movefile(temporary,target,'f');if ~ok,error('lmz:Recorder:Commit','Could not finalize export: %s',message);end
+lmz.compat.Files.atomicMove(temporary,target);
 end
 function deleteMany(paths),for index=1:numel(paths),deleteIfPresent(paths{index});end,end
 function deleteIfPresent(path),if exist(path,'file')==2,delete(path);end,end
 function value=fieldOr(source,name,fallback),if isfield(source,name),value=source.(name);else,value=fallback;end,end
-function exportAxes(axesHandle,path,resolution)
-% R2019b fallback is raster-based because exportgraphics starts in R2020a.
-if exist('exportgraphics','file')==2
-    [~,~,extension]=fileparts(path);
-    if strcmpi(extension,'.pdf')
-        exportgraphics(axesHandle,path,'ContentType','auto');
-    else
-        exportgraphics(axesHandle,path,'Resolution',resolution);
-    end
-    return
-end
-drawnow;
-frame=getframe(axesHandle);
-[~,~,extension]=fileparts(path);
-switch lower(extension)
-    case {'.png','.jpg','.jpeg','.tif','.tiff'}
-        imwrite(frame.cdata,path);
-    case '.pdf'
-        figureHandle=figure('Visible','off','Color','white');
-        cleanup=onCleanup(@()delete(figureHandle));
-        copyAxes=axes('Parent',figureHandle,'Position',[0 0 1 1]);
-        image(copyAxes,frame.cdata);axis(copyAxes,'image');axis(copyAxes,'off');
-        set(copyAxes,'YDir','reverse');
-        print(figureHandle,path,'-dpdf',sprintf('-r%d',resolution));
-        clear cleanup
-    otherwise
-        error('lmz:Recorder:PlotType', ...
-            'R2019b export supports PNG, JPEG, TIFF, and PDF files.');
-end
-end

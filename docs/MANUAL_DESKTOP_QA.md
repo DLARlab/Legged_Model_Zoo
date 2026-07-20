@@ -1,6 +1,6 @@
 # Manual MATLAB desktop QA
 
-## Round 6 environment
+## Round 7 environment
 
 | Field | Recorded value |
 |---|---|
@@ -19,6 +19,34 @@ evidence. A release owner must complete the checklist below in a real MATLAB
 desktop before a public desktop-usability claim is made.
 
 ## Required human walkthrough
+
+### Shared GUI behavior
+
+- Resize the window across common desktop sizes. Confirm that every tab remains
+  usable at the documented 1100-by-700 minimum, that controls do not overlap or
+  disappear, and that compact layouts recover when the window is enlarged.
+- Traverse the header and every tab using only the keyboard. Confirm a logical
+  focus and tab order, visible focus indication, reachable primary and cancel
+  actions, and no keyboard traps.
+- Enable the high-contrast palette. Confirm selected, hovered, disabled, and
+  ordinary data remain distinguishable by shape or state as well as color, and
+  that text and controls remain legible on every tab.
+- Start each long-running operation that exposes cancellation. Confirm controls
+  enter the correct busy state, the cancel or stop action remains available and
+  takes precedence, and controls return to a consistent enabled state after
+  success, failure, or cancellation.
+- Generate representative status entries and a controlled error. Confirm the
+  timestamped status history is selectable and copyable, error summaries use
+  plain language, technical details can be expanded and hidden, and both status
+  and error details can be copied without truncation.
+- Change the palette, window placement, and recent data/output folders; close
+  and reopen the app and confirm the preferences persist. Use Reset Preferences,
+  reopen again, and confirm defaults are restored and no project-root path is
+  persisted as a recent folder.
+- Close and reopen the app repeatedly after interacting with all tabs. Confirm
+  each action causes exactly one visible refresh or status response, closed
+  windows receive no updates, and reopen cycles do not accumulate listeners,
+  duplicate callbacks, warnings, or stale renderer/player resources.
 
 ### SLIP quadruped
 

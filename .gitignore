@@ -1,0 +1,18 @@
+# MATLAB editor, code-generation, and local preference files
+*.asv
+*.m~
+*.autosave
+slprj/
+codegen/
+.matlab/
+
+# Reproducible release outputs are built locally and are not source files.
+release/out/
+release/staging/
+*.mltbx
+Legged_Model_Zoo-*.zip
+Legged_Model_Zoo-*.zip.sha256
+
+# Platform metadata
+.DS_Store
+Thumbs.db

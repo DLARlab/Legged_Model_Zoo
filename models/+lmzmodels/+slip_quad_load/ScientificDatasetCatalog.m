@@ -8,9 +8,12 @@ classdef ScientificDatasetCatalog
     methods
         function obj=ScientificDatasetCatalog(rootPath)
             if nargin<1,rootPath=fullfile(lmz.util.ProjectPaths.examples(),'data','slip_quad_load','Scientific');end
-            obj.RootPath=rootPath;obj.ManifestPath=fullfile(rootPath,'dataset_manifest.json');
+            obj.RootPath=lmz.util.PathGuard.canonical(rootPath,true);
+            obj.ManifestPath=lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,'dataset_manifest.json',true);
             if exist(obj.ManifestPath,'file')~=2,error('lmz:QuadLoad:ManifestMissing','Scientific load manifest is missing.');end
-            obj.Manifest=jsondecode(fileread(obj.ManifestPath));obj.validateManifest();
+            obj.Manifest=lmz.io.SafeJson.read(obj.ManifestPath, ...
+                'Root',obj.RootPath);obj.validateManifest();
         end
         function records=records(obj)
             if iscell(obj.Manifest.files),records=[obj.Manifest.files{:}];else,records=obj.Manifest.files;end
@@ -23,7 +26,8 @@ classdef ScientificDatasetCatalog
             record=records(index);
         end
         function path=pathFor(obj,idOrFile)
-            record=obj.record(idOrFile);path=fullfile(obj.RootPath,record.relativePath);
+            record=obj.record(idOrFile);path=lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,record.relativePath,true);
         end
         function path=defaultSinglePath(obj),path=obj.pathFor(obj.Manifest.defaultSingleStride);end
         function path=defaultMultiPath(obj),path=obj.pathFor(obj.Manifest.defaultMultiStride);end
@@ -32,7 +36,8 @@ classdef ScientificDatasetCatalog
             record=obj.record(idOrFile);valid=strcmpi(lmz.util.FileHash.sha256(obj.pathFor(idOrFile)),record.sha256);
         end
         function path=nativePath(obj,idOrFile)
-            record=obj.record(idOrFile);path=fullfile(obj.RootPath,record.nativeArtifactPath);
+            record=obj.record(idOrFile);path=lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,record.nativeArtifactPath,false);
         end
     end
     methods (Static)
@@ -48,7 +53,10 @@ classdef ScientificDatasetCatalog
             for index=1:numel(records)
                 record=records(index);fields={'id','name','relativePath','sourcePath','sha256','strideCount','xAccumLength','nativeArtifactPath'};
                 for fieldIndex=1:numel(fields),if ~isfield(record,fields{fieldIndex}),error('lmz:QuadLoad:ManifestRecord','Dataset record is missing %s.',fields{fieldIndex});end,end
-                if record.xAccumLength~=44+13*(record.strideCount-1)||exist(fullfile(obj.RootPath,record.relativePath),'file')~=2|| ...
+                sourcePath=lmz.util.PathGuard.resolveWithin( ...
+                    obj.RootPath,record.relativePath,true);
+                lmz.util.PathGuard.validateRelative(record.nativeArtifactPath);
+                if record.xAccumLength~=44+13*(record.strideCount-1)||exist(sourcePath,'file')~=2|| ...
                         isempty(regexp(record.sha256,'^[0-9a-fA-F]{64}$','once'))
                     error('lmz:QuadLoad:ManifestRecord','Dataset record %s is invalid.',record.name);
                 end

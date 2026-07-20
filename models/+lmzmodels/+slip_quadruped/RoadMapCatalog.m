@@ -11,17 +11,20 @@ classdef RoadMapCatalog
                 rootPath = fullfile(lmz.util.ProjectPaths.examples(),'data', ...
                     'slip_quadruped','RoadMap');
             end
-            obj.RootPath = rootPath;
-            obj.ManifestPath = fullfile(rootPath,'roadmap_manifest.json');
+            obj.RootPath = lmz.util.PathGuard.canonical(rootPath,true);
+            obj.ManifestPath = lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,'roadmap_manifest.json',true);
             if exist(obj.ManifestPath,'file') ~= 2
                 error('lmz:RoadMap:MissingManifest','RoadMap manifest is missing.');
             end
-            obj.Manifest = jsondecode(fileread(obj.ManifestPath));
+            obj.Manifest = lmz.io.SafeJson.read(obj.ManifestPath, ...
+                'Root',obj.RootPath);
             obj.validateManifest();
         end
         function files = listBranches(obj)
             records = obj.branchRecords();
-            files = arrayfun(@(x)fullfile(obj.RootPath,x.relativePath), ...
+            files = arrayfun(@(x)lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,x.relativePath,true), ...
                 records,'UniformOutput',false);
         end
         function records = branchRecords(obj)
@@ -44,12 +47,14 @@ classdef RoadMapCatalog
         end
         function path = defaultBranchPath(obj)
             record = obj.record(obj.Manifest.defaultBranch);
-            path = fullfile(obj.RootPath,record.relativePath);
+            path = lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,record.relativePath,true);
         end
         function path = nativePath(obj,file)
             record = obj.record(file);
             if isempty(record.nativeArtifactPath), path=''; return, end
-            path = fullfile(obj.RootPath,record.nativeArtifactPath);
+            path = lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,record.nativeArtifactPath,false);
         end
         function index = recommendedSeedIndex(obj,file)
             record = obj.record(file);
@@ -60,7 +65,8 @@ classdef RoadMapCatalog
             end
         end
         function valid = validateSourceHash(obj,file)
-            record = obj.record(file); path = fullfile(obj.RootPath,record.relativePath);
+            record = obj.record(file); path = lmz.util.PathGuard.resolveWithin( ...
+                obj.RootPath,record.relativePath,true);
             valid = strcmpi(lmz.util.FileHash.sha256(path),record.sha256);
         end
         function matches = filterByFixedParameters(~,branches,name,value,tolerance)
@@ -123,10 +129,12 @@ classdef RoadMapCatalog
                 end
                 if isempty(regexp(record.sha256,'^[0-9a-fA-F]{64}$','once')) || ...
                         ~any(strcmp(record.kind,{'legacy-results-branch','reference-figure'})) || ...
-                        exist(fullfile(obj.RootPath,record.relativePath),'file')~=2
+                        exist(lmz.util.PathGuard.resolveWithin( ...
+                        obj.RootPath,record.relativePath,true),'file')~=2
                     error('lmz:RoadMap:InvalidManifest','File record %s is invalid.',record.name);
                 end
                 if strcmp(record.kind,'legacy-results-branch')
+                    lmz.util.PathGuard.validateRelative(record.nativeArtifactPath);
                     if record.rowCount~=29||record.pointCount<2||~strcmp(record.legacyVariable,'results')||isempty(record.nativeArtifactPath)
                         error('lmz:RoadMap:InvalidManifest','Branch record %s has an invalid Results29 contract.',record.name);
                     end

@@ -1,0 +1,20 @@
+classdef ModelPlotPlugin < lmz.viz.PlotPlugin
+    properties (SetAccess = private), ScenePath, end
+    methods
+        function obj = ModelPlotPlugin(scenePath), obj.ScenePath = scenePath; end
+        function value = sceneSpec(obj)
+            value = lmz.viz.SceneSpec.fromJson(obj.ScenePath, fileparts(obj.ScenePath));
+        end
+        function value = kinematicsFrame(~, simulation, index)
+            frames = struct('world', [0 0 0], ...
+                'body', [simulation.States(index,1) simulation.States(index,2) 0]);
+            value = lmz.viz.KinematicsFrame(simulation.Time(index), index, frames);
+        end
+        function value = plotDescriptors(~)
+            value = struct('id', 'trajectory', 'label', 'Trajectory');
+        end
+        function handles = plot(~, axesHandle, ~, simulation, ~)
+            handles = plot(axesHandle, simulation.state('x'), simulation.state('y'));
+        end
+    end
+end

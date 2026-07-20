@@ -21,8 +21,11 @@ classdef BaseProblem < handle
         end
         function value = getDescriptor(obj)
             manifest=obj.Model.getManifest();
-            registry=lmz.registry.ModelRegistry.discover();
-            value=registry.getProblemDescriptor(manifest.id,obj.Id);
+            value=obj.Model.registeredProblemDescriptor(obj.Id);
+            if isempty(value)
+                registry=lmz.registry.ModelRegistry.discover();
+                value=registry.getProblemDescriptor(manifest.id,obj.Id);
+            end
             value.version=obj.Version;
             value.modelId=manifest.id;
             value.modelVersion=manifest.version;

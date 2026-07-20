@@ -8,6 +8,7 @@ classdef TestR2019bCompatibility < matlab.unittest.TestCase
             testCase.verifyGreaterThan(report.Counts.UIComponents,0);
             testCase.verifyGreaterThan(report.Counts.OptimizationOptions,0);
             testCase.verifyGreaterThan(report.Counts.GuardedExportGraphicsCalls,0);
+            testCase.verifyGreaterThan(report.Counts.CompatibilityRoutedCalls,10);
             testCase.verifyEqual(report.RuntimeRelease,version('-release'));
             testCase.verifyEqual(report.RuntimeVerified, ...
                 strcmpi(version('-release'),'2019b'));

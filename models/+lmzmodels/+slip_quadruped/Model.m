@@ -58,6 +58,15 @@ classdef Model < lmz.api.LeggedModel
                 'oscillator'},'label',{'Torso and legs','Vertical GRF', ...
                 'Horizontal GRF','Footfall phases'});
         end
+        function value = getVisualizationPlugin(obj)
+            manifest = obj.registeredManifest();
+            if isempty(manifest)
+                value = [];
+            else
+                value = lmzmodels.slip_quadruped.QuadrupedScenePlugin( ...
+                    fullfile(manifest.catalogDirectory, 'scene.lmz.json'));
+            end
+        end
     end
     methods (Access=private)
         function result = simulateDemo(~,request,context)

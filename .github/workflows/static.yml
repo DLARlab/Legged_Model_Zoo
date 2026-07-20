@@ -1,0 +1,21 @@
+name: Static release checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+      - name: Run MATLAB-free contracts
+        run: python3 tools/ci/static_checks.py --all
+      - name: Check patch whitespace
+        run: git diff --check HEAD^

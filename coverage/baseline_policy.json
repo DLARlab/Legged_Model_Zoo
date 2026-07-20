@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "1.0.0",
+  "frameworkVersion": "1.0.0-rc.1",
+  "measured": true,
+  "measuredAt": "2026-07-19T18:57:00.065Z",
+  "matlabRelease": "2025b",
+  "matlabVersion": "25.2.0.3177638 (R2025b) Update 5",
+  "measurementScope": {
+    "sourceRoots": [
+      "src/+lmz",
+      "models/+lmzmodels"
+    ],
+    "testsRun": 194,
+    "excludedTests": [
+      "TestCoveragePolicy/policyComesFromMeasuredStablePackages"
+    ],
+    "runtimeFileExclusions": [],
+    "overallCoveredStatements": 7401,
+    "overallTotalStatements": 9792,
+    "overallLineRate": 0.7558210784313726
+  },
+  "stablePackages": [
+    {
+      "name": "lmz.api",
+      "measuredCoveredStatements": 110,
+      "measuredTotalStatements": 140,
+      "measuredLineRate": 0.7857142857142857,
+      "minimumLineRate": 0.7357142857142857
+    },
+    {
+      "name": "lmz.data",
+      "measuredCoveredStatements": 416,
+      "measuredTotalStatements": 504,
+      "measuredLineRate": 0.8253968253968254,
+      "minimumLineRate": 0.7753968253968254
+    },
+    {
+      "name": "lmz.io",
+      "measuredCoveredStatements": 312,
+      "measuredTotalStatements": 363,
+      "measuredLineRate": 0.859504132231405,
+      "minimumLineRate": 0.809504132231405
+    },
+    {
+      "name": "lmz.registry",
+      "measuredCoveredStatements": 272,
+      "measuredTotalStatements": 326,
+      "measuredLineRate": 0.8343558282208589,
+      "minimumLineRate": 0.7843558282208588
+    },
+    {
+      "name": "lmz.services",
+      "measuredCoveredStatements": 441,
+      "measuredTotalStatements": 592,
+      "measuredLineRate": 0.7449324324324325,
+      "minimumLineRate": 0.6949324324324325
+    }
+  ],
+  "policy": "Fail only when a stable package regresses by more than five percentage points from this measured Round 7 baseline."
+}

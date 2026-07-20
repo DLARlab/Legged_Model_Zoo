@@ -1,0 +1,9 @@
+classdef PhysicalStateSchema
+    methods (Static)
+        function value = create()
+            value = lmz.schema.VariableSchema([ ...
+                lmz.schema.VariableSpec('x', 'Unit', 'm', 'Scale', 1); ...
+                lmz.schema.VariableSpec('y', 'Unit', 'm', 'Scale', 1)]);
+        end
+    end
+end

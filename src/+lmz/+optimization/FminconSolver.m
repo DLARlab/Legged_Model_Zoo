@@ -1,6 +1,7 @@
 classdef FminconSolver
     methods
         function result=solve(~,problem,seed,parameters,options,context)
+            started=tic;
             if ~isa(problem,'lmz.api.OptimizationProblem'),error('lmz:Optimization:ProblemType','FminconSolver requires OptimizationProblem.');end
             if exist('fmincon','file')~=2,error('lmz:Optimization:ToolboxUnavailable','Optimization Toolbox fmincon is unavailable.');end
             if nargin<5||isempty(options),options=lmz.optimization.OptimizationOptions();elseif isstruct(options),options=lmz.optimization.OptimizationOptions(options);end
@@ -16,10 +17,11 @@ classdef FminconSolver
             linear=problem.optionalLinearConstraints();
             [A,b,Aeq,beq]=reduceLinearConstraints(linear,free,fullTemplate);
             history=[];
-            matlabOptions=optimoptions('fmincon','Algorithm',options.Algorithm,'Display',options.Display, ...
+            optionValues=struct('Algorithm',options.Algorithm,'Display',options.Display, ...
                 'MaxIterations',options.MaxIterations,'MaxFunctionEvaluations',options.MaxFunctionEvaluations, ...
                 'OptimalityTolerance',options.OptimalityTolerance,'StepTolerance',options.StepTolerance, ...
                 'ConstraintTolerance',options.ConstraintTolerance,'OutputFcn',@outputFunction);
+            matlabOptions=lmz.compat.Optimization.fmincon(optionValues);
             if any(free)
                 [freeValues,~,exitFlag,output]=fmincon(@objectiveFunction, ...
                     fullTemplate(free),A,b,Aeq,beq,lower(free),upper(free), ...
@@ -33,7 +35,9 @@ classdef FminconSolver
             output.freeVariableIndices=find(free);output.fixedVariableIndices=find(fixed);
             [objective,terms,diagnostics]=problem.evaluateObjective(u,parameters,context); solution=problem.makeSolution(u,parameters,[]);
             result=lmz.data.OptimizationResult(solution,objective,terms,exitFlag,output,history,options.toStruct(),sourceSeed,context.RandomSeed, ...
-                struct('solver','fmincon','diagnostics',diagnostics,'matlabVersion',version)); context.progress(1,'Optimization complete');
+                struct('solver','fmincon','diagnostics',diagnostics, ...
+                'matlabVersion',version,'elapsedTime',toc(started), ...
+                'problemMetadata',problem.getDescriptor())); context.progress(1,'Optimization complete');
             function value=objectiveFunction(candidate),context.check();full=expandDecision(candidate,free,fullTemplate);[value,~,~]=problem.evaluateObjective(full,parameters,context);end
             function [c,ceq]=constraints(candidate),full=expandDecision(candidate,free,fullTemplate);[c,ceq]=problem.nonlinearConstraints(full,parameters,context);end
             function stop=outputFunction(~,optimValues,state),stop=false;if strcmp(state,'iter'),history(end+1)=optimValues.fval;context.progress(min(0.99,optimValues.iteration/options.MaxIterations),'Optimizing');end;if context.Cancellation.IsCancellationRequested,stop=true;end,end

@@ -7,17 +7,17 @@ classdef TestModelDescriptorValidation < matlab.unittest.TestCase
             cleanup = onCleanup(@() removeTree(parent));
             copyfile(lmz.util.ProjectPaths.catalog(), catalogPath);
             registry = lmz.registry.ModelRegistry.discover(catalogPath);
-            testCase.verifyEqual(numel(registry.listModels()), 3);
+            testCase.verifyEqual(numel(registry.listModels()), 4);
             clear cleanup
         end
 
         function rejectsMissingDescriptor(testCase)
             parent = tempname;
-            modelPath = fullfile(parent, 'model');
+            modelPath = fullfile(parent, 'missing_model');
             mkdir(modelPath);
             cleanup = onCleanup(@() removeTree(parent));
             manifest = ['{"schemaVersion":"1.0.0",' ...
-                '"id":"missing.problem","version":"1.0.0",' ...
+                '"id":"missing_model","version":"1.0.0",' ...
                 '"name":"Missing","implementationClass":' ...
                 '"lmzmodels.slip_quadruped.Model",' ...
                 '"problems":["absent"],"capabilities":{' ...

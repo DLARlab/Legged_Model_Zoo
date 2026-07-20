@@ -1,6 +1,6 @@
 classdef AppState < handle
     %APPSTATE Mutable presentation state, independent of UI widgets.
-    properties
+    properties (SetObservable)
         ModelId = ''
         ProblemId = ''
         ExampleId = 'default_stride'

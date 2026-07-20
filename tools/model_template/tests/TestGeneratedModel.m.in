@@ -1,0 +1,16 @@
+classdef TestGeneratedModel < matlab.unittest.TestCase
+    methods (Test)
+        function simulationAndResidual(testCase)
+            registry = lmz.registry.ModelRegistry.discoverWithPlugins( ...
+                fileparts(fileparts(fileparts(fileparts(mfilename('fullpath'))))), ...
+                'IncludeBuiltIns', false);
+            model = registry.createModel('{{MODEL_ID}}');
+            problem = model.createProblem('periodic_orbit', struct());
+            evaluation = problem.evaluate(problem.getDecisionSchema().defaults(), ...
+                problem.getParameterSchema().defaults(), ...
+                lmz.api.RunContext.synchronous(0), true);
+            testCase.verifyLessThan(evaluation.ScaledResidualNorm, 1e-12);
+            testCase.verifyClass(evaluation.Simulation, 'lmz.api.SimulationResult');
+        end
+    end
+end

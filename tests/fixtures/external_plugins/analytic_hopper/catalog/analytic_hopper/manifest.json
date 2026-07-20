@@ -1,0 +1,1 @@
+{"schemaVersion":"1.0.0","id":"analytic_hopper","version":"1.0.0","name":"Analytic Hybrid Hopper","implementationClass":"lmzplugins.analytic_hopper.Model","problems":["periodic_hop","demo_hop"],"capabilities":{"simulate":true,"solve":true,"continue":true,"optimize":false,"visualize":true,"animate":true,"parameterHomotopy":false,"branchFamilyScan":false}}

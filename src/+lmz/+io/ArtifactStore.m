@@ -1,7 +1,6 @@
 classdef ArtifactStore
     %ARTIFACTSTORE Versioned plain-struct MAT artifact persistence.
     properties (Constant, Access=private)
-        CurrentSchemaVersion = '1.0.0'
         SupportedTypes = {'solution', 'branch', 'simulation', 'solve-run', ...
             'continuation-run', 'optimization-run', 'checkpoint', ...
             'branch-family-report'}
@@ -19,17 +18,15 @@ classdef ArtifactStore
                     'Artifact directory does not exist: %s', folder);
             end
 
-            temporaryPath = [tempname(folder) '.mat'];
+            temporaryPath = lmz.compat.Files.temporary(folder, '.mat');
             cleanup = onCleanup(@() ...
                 lmz.io.ArtifactStore.removeTemporary(temporaryPath));
             save(temporaryPath, 'artifact');
 
-            check = load(temporaryPath, 'artifact');
+            check = lmz.io.SafeMat.loadVariables(temporaryPath, {'artifact'}, ...
+                'ExactVariables', true);
             lmz.io.ArtifactStore.validate(check.artifact);
-            [ok, message] = movefile(temporaryPath, path, 'f');
-            if ~ok
-                error('lmz:Artifact:WriteFailed', '%s', message);
-            end
+            lmz.compat.Files.atomicMove(temporaryPath, path);
             clear cleanup
         end
 
@@ -38,12 +35,8 @@ classdef ArtifactStore
                 error('lmz:Artifact:MissingFile', ...
                     'Artifact does not exist: %s', path);
             end
-            loaded = load(path);
-            names = fieldnames(loaded);
-            if ~isequal(names, {'artifact'})
-                error('lmz:Artifact:TopLevelContract', ...
-                    'MAT file must contain only the top-level artifact struct.');
-            end
+            loaded = lmz.io.SafeMat.loadVariables(path, {'artifact'}, ...
+                'ExactVariables', true);
             artifact = lmz.io.ArtifactStore.dispatch(loaded.artifact);
             lmz.io.ArtifactStore.validate(artifact);
         end
@@ -61,10 +54,31 @@ classdef ArtifactStore
             lmz.io.ArtifactStore.requireFields(artifact, required);
 
             if ~strcmp(artifact.schemaVersion, ...
-                    lmz.io.ArtifactStore.CurrentSchemaVersion)
+                    lmz.util.Version.artifactSchemaVersion())
                 error('lmz:Artifact:UnsupportedVersion', ...
                     'Unsupported artifact schema version: %s', ...
                     artifact.schemaVersion);
+            end
+            versionFields = {'artifactSchemaVersion', 'frameworkVersion', ...
+                'minimumMatlabRelease'};
+            present = cellfun(@(name)isfield(artifact,name), versionFields);
+            if any(present) && ~all(present)
+                error('lmz:Artifact:IncompleteVersionMetadata', ...
+                    'New artifact version metadata must be recorded together.');
+            end
+            if all(present)
+                if ~ischar(artifact.artifactSchemaVersion) || ...
+                        ~strcmp(artifact.artifactSchemaVersion,artifact.schemaVersion)
+                    error('lmz:Artifact:SchemaVersionMismatch', ...
+                        'artifactSchemaVersion must match schemaVersion.');
+                end
+                lmz.util.Version.parse(artifact.frameworkVersion);
+                if ~ischar(artifact.minimumMatlabRelease) || ...
+                        isempty(regexp(artifact.minimumMatlabRelease, ...
+                        '^R[0-9]{4}[ab]$', 'once'))
+                    error('lmz:Artifact:InvalidMinimumMatlabRelease', ...
+                        'minimumMatlabRelease must have the form RYYYYa or RYYYYb.');
+                end
             end
             if ~any(strcmp(artifact.artifactType, ...
                     lmz.io.ArtifactStore.SupportedTypes))
@@ -145,6 +159,90 @@ classdef ArtifactStore
                 lmz.io.ArtifactStore.requireFields(artifact, ...
                     {'checkpointState', 'algorithmOptions', 'terminationReason'});
             end
+            recordedRunTypes={'solve-run','continuation-run', ...
+                'optimization-run','checkpoint'};
+            if any(strcmp(artifact.artifactType,recordedRunTypes))
+                runFields={'options','sourceSeed','sourcePair', ...
+                    'sourceArtifactId','runProvenance','matlabRelease', ...
+                    'toolboxes','elapsedTime','functionEvaluations', ...
+                    'terminationReason','warnings','sourceDataHashes'};
+                lmz.io.ArtifactStore.requireFields(artifact,runFields);
+                if ~isstruct(artifact.options)||~isscalar(artifact.options)|| ...
+                        ~isstruct(artifact.sourcePair)|| ...
+                        ~isstruct(artifact.runProvenance)|| ...
+                        ~isstruct(artifact.toolboxes)|| ...
+                        ~isstruct(artifact.sourceDataHashes)|| ...
+                        ~ischar(artifact.sourceArtifactId)|| ...
+                        ~ischar(artifact.matlabRelease)|| ...
+                        ~ischar(artifact.terminationReason)|| ...
+                        isempty(artifact.terminationReason)|| ...
+                        ~iscell(artifact.warnings)
+                    error('lmz:Artifact:InvalidRunMetadata', ...
+                        'Run reproducibility metadata is malformed.');
+                end
+                numericFields={'elapsedTime','functionEvaluations'};
+                for numericIndex=1:numel(numericFields)
+                    item=artifact.(numericFields{numericIndex});
+                    if ~isnumeric(item)||~isscalar(item)|| ...
+                            ~(isnan(item)||(isfinite(item)&&item>=0))
+                        error('lmz:Artifact:InvalidRunMetadata', ...
+                            '%s must be nonnegative or explicitly unavailable.', ...
+                            numericFields{numericIndex});
+                    end
+                end
+            end
+        end
+
+        function artifact=withRunMetadata(artifact,details)
+            %WITHRUNMETADATA Normalize reproducibility fields for run records.
+            defaults=struct('Options',struct(),'SourceSeed',[], ...
+                'SourcePair',struct(),'RandomSeed',0,'Provenance',struct(), ...
+                'ElapsedTime',NaN,'FunctionEvaluations',NaN, ...
+                'TerminationReason','','Warnings',{{}}, ...
+                'SourceDataHashes',struct(),'SourceCommitSHAs',struct());
+            names=fieldnames(details);
+            for index=1:numel(names),defaults.(names{index})=details.(names{index});end
+            artifact.randomSeed=defaults.RandomSeed;
+            artifact.options=defaults.Options;
+            artifact.sourceSeed=defaults.SourceSeed;
+            artifact.sourcePair=defaults.SourcePair;
+            artifact.sourceArtifactId=lmz.io.ArtifactStore.sourceId( ...
+                defaults.SourceSeed,defaults.SourcePair);
+            artifact.runProvenance=defaults.Provenance;
+            artifact.matlabRelease=version('-release');
+            artifact.toolboxes=lmz.io.ArtifactStore.toolboxSnapshot();
+            artifact.elapsedTime=defaults.ElapsedTime;
+            artifact.functionEvaluations=defaults.FunctionEvaluations;
+            artifact.terminationReason=defaults.TerminationReason;
+            artifact.warnings=defaults.Warnings;
+            sources={defaults.SourceSeed,defaults.SourcePair, ...
+                defaults.Provenance,artifact.diagnostics,artifact.lineage};
+            dataHashes=struct();commits=struct();
+            if isfield(artifact,'sourceDataHashes'),dataHashes=artifact.sourceDataHashes;end
+            if isfield(artifact,'sourceCommitSHAs'),commits=artifact.sourceCommitSHAs;end
+            for sourceIndex=1:numel(sources)
+                dataHashes=lmz.io.ArtifactStore.collectMetadata( ...
+                    sources{sourceIndex},'hash',['source' num2str(sourceIndex)],dataHashes);
+                dataHashes=lmz.io.ArtifactStore.collectPathHashes( ...
+                    sources{sourceIndex},['source' num2str(sourceIndex)],dataHashes);
+                commits=lmz.io.ArtifactStore.collectMetadata( ...
+                    sources{sourceIndex},'commit',['source' num2str(sourceIndex)],commits);
+            end
+            artifact.sourceDataHashes=lmz.io.ArtifactStore.mergeStructs( ...
+                dataHashes,defaults.SourceDataHashes);
+            artifact.sourceCommitSHAs=lmz.io.ArtifactStore.mergeStructs( ...
+                commits,defaults.SourceCommitSHAs);
+            if isstruct(defaults.Provenance)&&isscalar(defaults.Provenance)&& ...
+                    isfield(defaults.Provenance,'problemMetadata')
+                metadata=defaults.Provenance.problemMetadata;
+                if isstruct(metadata)&&isscalar(metadata)&& ...
+                        isfield(metadata,'maturity')&& ...
+                        isfield(metadata,'validationStatus')
+                    artifact.problemMetadata=metadata;
+                    artifact.problemMaturity=metadata.maturity;
+                    artifact.validationStatus=metadata.validationStatus;
+                end
+            end
         end
     end
 
@@ -155,7 +253,7 @@ classdef ArtifactStore
                     'Artifact schemaVersion is required for dispatch.');
             end
             if strcmp(artifact.schemaVersion, ...
-                    lmz.io.ArtifactStore.CurrentSchemaVersion)
+                    lmz.util.Version.artifactSchemaVersion())
                 if isfield(artifact, 'modelId')
                     canonical = lmz.registry.ModelRegistry.canonicalModelId( ...
                         artifact.modelId);
@@ -297,6 +395,101 @@ classdef ArtifactStore
                     schema.variables(index)=variable;
                 end
             end
+        end
+
+
+        function value=sourceId(seed,pair)
+            value='';
+            if isstruct(seed)&&isscalar(seed)
+                if isfield(seed,'Id'),value=seed.Id;elseif isfield(seed,'id'),value=seed.id;end
+            end
+            if isempty(value)&&isstruct(pair)&&isscalar(pair)
+                if isfield(pair,'First')&&isstruct(pair.First)&&isfield(pair.First,'Id')
+                    second='';if isfield(pair,'Second')&&isstruct(pair.Second)&&isfield(pair.Second,'Id'),second=pair.Second.Id;end
+                    value=[pair.First.Id ':' second];
+                end
+            end
+        end
+
+        function values=toolboxSnapshot()
+            installed=ver;values=repmat(struct('Name','','Version','','Release',''),numel(installed),1);
+            for index=1:numel(installed)
+                values(index).Name=installed(index).Name;
+                values(index).Version=installed(index).Version;
+                if isfield(installed,'Release'),values(index).Release=installed(index).Release;end
+            end
+        end
+
+        function output=collectMetadata(value,kind,prefix,output)
+            if iscell(value)
+                for index=1:numel(value)
+                    output=lmz.io.ArtifactStore.collectMetadata(value{index}, ...
+                        kind,[prefix '_' num2str(index)],output);
+                end
+                return
+            end
+            if ~isstruct(value),return,end
+            for valueIndex=1:numel(value)
+                names=fieldnames(value(valueIndex));
+                for index=1:numel(names)
+                    name=names{index};item=value(valueIndex).(name);
+                    key=sprintf('%s_%s',prefix,name);
+                    if numel(value)>1,key=sprintf('%s_%d',key,valueIndex);end
+                    if isstruct(item)||iscell(item)
+                        output=lmz.io.ArtifactStore.collectMetadata(item,kind,key,output);
+                    elseif (ischar(item)||(isstring(item)&&isscalar(item)))
+                        lowerName=lower(name);
+                        matches=strcmp(kind,'commit')&&contains(lowerName,'commit');
+                        matches=matches||(strcmp(kind,'hash')&& ...
+                            (contains(lowerName,'hash')||contains(lowerName,'sha'))&& ...
+                            ~contains(lowerName,'commit'));
+                        if matches,output.(matlab.lang.makeValidName(key))=char(item);end
+                    end
+                end
+            end
+        end
+
+        function output=collectPathHashes(value,prefix,output)
+            if iscell(value)
+                for index=1:numel(value)
+                    output=lmz.io.ArtifactStore.collectPathHashes(value{index}, ...
+                        [prefix '_' num2str(index)],output);
+                end
+                return
+            end
+            if ~isstruct(value),return,end
+            for valueIndex=1:numel(value)
+                names=fieldnames(value(valueIndex));
+                for index=1:numel(names)
+                    name=names{index};item=value(valueIndex).(name);
+                    key=sprintf('%s_%s',prefix,name);
+                    if numel(value)>1,key=sprintf('%s_%d',key,valueIndex);end
+                    if isstruct(item)||iscell(item)
+                        output=lmz.io.ArtifactStore.collectPathHashes(item,key,output);
+                    elseif contains(lower(name),'path')&& ...
+                            (ischar(item)||(isstring(item)&&isscalar(item)))&& ...
+                            exist(char(item),'file')==2
+                        absolute=lmz.util.PathGuard.canonical(char(item),true);
+                        root=lmz.util.PathGuard.canonical( ...
+                            lmz.util.ProjectPaths.root(),true);
+                        rootPrefix=[root filesep];relative='';
+                        if strncmp(absolute,rootPrefix,numel(rootPrefix))
+                            relative=strrep(absolute(numel(rootPrefix)+1:end), ...
+                                filesep,'/');
+                        end
+                        output.(matlab.lang.makeValidName([key '_SHA256']))= ...
+                            struct('relativePath',relative,'sha256', ...
+                            lmz.util.FileHash.sha256(absolute));
+                    end
+                end
+            end
+        end
+
+        function output=mergeStructs(first,second)
+            output=first;if ~isstruct(output)||~isscalar(output),output=struct();end
+            if ~isstruct(second)||~isscalar(second),return,end
+            names=fieldnames(second);
+            for index=1:numel(names),output.(names{index})=second.(names{index});end
         end
     end
 end
