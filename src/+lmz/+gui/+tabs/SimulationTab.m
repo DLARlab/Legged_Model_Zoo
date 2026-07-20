@@ -14,15 +14,27 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
         LoopCheckBox
         ForceCheckBox
         TrajectoryModeDropDown
+        VisualProfileDropDown
+        DetailedOverlayCheckBox
+        GroundStyleDropDown
+        CameraFollowCheckBox
+        ResetCameraButton
+        ProfileMetadataLabel
         SimulateButton
         AnimationRenderer
         AnimationPlayer
+        ProfileRegistry
+        RendererFactory
+        CurrentProfile
     end
 
     methods
         function obj=SimulationTab(parent,controller,eventBus,preferences,varargin)
             tab=uitab(parent,'Title','Physical Simulation','Tag','lmz-tab-simulation');
             obj@lmz.gui.tabs.BaseTab(tab,controller,eventBus,preferences,varargin{:});
+            obj.ProfileRegistry=lmz.viz.VisualizationProfileRegistry(controller.Registry);
+            obj.RendererFactory=lmz.viz.RendererFactory( ...
+                controller.Registry,obj.ProfileRegistry);
             obj.Id='simulation';obj.CapabilityName='simulate';obj.build();
             obj.subscribe({lmz.gui.PresentationEvents.ModelChanged, ...
                 lmz.gui.PresentationEvents.ProblemChanged, ...
@@ -35,7 +47,7 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
 
         function build(obj)
             rootGrid=uigridlayout(obj.Root,[3 2]);
-            rootGrid.RowHeight={'1x','1x',82};rootGrid.ColumnWidth={'1.12x','1x'};
+            rootGrid.RowHeight={'1x','1x',150};rootGrid.ColumnWidth={'1.12x','1x'};
             obj.Axes=uiaxes(rootGrid,'Tag','lmz-simulation-animation');place(obj.Axes,[1 2],1);
             title(obj.Axes,'Select and simulate a branch point');
             trajectories=uitabgroup(rootGrid);place(trajectories,1,2);
@@ -45,9 +57,9 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
             lower=uigridlayout(rootGrid,[1 2]);place(lower,2,2);
             obj.GRFAxes=uiaxes(lower,'Tag','lmz-simulation-grf');
             obj.OscillatorAxes=uiaxes(lower,'Tag','lmz-simulation-oscillator');
-            controls=uigridlayout(rootGrid,[2 12]);place(controls,3,[1 2]);
-            controls.RowHeight={30,34};
-            controls.ColumnWidth={110,'1x','1x','1x',72,36,64,42,48,55,70,100};
+            controls=uigridlayout(rootGrid,[4 12]);place(controls,3,[1 2]);
+            controls.RowHeight={30,30,22,34};
+            controls.ColumnWidth={110,'1x','1x','1x',72,58,84,66,72,86,92,105};
             label=uilabel(controls,'Text','Normalized stride');place(label,1,1);
             obj.TimeSlider=uislider(controls,'Limits',[0 1],'Tag','lmz-simulation-time', ...
                 'Tooltip','Scrub through normalized stride time.', ...
@@ -64,13 +76,46 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
                 'Tag','lmz-simulation-speed','Tooltip','Playback speed multiplier.');place(obj.SpeedSpinner,1,9);
             obj.LoopCheckBox=uicheckbox(controls,'Text','Loop','Value',false, ...
                 'Tag','lmz-simulation-loop');place(obj.LoopCheckBox,1,10);
-            obj.ForceCheckBox=uicheckbox(controls,'Text','Forces','Value',true, ...
-                'Tag','lmz-simulation-forces','Tooltip','Show physical force arrows when supported.', ...
-                'ValueChangedFcn',@(~,~)obj.forceChanged());place(obj.ForceCheckBox,1,11);
             obj.TrajectoryModeDropDown=uidropdown(controls,'Items',{'Complete','Progressive'}, ...
                 'Value','Complete','Tag','lmz-simulation-trajectory-mode', ...
                 'Tooltip','Show complete trajectories or reveal them progressively.', ...
-                'ValueChangedFcn',@(~,~)obj.frameChanged(obj.NormalizedTimeField.Value,[]));place(obj.TrajectoryModeDropDown,1,12);
+                'ValueChangedFcn',@(~,~)obj.frameChanged(obj.NormalizedTimeField.Value,[]));
+            place(obj.TrajectoryModeDropDown,1,[11 12]);
+
+            label=uilabel(controls,'Text','Visual profile');place(label,2,1);
+            obj.VisualProfileDropDown=uidropdown(controls, ...
+                'Items',{'Clean generic'},'ItemsData',{'clean_generic'}, ...
+                'Value','clean_generic','Tag','lmz-simulation-visual-profile', ...
+                'Tooltip','Choose research legacy, clean generic, or high-contrast graphics.', ...
+                'ValueChangedFcn',@(~,~)obj.profileChanged());
+            place(obj.VisualProfileDropDown,2,[2 4]);
+            obj.DetailedOverlayCheckBox=uicheckbox(controls,'Text','Detailed', ...
+                'Value',false,'Tag','lmz-simulation-detailed-overlay', ...
+                'Tooltip','Show source phase/details overlay where supported.', ...
+                'ValueChangedFcn',@(~,~)obj.visualOptionsChanged());place(obj.DetailedOverlayCheckBox,2,5);
+            label=uilabel(controls,'Text','Ground');place(label,2,6);
+            obj.GroundStyleDropDown=uidropdown(controls, ...
+                'Items',{'Line','Hidden'},'Value','Line', ...
+                'Tag','lmz-simulation-ground-style', ...
+                'Tooltip','Choose the supported ground treatment.', ...
+                'ValueChangedFcn',@(~,~)obj.visualOptionsChanged());place(obj.GroundStyleDropDown,2,7);
+            obj.ForceCheckBox=uicheckbox(controls,'Text','Forces','Value',false, ...
+                'Tag','lmz-simulation-forces','Tooltip','Show physical force arrows when supported.', ...
+                'ValueChangedFcn',@(~,~)obj.visualOptionsChanged());place(obj.ForceCheckBox,2,8);
+            obj.CameraFollowCheckBox=uicheckbox(controls,'Text','Follow', ...
+                'Value',true,'Tag','lmz-simulation-camera-follow', ...
+                'Tooltip','Keep the profile camera centered on the moving model.', ...
+                'ValueChangedFcn',@(~,~)obj.visualOptionsChanged());place(obj.CameraFollowCheckBox,2,9);
+            obj.ResetCameraButton=uibutton(controls,'Text','Reset camera', ...
+                'Tag','lmz-simulation-reset-camera', ...
+                'Tooltip','Restore the selected profile camera.', ...
+                'ButtonPushedFcn',@(~,~)obj.resetCamera());place(obj.ResetCameraButton,2,10);
+            paletteLabel=uilabel(controls,'Text','Profile controls renderer palette', ...
+                'HorizontalAlignment','center');place(paletteLabel,2,[11 12]);
+            obj.ProfileMetadataLabel=uilabel(controls,'Text','', ...
+                'Tag','lmz-simulation-profile-metadata', ...
+                'FontAngle','italic','HorizontalAlignment','left');
+            place(obj.ProfileMetadataLabel,3,[1 12]);
             labels={'Play','Pause','Stop','Reset','Simulate point','GIF…','MP4…', ...
                 'Keyframes…','Export plots…','Oscillator GIF…','Cancel export'};
             tags={'play','pause','stop','reset','simulate','gif','mp4','keyframes', ...
@@ -83,17 +128,20 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
             for index=1:numel(labels)
                 buttons{index}=uibutton(controls,'Text',labels{index}, ...
                     'Tag',['lmz-simulation-' tags{index}], ...
-                    'ButtonPushedFcn',@(~,~)callbacks{index}());place(buttons{index},2,index);
+                    'ButtonPushedFcn',@(~,~)callbacks{index}());place(buttons{index},4,index);
             end
             obj.SimulateButton=buttons{5};
             obj.ActionControls=[buttons(1:10) {obj.TimeSlider obj.NormalizedTimeField ...
                 obj.FPSSpinner obj.SpeedSpinner obj.LoopCheckBox obj.ForceCheckBox ...
-                obj.TrajectoryModeDropDown}];
+                obj.TrajectoryModeDropDown obj.VisualProfileDropDown ...
+                obj.DetailedOverlayCheckBox obj.GroundStyleDropDown ...
+                obj.CameraFollowCheckBox obj.ResetCameraButton}];
             obj.CancelControls=buttons(11);
         end
 
         function refresh(obj,varargin)
             refresh@lmz.gui.tabs.BaseTab(obj);
+            obj.refreshProfileControls();
             simulation=obj.Controller.State.Simulation;
             if isempty(simulation)
                 obj.clearPresentation();return
@@ -128,11 +176,14 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
         end
 
         function beforeDelete(obj)
-            obj.stop();
-            if ~isempty(obj.AnimationPlayer)&&isvalid(obj.AnimationPlayer)
-                obj.AnimationPlayer.FrameChangedFcn=[];delete(obj.AnimationPlayer);
-            end
-            obj.AnimationPlayer=[];obj.AnimationRenderer=[];
+            obj.disposeAnimation();
+        end
+
+        function value=cancelControlsEnabled(obj)
+            recording=obj.Controller.State.RecordingState;
+            value=obj.IsBusy&&isstruct(recording)&&isscalar(recording)&& ...
+                isfield(recording,'Active')&&islogical(recording.Active)&& ...
+                isscalar(recording.Active)&&recording.Active;
         end
 
         function controls=controlMap(obj)
@@ -140,7 +191,14 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
                 'BackLegAxes',obj.BackLegAxes,'FrontLegAxes',obj.FrontLegAxes, ...
                 'GRFAxes',obj.GRFAxes,'OscillatorAxes',obj.OscillatorAxes, ...
                 'TimeSlider',obj.TimeSlider,'NormalizedTimeField',obj.NormalizedTimeField, ...
-                'FPSSpinner',obj.FPSSpinner,'SimulateButton',obj.SimulateButton);
+                'FPSSpinner',obj.FPSSpinner,'SimulateButton',obj.SimulateButton, ...
+                'VisualProfileDropDown',obj.VisualProfileDropDown, ...
+                'ForceCheckBox',obj.ForceCheckBox, ...
+                'DetailedOverlayCheckBox',obj.DetailedOverlayCheckBox, ...
+                'GroundStyleDropDown',obj.GroundStyleDropDown, ...
+                'CameraFollowCheckBox',obj.CameraFollowCheckBox, ...
+                'ResetCameraButton',obj.ResetCameraButton, ...
+                'ProfileMetadataLabel',obj.ProfileMetadataLabel);
         end
     end
 
@@ -150,60 +208,137 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
         end
 
         function renderSimulation(obj,simulation)
-            obj.stop();obj.AnimationRenderer=[];obj.AnimationPlayer=[];
+            obj.disposeAnimation();
             modelId=obj.Controller.State.ModelId;
+            problemId=obj.Controller.State.ProblemId;
             try
-                switch modelId
-                    case 'slip_quadruped'
-                        obj.AnimationRenderer=lmzmodels.slip_quadruped.QuadrupedRenderer(obj.Axes,simulation);
-                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotTorso(obj.TorsoAxes,simulation);
-                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotBackLegs(obj.BackLegAxes,simulation);
-                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotFrontLegs(obj.FrontLegAxes,simulation);
-                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotGRF(obj.GRFAxes,simulation);
-                        lmzmodels.slip_quadruped.QuadrupedPlotProvider.plotOscillator(obj.OscillatorAxes,simulation);
-                    case 'slip_biped'
-                        obj.AnimationRenderer=lmzmodels.slip_biped.BipedRenderer(obj.Axes,simulation);
-                        lmzmodels.slip_biped.BipedPlotProvider.plotBody(obj.TorsoAxes,simulation);
-                        lmzmodels.slip_biped.BipedPlotProvider.plotLegs(obj.BackLegAxes,simulation);
-                        lmzmodels.slip_biped.BipedPlotProvider.plotFootfall(obj.FrontLegAxes,simulation);
-                        lmzmodels.slip_biped.BipedPlotProvider.plotGRF(obj.GRFAxes,simulation);
-                        lmzmodels.slip_biped.BipedPlotProvider.plotFootfall(obj.OscillatorAxes,simulation);
-                    case 'slip_quad_load'
-                        obj.AnimationRenderer=lmzmodels.slip_quad_load.QuadLoadRenderer(obj.Axes,simulation);
-                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotBodyAndLegs(obj.TorsoAxes,simulation);
-                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotLoad(obj.BackLegAxes,simulation);
-                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotFootfall(obj.FrontLegAxes,simulation);
-                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotGRF(obj.GRFAxes,simulation);
-                        lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotTugline(obj.OscillatorAxes,simulation);
-                    otherwise
-                        if ~obj.renderPlugin(simulation),obj.renderGeneric(simulation);end
+                options=obj.rendererOptions();
+                [obj.AnimationRenderer,obj.CurrentProfile]= ...
+                    obj.RendererFactory.createRenderer(obj.Axes,simulation, ...
+                    modelId,problemId,obj.VisualProfileDropDown.Value,options);
+                axesMap=struct('Torso',obj.TorsoAxes,'Back',obj.BackLegAxes, ...
+                    'Front',obj.FrontLegAxes,'Forces',obj.GRFAxes, ...
+                    'Auxiliary',obj.OscillatorAxes);
+                if ~obj.RendererFactory.renderPlots(axesMap,simulation, ...
+                        modelId,obj.CurrentProfile)
+                    obj.renderGenericPlots(simulation);
                 end
-                if ~isempty(obj.AnimationRenderer)&&isprop(obj.AnimationRenderer,'ShowForces')
-                    obj.AnimationRenderer.ShowForces=obj.ForceCheckBox.Value;
-                end
+                obj.updateProfileMetadata();
                 if ~isempty(obj.AnimationRenderer)
                     obj.AnimationPlayer=lmz.gui.AnimationController(simulation,obj.AnimationRenderer);
                     obj.AnimationPlayer.FrameChangedFcn=@(value,index)obj.frameChanged(value,index);
                     obj.frameChanged(0,1);
                 end
             catch exception
-                obj.renderGeneric(simulation);obj.reportError(exception);
+                obj.disposeAnimation();obj.renderGeneric(simulation);obj.reportError(exception);
             end
         end
 
-        function rendered=renderPlugin(obj,simulation)
-            rendered=false;model=obj.Controller.Registry.createModel(obj.Controller.State.ModelId);
-            if ~ismethod(model,'getVisualizationPlugin'),return,end
-            plugin=model.getVisualizationPlugin();if isempty(plugin),return,end
-            if ismethod(plugin,'createRenderer')
-                obj.AnimationRenderer=plugin.createRenderer(obj.Axes,simulation);
+        function renderGenericPlots(obj,simulation)
+            axesList={obj.TorsoAxes,obj.BackLegAxes,obj.FrontLegAxes, ...
+                obj.GRFAxes,obj.OscillatorAxes};
+            for index=1:numel(axesList),cla(axesList{index});end
+            names=simulation.StateSchema.names();
+            plot(obj.TorsoAxes,simulation.Time,simulation.States,'LineWidth',1.1);
+            grid(obj.TorsoAxes,'on');xlabel(obj.TorsoAxes,'Time');
+            title(obj.TorsoAxes,'State trajectories');
+            if numel(names)<=12,legend(obj.TorsoAxes,names,'Interpreter','none', ...
+                    'Location','best');end
+        end
+
+        function refreshProfileControls(obj)
+            try
+                modelId=obj.Controller.State.ModelId;
+                problemId=obj.Controller.State.ProblemId;
+                profiles=obj.ProfileRegistry.profilesForProblem(modelId,problemId);
+                if isempty(profiles),return,end
+                ids=cellfun(@(item)item.Id,profiles,'UniformOutput',false);
+                labels=cellfun(@(item)item.Label,profiles,'UniformOutput',false);
+                fallback=obj.ProfileRegistry.defaultProfile(modelId,problemId).Id;
+                preferred=obj.Preferences.visualizationProfile( ...
+                    modelId,problemId,fallback);
+                if ~any(strcmp(preferred,ids)),preferred=fallback;end
+                obj.VisualProfileDropDown.Items=labels;
+                obj.VisualProfileDropDown.ItemsData=ids;
+                obj.VisualProfileDropDown.Value=preferred;
+                profile=obj.ProfileRegistry.resolve(modelId,problemId,preferred);
+                obj.applyProfileControlDefaults(profile);
+                obj.CurrentProfile=profile;obj.updateProfileMetadata();
+            catch exception
+                obj.ProfileMetadataLabel.Text=['Profile configuration error: ' exception.message];
             end
-            if ismethod(plugin,'plotSimulation')
-                plugin.plotSimulation(struct('Torso',obj.TorsoAxes,'Back',obj.BackLegAxes, ...
-                    'Front',obj.FrontLegAxes,'Forces',obj.GRFAxes, ...
-                    'Auxiliary',obj.OscillatorAxes),simulation);
+        end
+
+        function profileChanged(obj)
+            try
+                modelId=obj.Controller.State.ModelId;
+                problemId=obj.Controller.State.ProblemId;
+                profileId=obj.VisualProfileDropDown.Value;
+                obj.Preferences.setVisualizationProfile(modelId,problemId,profileId);
+                profile=obj.ProfileRegistry.resolve(modelId,problemId,profileId);
+                obj.CurrentProfile=profile;
+                obj.applyProfileControlDefaults(profile);
+                simulation=obj.Controller.State.Simulation;
+                if ~isempty(simulation),obj.renderSimulation(simulation);else,obj.updateProfileMetadata();end
+            catch exception,obj.reportError(exception);end
+        end
+
+        function applyProfileControlDefaults(obj,profile)
+            obj.CameraFollowCheckBox.Value=fieldOr(profile.Camera,'follow',false);
+            if isfield(profile.RecordingProfile,'fps')
+                obj.FPSSpinner.Value=profile.RecordingProfile.fps;
             end
-            rendered=~isempty(obj.AnimationRenderer)||ismethod(plugin,'plotSimulation');
+            obj.ForceCheckBox.Value=any(strcmp('force_vectors',profile.Overlays));
+            obj.DetailedOverlayCheckBox.Value= ...
+                any(strcmp('detailed_phase',profile.Overlays));
+            [items,value]=groundControlDefaults(profile);
+            obj.GroundStyleDropDown.Items=items;
+            obj.GroundStyleDropDown.Value=value;
+        end
+
+        function visualOptionsChanged(obj)
+            if isempty(obj.AnimationRenderer)||~isvalid(obj.AnimationRenderer),return,end
+            try,obj.AnimationRenderer.setOptions(obj.rendererOptions());
+            catch exception,obj.reportError(exception);end
+        end
+
+        function options=rendererOptions(obj)
+            ground=obj.GroundStyleDropDown.Value;
+            options=struct('ShowForces',logical(obj.ForceCheckBox.Value), ...
+                'DetailedOverlay',logical(obj.DetailedOverlayCheckBox.Value), ...
+                'GroundVisible',~strcmp(ground,'Hidden'), ...
+                'CameraFollow',logical(obj.CameraFollowCheckBox.Value), ...
+                'GroundStyle',lower(ground), ...
+                'Palette',obj.VisualProfileDropDown.Value);
+        end
+
+        function updateProfileMetadata(obj)
+            if isempty(obj.CurrentProfile)
+                obj.ProfileMetadataLabel.Text='';return
+            end
+            obj.ProfileMetadataLabel.Text=sprintf( ...
+                '%s — renderer: %s — plot profile: %s', ...
+                obj.CurrentProfile.Label,obj.CurrentProfile.RendererClass, ...
+                obj.CurrentProfile.PlotProfile);
+        end
+
+        function resetCamera(obj)
+            if isempty(obj.AnimationRenderer)||~isvalid(obj.AnimationRenderer),return,end
+            try
+                obj.AnimationRenderer.resetCamera();
+                obj.CameraFollowCheckBox.Value=obj.AnimationRenderer.CameraFollow;
+            catch exception,obj.reportError(exception);end
+        end
+
+        function disposeAnimation(obj)
+            obj.stop();
+            if ~isempty(obj.AnimationPlayer)&&isvalid(obj.AnimationPlayer)
+                obj.AnimationPlayer.FrameChangedFcn=[];delete(obj.AnimationPlayer);
+            end
+            if ~isempty(obj.AnimationRenderer)&&isvalid(obj.AnimationRenderer)
+                delete(obj.AnimationRenderer);
+            end
+            obj.AnimationPlayer=[];obj.AnimationRenderer=[];
         end
 
         function renderGeneric(obj,simulation)
@@ -250,14 +385,8 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
         function pause(obj),if ~isempty(obj.AnimationPlayer),obj.AnimationPlayer.pause();end,end
         function stop(obj),if ~isempty(obj.AnimationPlayer)&&isvalid(obj.AnimationPlayer),obj.AnimationPlayer.stop();end,end
         function reset(obj),if ~isempty(obj.AnimationPlayer),obj.AnimationPlayer.reset();end,end
-        function forceChanged(obj)
-            if ~isempty(obj.AnimationRenderer)&&isprop(obj.AnimationRenderer,'ShowForces')
-                obj.AnimationRenderer.ShowForces=obj.ForceCheckBox.Value;
-                obj.AnimationRenderer.updateFrame(obj.AnimationRenderer.CurrentIndex);
-            end
-        end
-        function recordGif(obj),obj.record('gif','*.gif','Save scientific animation',struct('FrameCount',40));end
-        function recordMP4(obj),obj.record('mp4','*.mp4','Save scientific video',struct('FrameCount',60,'FPS',obj.FPSSpinner.Value));end
+        function recordGif(obj),obj.record('gif','*.gif','Save scientific animation',struct());end
+        function recordMP4(obj),obj.record('mp4','*.mp4','Save scientific video',struct('FPS',obj.FPSSpinner.Value));end
         function recordKeyframes(obj),obj.record('keyframes',{'*.png';'*.pdf'},'Export animation keyframes',struct('NormalizedTimes',[0 .25 .5 .75 1]));end
         function record(obj,format,filter,titleText,options)
             if isempty(obj.AnimationRenderer),obj.simulate();end
@@ -265,6 +394,8 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
             start=obj.Preferences.recentOutputFolder(pwd);
             [file,path]=uiputfile(filter,titleText,start);if isequal(file,0),return,end
             try
+                options=obj.profileRecordingOptions(format,options);
+                options.Metadata=obj.profileMetadata(['animation_' format]);
                 obj.Controller.recordAnimation(format,fullfile(path,file), ...
                     obj.AnimationRenderer,options);obj.Preferences.rememberOutputFolder(path);
                 obj.frameChanged(obj.AnimationPlayer.NormalizedTime,[]);
@@ -277,8 +408,10 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
             [file,path]=uiputfile(fullfile(start,'*.gif'),'Save oscillator GIF');
             if isequal(file,0),return,end
             try
+                options=obj.profileRecordingOptions('gif',struct());
+                options.Metadata=obj.profileMetadata('oscillator_gif');
                 obj.Controller.recordAxesGif(obj.OscillatorAxes,@(phase)obj.updateCursor(phase), ...
-                    fullfile(path,file),struct('FrameCount',40));
+                    fullfile(path,file),options);
                 obj.Preferences.rememberOutputFolder(path);
                 obj.updateCursor(obj.NormalizedTimeField.Value);
             catch exception,obj.reportError(exception);end
@@ -298,19 +431,57 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
             suffix={'torso','back_legs','front_legs','grf','oscillator'};
             try
                 for index=1:numel(axesList)
+                    metadata=obj.profileMetadata(['plot_' suffix{index}]);
+                    options=obj.profileRecordingOptions('plot', ...
+                        struct('Metadata',metadata));
                     obj.Controller.exportPlot(axesList{index}, ...
-                        fullfile(path,sprintf('%s_%s%s',name,suffix{index},extension)));
+                        fullfile(path,sprintf('%s_%s%s',name,suffix{index},extension)), ...
+                        options);
                 end
                 obj.Preferences.rememberOutputFolder(path);
             catch exception,obj.reportError(exception);end
         end
         function clearPresentation(obj)
-            obj.stop();obj.AnimationRenderer=[];obj.AnimationPlayer=[];
+            obj.disposeAnimation();
             obj.clearAxesOnly();obj.TimeSlider.Value=0;obj.NormalizedTimeField.Value=0;
         end
         function clearAxesOnly(obj)
             values=[obj.Axes obj.TorsoAxes obj.BackLegAxes obj.FrontLegAxes obj.GRFAxes obj.OscillatorAxes];
             for index=1:numel(values),if isgraphics(values(index)),cla(values(index));end,end
+        end
+
+        function options=profileRecordingOptions(obj,format,options)
+            if nargin<3||isempty(options),options=struct();end
+            if isempty(obj.CurrentProfile),return,end
+            recording=obj.CurrentProfile.RecordingProfile;
+            if isfield(recording,'frameCount')&&~isfield(options,'FrameCount')&& ...
+                    any(strcmp(format,{'gif','mp4'}))
+                options.FrameCount=recording.frameCount;
+            end
+            if isfield(recording,'fps')
+                if strcmp(format,'gif')&&~isfield(options,'DelayTime')
+                    options.DelayTime=1/recording.fps;
+                elseif strcmp(format,'mp4')&&~isfield(options,'FPS')
+                    options.FPS=recording.fps;
+                end
+            end
+            if isfield(recording,'dpi')&&~isfield(options,'DPI')
+                options.DPI=recording.dpi;
+            end
+            if isfield(recording,'backgroundColor')
+                options.BackgroundColor=recording.backgroundColor;
+            end
+        end
+
+        function metadata=profileMetadata(obj,artifactKind)
+            metadata=struct();
+            if isempty(obj.CurrentProfile),return,end
+            metadata=struct('schemaVersion','1.0.0', ...
+                'artifactKind',artifactKind, ...
+                'modelId',obj.Controller.State.ModelId, ...
+                'problemId',obj.Controller.State.ProblemId, ...
+                'visualizationProfile',obj.CurrentProfile.toStruct(), ...
+                'createdAt',lmz.compat.Timestamp.current());
         end
     end
 end
@@ -320,3 +491,25 @@ tab=uitab(group,'Title',titleText);layout=uigridlayout(tab,[1 1]);
 layout.Padding=[8 8 8 8];axesHandle=uiaxes(layout,'Tag',tag);
 end
 function place(control,row,column),control.Layout.Row=row;control.Layout.Column=column;end
+
+function [items,value]=groundControlDefaults(profile)
+if strcmp(profile.Id,'clean_generic')||~isempty(profile.ScenePath)
+    % Declarative scenes and clean profiles define a line ground.
+    items={'Line','Hidden'};value='Line';return
+end
+researchProfile=any(strcmp(profile.Id,{'research_legacy','high_contrast'}));
+if researchProfile&&any(strcmp('phase',profile.Layers))
+    % Compound profiles with a phase layer support suppressing the hatch.
+    items={'Hatched','Line','Hidden'};value='Hatched';return
+end
+if researchProfile
+    % Remaining built-in research profiles own source-faithful hatching.
+    items={'Hatched','Hidden'};value='Hatched';return
+end
+% Unknown custom renderers receive the conservative generic line control.
+items={'Line','Hidden'};value='Line';
+end
+
+function value=fieldOr(source,name,fallback)
+if isfield(source,name),value=source.(name);else,value=fallback;end
+end

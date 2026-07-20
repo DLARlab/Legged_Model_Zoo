@@ -2,7 +2,7 @@
 
 ## Environment
 
-- Date: 2026-07-19
+- Date: 2026-07-19 Round 8 status refresh
 - MATLAB: `25.2.0.3177638 (R2025b) Update 5`, Apple silicon
 - License: Student License
 - Operating system: macOS 26.5.2 (build 25F84), arm64
@@ -14,7 +14,134 @@ MATLAB R2019b is the compatibility target, but no R2019b installation is
 available. Runtime verification is therefore R2025b-only; the R2019b result
 below is a static audit and is not described as execution evidence.
 
-## Final Round 7 release-candidate gates
+## Round 8 research graphics verification
+
+Round 8 adds three selectable profiles to each scientific model:
+`research_legacy`, `clean_generic`, and `high_contrast`. The research and
+high-contrast paths use compound source-derived geometry; the clean path
+remains the explicit tutorial/generic alternative. Focused profile, factory,
+renderer lifecycle, classic-axes/UIAxes, recording, geometry, plot, image, and
+performance gates pass on the recorded R2025b platform. The clean closing suite
+also includes every retained scientific, generic scene/plugin, GUI, release,
+security, compatibility, and clean-copy isolation gate.
+
+### Numeric geometry evidence
+
+| Model | Pinned source | Verified geometry evidence |
+|---|---|---|
+| `slip_quadruped` | `2c106101383ecee1b2a9d695efe09fbd72d5718a` | Body, compound legs/springs, COM, dense ground, and phase geometry compare with maximum absolute error `<= 2.22e-16`. |
+| `slip_biped` | `4595146c5881a5313bc8fe92de85099193ef9be9` | Body, quartered COG, left/right compound legs, contact-length behavior, and dense ground compare directly with repository-contained captured numeric fixtures. |
+| `slip_quad_load` | `19f3133073c988cc0c3424a647b4adbb60a90b99` plus shared quadruped geometry | Load vertices, duplicated rope endpoints, source camera/aspect, and exact-boundary-later-row stride selection compare directly with fixtures; renderer frames reuse the quadruped providers. |
+
+Ordinary geometry and renderer tests use repository fixtures only. Pinned
+source checkouts are maintainer inputs for recapture/comparison and are not
+runtime dependencies.
+
+### Headless source-versus-LMZ image evidence
+
+The maintainer comparison rendered matched source and LMZ cameras headlessly
+on R2025b/macOS arm64. Values below summarize five quadruped cases, seven biped
+cases, and six load cases:
+
+| Model | Max normalized RMSE | Min edge overlap | Min foreground bbox | Min color-cluster agreement |
+|---|---:|---:|---:|---:|
+| `slip_quadruped` | `0.067967` | `0.856892` | `0.849379` | `0.972641` |
+| `slip_biped` | `0.012645` | `0.992179` | `1` | `0.987551` |
+| `slip_quad_load` | `0.047254` | `0.895824` | `0.871708` | `0.987968` |
+
+These are automated batch-image metrics, not human approval. Geometry tests
+remain the primary cross-platform fidelity gate. Only numeric metric JSON and
+geometry fixtures are committed under `docs/graphics-comparison/` and
+`tests/fixtures/graphics/`; no source, LMZ, golden, or difference raster is
+committed.
+
+### Research renderer performance
+
+`TestResearchRendererPerformance` uses repository-contained simulations and
+two warm R2025b repetitions. It measures construction, 100 in-place frame
+updates, research-to-high-contrast switching, and `captureFrame`:
+
+| Model | Construction | 100 updates | Per update | Profile switch | Capture | Stable handles |
+|---|---:|---:|---:|---:|---:|---:|
+| `slip_quadruped` | `0.132850 s` | `0.305031 s` | `0.003050 s` | `0.053857 s` | `0.845295 s` | 49 |
+| `slip_biped` | `0.098046 s` | `0.179934 s` | `0.001799 s` | `0.023515 s` | `0.972726 s` | 12 |
+| `slip_quad_load` | `0.110917 s` | `0.430181 s` | `0.004302 s` | `0.026733 s` | `0.802519 s` | 34 |
+
+Every handle identity remained stable through all 100 updates; profile
+switching preserved the current frame and retained a research renderer. Dense
+20,002-vertex ground construction measured `0.000846 s` (quadruped) and
+`0.001696 s` (biped); 100 quadruped phase-geometry updates measured
+`0.013663 s`. Fixed test budgets are deliberately much larger for slower CI
+graphics backends.
+
+### Round 8 qualifications
+
+- Human source-versus-LMZ desktop review is blocked because no interactive
+  MATLAB desktop/display is available. `MANUAL_DESKTOP_QA.md` remains pending.
+- R2019b compatibility is static/fallback-only; no R2019b renderer execution is
+  claimed.
+- No redistribution conclusion changed. Adapted geometry, fixtures, and any
+  potential rasters remain subject to unresolved framework/scientific-source
+  authority, and no raster is committed.
+- Public release remains blocked by the framework and scientific-source
+  authority decisions recorded below; a technically green internal candidate
+  is not a redistribution grant.
+
+## Final Round 8 release-candidate gates
+
+The authoritative clean R2025b run completed:
+
+```text
+Legged Model Zoo: 275 run, 0 failed, 0 incomplete.
+LMZ_ROUND8_FINAL_SUITE total=275 passed=275 failed=0 incomplete=0
+```
+
+All public examples then ran successfully, including the three model-specific
+research demos, live profile switching, selected-profile recording, and the
+three-model comparison gallery:
+
+```text
+LMZ_GRAPHICS_COMPARISON_GALLERY_OK models=3 profiles=3 canonical_frames=27 source_reports=3
+LMZ_PUBLIC_EXAMPLES_OK files=31
+```
+
+The clean-copy child MATLAB gate copied the repository beneath an otherwise
+empty temporary parent, did not add any sibling source repository to the path,
+and rendered/captured the selected research profile for all three scientific
+models:
+
+```text
+ISOLATED_RESEARCH_GRAPHICS_OK slip_biped,slip_quadruped,slip_quad_load
+ISOLATED_ALL_SCIENTIFIC_MODELS_OK
+```
+
+Closing structural and quality evidence is:
+
+```text
+LMZ_CODE_QUALITY files=206 violations=0 allowed=146 missingHelp=36 complexity=5 excludedLegacy=5
+R2019b static compatibility: 436 files, 0 violations
+Redistribution inventory: 628 files, 613 selected scientific blockers, project decision unresolved
+```
+
+`missingHelp` and `complexity` remain visible informational findings. The
+R2019b number is a static syntax/API scan on R2025b, not runtime execution.
+All 18 source-versus-LMZ comparison cases passed in three separate MATLAB
+processes; their scalar reports record `humanApproved: false` and no raster is
+retained.
+
+The closing programmatic-coverage run used the same frozen tree, instrumented
+every runtime MATLAB file below `src/+lmz` and `models/+lmzmodels`, enforced the
+tracked stable-package floors, and excluded no runtime file:
+
+```text
+LMZ_COVERAGE_OK files=204 packages=25 statements=9601/12546 rate=0.7653
+LMZ_ROUND8_COVERAGE tests=275 passed=275 failed=0 incomplete=0 files=204 covered=9601 total=12546 rate=0.76526383 duration=508.587264
+```
+
+This is a new Round 8 measurement. The Round 7 policy values below remain the
+starting regression floors and were verified rather than rewritten.
+
+## Historical Round 7 release-candidate gates
 
 Canonical command:
 
@@ -362,5 +489,7 @@ execution was approximately 31.3 seconds.
   for quadruped code/data, biped code/data scope, and load code/data. See
   `docs/REDISTRIBUTION_STATUS.md`.
 
-No remaining technical test, example, architecture, hash, isolation, or README
-contract failure is known in the R2025b environment.
+No automated Round 8 failure is known in the recorded R2025b environment. The
+remaining gates are human desktop/side-by-side review, R2019b runtime, remote
+CI execution, and explicit framework/scientific redistribution authority; none
+is inferred from the green batch results.

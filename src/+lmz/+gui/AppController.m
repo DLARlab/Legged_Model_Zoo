@@ -651,7 +651,10 @@ classdef AppController < handle
             switch lower(format)
                 case 'gif',service.recordGif(renderer,path,options,recordContext);
                 case {'mp4','mpeg-4'},service.recordMP4(renderer,path,options,recordContext);
-                case 'keyframes',service.exportKeyframes(renderer,path,fieldOr(options,'NormalizedTimes',[0 .25 .5 .75 1]),recordContext);
+                case 'keyframes',service.exportKeyframes(renderer,path, ...
+                        fieldOr(options,'NormalizedTimes',[0 .25 .5 .75 1]), ...
+                        recordContext,fieldOr(options,'Metadata',struct()), ...
+                        fieldOr(options,'DPI',150),options);
                 otherwise,error('lmz:GUI:RecordingFormat','Unknown recording format %s.',format);
             end
             clear cleanup
@@ -661,7 +664,10 @@ classdef AppController < handle
             recordContext=lmz.api.RunContext.synchronous(obj.Context.RandomSeed);obj.State.RecordingState=struct('Active',true,'Format','axes-gif','Path',path,'Context',recordContext);
             cleanup=onCleanup(@()obj.finishRecording());lmz.services.RecorderService().recordAxesGif(axesHandle,frameFcn,path,options,recordContext);clear cleanup
         end
-        function exportPlot(~,axesHandle,path),lmz.services.RecorderService().exportPlot(axesHandle,path);end
+        function exportPlot(~,axesHandle,path,options)
+            if nargin<4,options=struct();end
+            lmz.services.RecorderService().exportPlot(axesHandle,path,options);
+        end
         function stopRecording(obj),if isstruct(obj.State.RecordingState)&&isfield(obj.State.RecordingState,'Active')&&obj.State.RecordingState.Active&&isfield(obj.State.RecordingState,'Context'),obj.State.RecordingState.Context.Cancellation.cancel();end,end
         function names=bodyTrajectoryNames(obj)
             if isempty(obj.State.Simulation),names={};return,end

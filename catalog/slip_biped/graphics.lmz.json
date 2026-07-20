@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "1.0.0",
+  "defaultProfileByMaturity": {
+    "validated": "research_legacy",
+    "tutorial": "clean_generic",
+    "compatibility": "clean_generic",
+    "experimental": "clean_generic"
+  },
+  "requiredFrames": ["world", "body", "foot_left", "foot_right"],
+  "requiredParameters": [],
+  "profiles": [
+    {
+      "id": "research_legacy",
+      "label": "Research legacy",
+      "rendererClass": "lmzmodels.slip_biped.ResearchRenderer",
+      "styleFile": "graphics/research_legacy_style.json",
+      "camera": {
+        "xLimits": [-1.5, 1.5],
+        "yLimits": [-0.3, 2.0],
+        "dataAspectRatio": [1, 1, 1],
+        "follow": true,
+        "followWindow": 3.0
+      },
+      "axis": {
+        "equal": true,
+        "grid": false,
+        "visible": false,
+        "backgroundColor": [1, 1, 1]
+      },
+      "layers": ["legs", "ground", "body", "com"],
+      "overlays": [],
+      "plotProfile": "research_legacy",
+      "recordingProfile": {
+        "fps": 30,
+        "dpi": 120,
+        "backgroundColor": [1, 1, 1]
+      },
+      "maturities": ["validated"]
+    },
+    {
+      "id": "clean_generic",
+      "label": "Clean generic",
+      "rendererClass": "lmzmodels.slip_biped.BipedRenderer",
+      "styleFile": "graphics/clean_generic_style.json",
+      "camera": {
+        "dataAspectRatio": [1, 1, 1],
+        "follow": false
+      },
+      "axis": {
+        "equal": true,
+        "grid": true,
+        "visible": true,
+        "xLabel": "x",
+        "yLabel": "y",
+        "title": "Scientific SLIP biped stride",
+        "backgroundColor": [1, 1, 1]
+      },
+      "layers": ["ground", "model", "labels"],
+      "overlays": ["contacts"],
+      "plotProfile": "clean_generic",
+      "recordingProfile": {
+        "fps": 30,
+        "dpi": 120,
+        "backgroundColor": [1, 1, 1]
+      },
+      "maturities": ["tutorial", "compatibility", "validated", "experimental"]
+    },
+    {
+      "id": "high_contrast",
+      "label": "High contrast",
+      "rendererClass": "lmzmodels.slip_biped.ResearchRenderer",
+      "styleFile": "graphics/high_contrast_style.json",
+      "camera": {
+        "xLimits": [-1.5, 1.5],
+        "yLimits": [-0.3, 2.0],
+        "dataAspectRatio": [1, 1, 1],
+        "follow": true,
+        "followWindow": 3.0
+      },
+      "axis": {
+        "equal": true,
+        "grid": false,
+        "visible": false,
+        "backgroundColor": [1, 1, 1]
+      },
+      "layers": ["legs", "ground", "body", "com"],
+      "overlays": [],
+      "plotProfile": "high_contrast",
+      "recordingProfile": {
+        "fps": 30,
+        "dpi": 150,
+        "backgroundColor": [1, 1, 1]
+      },
+      "maturities": ["tutorial", "compatibility", "validated", "experimental"]
+    }
+  ]
+}

@@ -1,75 +1,134 @@
-classdef QuadrupedRenderer < handle
-    %QUADRUPEDRENDERER Frame renderer using named scientific kinematics.
-    properties (SetAccess=private)
-        Axes
-        Simulation
-        Handles = struct()
-        CurrentIndex = 1
-    end
+classdef QuadrupedRenderer < lmz.viz.Renderer
+    %QUADRUPEDRENDERER Stable clean-generic named-kinematics renderer.
+    %   Scientific profiles use ResearchRenderer. This compact renderer is
+    %   retained for direct callers and clean/tutorial visualization.
     properties
-        ShowForces = true
         ForceScale = 0.025
     end
+
     methods
-        function obj=QuadrupedRenderer(axesHandle,simulation)
-            if nargin>=1,obj.Axes=axesHandle;end
-            if nargin>=2,obj.initialize(simulation);end
-        end
-        function initialize(obj,simulation)
-            obj.Simulation=simulation;
-            if isempty(obj.Axes)||~isgraphics(obj.Axes),error('lmz:Renderer:Axes','A valid axes is required.');end
-            cla(obj.Axes);hold(obj.Axes,'on');grid(obj.Axes,'on');
-            k=simulation.Kinematics;
-            if isempty(fieldnames(k)),k=lmzmodels.slip_quadruped.KinematicsProvider.compute(simulation);end
-            xmin=min(k.FootX(:));xmax=max(k.FootX(:));span=max(xmax-xmin,1);
-            obj.Handles.Ground=plot(obj.Axes,[xmin-0.1*span xmax+0.1*span],[0 0],'k-','LineWidth',1.5);
-            obj.Handles.Body=plot(obj.Axes,nan(1,2),nan(1,2),'k-','LineWidth',7);
-            obj.Handles.Center=plot(obj.Axes,nan,nan,'ko','MarkerFaceColor',[0.15 0.15 0.15],'MarkerSize',7);
-            colors=[0.2 0.45 0.85;0.85 0.35 0.2;0.2 0.65 0.35;0.65 0.3 0.8];
-            obj.Handles.Legs=gobjects(1,4);obj.Handles.Feet=gobjects(1,4);obj.Handles.Forces=gobjects(1,4);
-            for leg=1:4
-                obj.Handles.Legs(leg)=plot(obj.Axes,nan(1,2),nan(1,2),'-','Color',colors(leg,:),'LineWidth',2.5);
-                obj.Handles.Feet(leg)=plot(obj.Axes,nan,nan,'o','Color',colors(leg,:),'MarkerSize',7,'MarkerFaceColor','w');
-                obj.Handles.Forces(leg)=quiver(obj.Axes,nan,nan,nan,nan,0,'Color',[0.75 0.1 0.1],'LineWidth',1.2);
-            end
-            obj.Handles.Phase=text(obj.Axes,0,0,'','VerticalAlignment','top','FontWeight','bold');
-            axis(obj.Axes,'equal');xlim(obj.Axes,[xmin-0.05*span,xmax+0.05*span]);
-            ymax=max(k.CenterOfMass(:,2))+0.35;ylim(obj.Axes,[-0.05,max(1,ymax)]);
-            xlabel(obj.Axes,'x');ylabel(obj.Axes,'y');title(obj.Axes,'Scientific SLIP quadruped stride');
-            obj.updateFrame(1);
-        end
-        function updateFrame(obj,index)
-            if index>=0&&index<=1&&index~=fix(index)
-                index=1+round(index*(numel(obj.Simulation.Time)-1));
-            end
-            index=max(1,min(numel(obj.Simulation.Time),round(index)));obj.CurrentIndex=index;
-            k=obj.Simulation.Kinematics;
-            if isempty(fieldnames(k)),k=lmzmodels.slip_quadruped.KinematicsProvider.compute(obj.Simulation);end
-            set(obj.Handles.Body,'XData',[k.BackAttachment(index,1),k.FrontAttachment(index,1)], ...
-                'YData',[k.BackAttachment(index,2),k.FrontAttachment(index,2)]);
-            set(obj.Handles.Center,'XData',k.CenterOfMass(index,1),'YData',k.CenterOfMass(index,2));
-            contacts={'back_left','front_left','back_right','front_right'};
-            for leg=1:4
-                set(obj.Handles.Legs(leg),'XData',[k.AttachmentX(index,leg),k.FootX(index,leg)], ...
-                    'YData',[k.AttachmentY(index,leg),k.FootY(index,leg)]);
-                inContact=obj.Simulation.Modes.(contacts{leg})(index);
-                if inContact,face=[0.9 0.2 0.15];else,face='w';end
-                set(obj.Handles.Feet(leg),'XData',k.FootX(index,leg),'YData',k.FootY(index,leg),'MarkerFaceColor',face);
-                if obj.ShowForces&&~isempty(obj.Simulation.GroundReactionForces)
-                    fx=obj.Simulation.GroundReactionForces(index,4+leg);
-                    fy=obj.Simulation.GroundReactionForces(index,8+leg);
-                    set(obj.Handles.Forces(leg),'XData',k.FootX(index,leg),'YData',k.FootY(index,leg), ...
-                        'UData',obj.ForceScale*fx,'VData',obj.ForceScale*fy,'Visible','on');
-                else,set(obj.Handles.Forces(leg),'Visible','off');end
-            end
-            limits=xlim(obj.Axes);vertical=ylim(obj.Axes);
-            set(obj.Handles.Phase,'Position',[limits(1)+0.02*diff(limits),vertical(2)-0.02*diff(vertical),0], ...
-                'String',sprintf('t/T = %.3f',obj.Simulation.Time(index)/obj.Simulation.Time(end)));
-            drawnow limitrate
-        end
-        function clear(obj)
-            if ~isempty(obj.Axes)&&isgraphics(obj.Axes),cla(obj.Axes);end
-            obj.Handles=struct();obj.Simulation=[];obj.CurrentIndex=1;
+        function obj = QuadrupedRenderer(axesHandle, simulation, profile, options)
+            if nargin < 1, axesHandle = []; end
+            if nargin < 2, simulation = []; end
+            if nargin < 3, profile = []; end
+            if nargin < 4, options = struct(); end
+            obj@lmz.viz.Renderer(axesHandle, simulation, profile, options);
         end
     end
+
+    methods (Access=protected)
+        function configureAxes(obj)
+            configureAxes@lmz.viz.Renderer(obj);
+            hold(obj.Axes, 'on');
+            if isempty(obj.Profile)
+                xlabel(obj.Axes, 'x'); ylabel(obj.Axes, 'y');
+                title(obj.Axes, 'Clean generic SLIP quadruped stride');
+            end
+        end
+
+        function buildHandles(obj)
+            kinematics = allKinematics(obj.Simulation);
+            xmin = min(kinematics.FootX(:));
+            xmax = max(kinematics.FootX(:));
+            span = max(xmax-xmin, 1);
+            obj.Handles.Ground = plot(obj.Axes, ...
+                [xmin-0.1*span, xmax+0.1*span], [0 0], 'k-', ...
+                'LineWidth', 1.5, 'Tag', 'lmz.quadruped.generic.ground');
+            obj.Handles.Body = plot(obj.Axes, nan(1, 2), nan(1, 2), ...
+                'k-', 'LineWidth', 7, ...
+                'Tag', 'lmz.quadruped.generic.body');
+            obj.Handles.Center = plot(obj.Axes, nan, nan, 'ko', ...
+                'MarkerFaceColor', [0.15 0.15 0.15], 'MarkerSize', 7, ...
+                'Tag', 'lmz.quadruped.generic.center');
+            colors = [0.2 0.45 0.85; 0.85 0.35 0.2; ...
+                0.2 0.65 0.35; 0.65 0.3 0.8];
+            obj.Handles.Legs = gobjects(1, 4);
+            obj.Handles.Feet = gobjects(1, 4);
+            obj.Handles.Forces = gobjects(1, 4);
+            for leg = 1:4
+                obj.Handles.Legs(leg) = plot(obj.Axes, nan(1, 2), ...
+                    nan(1, 2), '-', 'Color', colors(leg, :), ...
+                    'LineWidth', 2.5, 'Tag', ...
+                    sprintf('lmz.quadruped.generic.leg.%d', leg));
+                obj.Handles.Feet(leg) = plot(obj.Axes, nan, nan, 'o', ...
+                    'Color', colors(leg, :), 'MarkerSize', 7, ...
+                    'MarkerFaceColor', 'w', 'Tag', ...
+                    sprintf('lmz.quadruped.generic.foot.%d', leg));
+                obj.Handles.Forces(leg) = quiver(obj.Axes, nan, nan, ...
+                    nan, nan, 0, 'Color', [0.75 0.1 0.1], ...
+                    'LineWidth', 1.2, 'Tag', ...
+                    sprintf('lmz.quadruped.generic.force.%d', leg));
+            end
+            obj.Handles.Phase = text(obj.Axes, 0, 0, '', ...
+                'VerticalAlignment', 'top', 'FontWeight', 'bold', ...
+                'Tag', 'lmz.quadruped.generic.phase');
+            if isempty(obj.Profile)
+                xlim(obj.Axes, [xmin-0.05*span, xmax+0.05*span]);
+                ymax = max(kinematics.CenterOfMass(:, 2))+0.35;
+                ylim(obj.Axes, [-0.05, max(1, ymax)]);
+            end
+        end
+
+        function updateHandles(obj, index)
+            kinematics = allKinematics(obj.Simulation);
+            set(obj.Handles.Body, 'XData', ...
+                [kinematics.BackAttachment(index, 1), ...
+                 kinematics.FrontAttachment(index, 1)], 'YData', ...
+                [kinematics.BackAttachment(index, 2), ...
+                 kinematics.FrontAttachment(index, 2)]);
+            set(obj.Handles.Center, ...
+                'XData', kinematics.CenterOfMass(index, 1), ...
+                'YData', kinematics.CenterOfMass(index, 2));
+            contacts = {'back_left','front_left','back_right','front_right'};
+            for leg = 1:4
+                set(obj.Handles.Legs(leg), 'XData', ...
+                    [kinematics.AttachmentX(index, leg), ...
+                     kinematics.FootX(index, leg)], 'YData', ...
+                    [kinematics.AttachmentY(index, leg), ...
+                     kinematics.FootY(index, leg)]);
+                inContact = isfield(obj.Simulation.Modes, contacts{leg}) && ...
+                    obj.Simulation.Modes.(contacts{leg})(index);
+                if inContact, face = [0.9 0.2 0.15]; else, face = 'w'; end
+                set(obj.Handles.Feet(leg), ...
+                    'XData', kinematics.FootX(index, leg), ...
+                    'YData', kinematics.FootY(index, leg), ...
+                    'MarkerFaceColor', face);
+                forces = obj.Simulation.GroundReactionForces;
+                if obj.ShowForces && ~isempty(forces) && size(forces, 2) >= 12
+                    set(obj.Handles.Forces(leg), ...
+                        'XData', kinematics.FootX(index, leg), ...
+                        'YData', kinematics.FootY(index, leg), ...
+                        'UData', obj.ForceScale*forces(index, 4+leg), ...
+                        'VData', obj.ForceScale*forces(index, 8+leg), ...
+                        'Visible', 'on');
+                else
+                    set(obj.Handles.Forces(leg), 'Visible', 'off');
+                end
+            end
+            limits = xlim(obj.Axes); vertical = ylim(obj.Axes);
+            set(obj.Handles.Phase, 'Position', ...
+                [limits(1)+0.02*diff(limits), ...
+                 vertical(2)-0.02*diff(vertical), 0], ...
+                'String', sprintf('t/T = %.3f', ...
+                obj.Simulation.Time(index)/obj.Simulation.Time(end)));
+            set(obj.Handles.Ground, 'Visible', onOff(obj.GroundVisible));
+        end
+
+        function applyOptions(obj)
+            if isempty(fieldnames(obj.Handles)), return, end
+            set(obj.Handles.Ground, 'Visible', onOff(obj.GroundVisible));
+            if ~obj.ShowForces, set(obj.Handles.Forces, 'Visible', 'off'); end
+        end
+    end
+end
+
+function value = allKinematics(simulation)
+value = simulation.Kinematics;
+if isempty(fieldnames(value))
+    value = lmzmodels.slip_quadruped.KinematicsProvider.compute(simulation);
+end
+end
+
+function value = onOff(flag)
+if flag, value = 'on'; else, value = 'off'; end
 end

@@ -251,7 +251,9 @@ classdef LeggedModelZooApp < handle
             end
             runIndex=find(strcmp(names,lmz.gui.PresentationEvents.RunStateChanged),1,'last');
             if ~isempty(runIndex)
-                payload=batch(runIndex).Payload;busy=~isempty(obj.Controller.State.CurrentRun);
+                payload=batch(runIndex).Payload;
+                busy=~isempty(obj.Controller.State.CurrentRun)|| ...
+                    recordingIsActive(obj.Controller.State);
                 if isstruct(payload)&&isfield(payload,'Busy'),busy=payload.Busy;end
                 obj.setBusy(busy);
             end
@@ -385,4 +387,10 @@ end
 function setEnable(control,value)
 state='off';if value,state='on';end
 if ~isempty(control)&&isvalid(control)&&isprop(control,'Enable'),control.Enable=state;end
+end
+function value=recordingIsActive(state)
+recording=state.RecordingState;
+value=isstruct(recording)&&isscalar(recording)&& ...
+    isfield(recording,'Active')&&islogical(recording.Active)&& ...
+    isscalar(recording.Active)&&recording.Active;
 end

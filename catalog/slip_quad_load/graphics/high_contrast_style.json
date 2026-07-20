@@ -1,0 +1,62 @@
+{
+  "source": {
+    "repository": "DLARlab/SLIP_Model_Zoo and DLARlab/2025_Gait_Transitions_in_Load_Pulling_Quadrupeds_Insights",
+    "quadrupedCommit": "2c106101383ecee1b2a9d695efe09fbd72d5718a",
+    "loadCommit": "19f3133073c988cc0c3424a647b4adbb60a90b99",
+    "adaptation": "Research geometry and source stroke widths with an accessibility-oriented palette."
+  },
+  "body": {
+    "backgroundColor": [1, 1, 1],
+    "shadeColor": [0.25, 0.25, 0.25],
+    "edgeColor": [0, 0, 0],
+    "shadeWidth": 3,
+    "outlineWidth": 4
+  },
+  "leg": {
+    "springColor": [0.85, 0.2, 0],
+    "springWidth": 5,
+    "upperBackgroundColor": [1, 1, 1],
+    "shadeColor": [0.25, 0.25, 0.25],
+    "shadeWidth": 3,
+    "outlineColor": [0, 0, 0],
+    "outlineWidth": 3,
+    "lowerColor": [1, 1, 1],
+    "lowerEdgeColor": [0, 0, 0],
+    "lowerWidth": 3
+  },
+  "com": {
+    "outerColor": [1, 1, 1],
+    "edgeColor": [0, 0, 0],
+    "outerWidth": 5,
+    "innerWidth": 3,
+    "radius": 0.15
+  },
+  "ground": {
+    "fieldColor": [1, 1, 1],
+    "edgeColor": [0, 0, 0],
+    "hatchColor": [0, 0, 0],
+    "lineWidth": 0.5
+  },
+  "load": {
+    "faceColor": [1, 0.85, 0],
+    "faceAlpha": 0.3,
+    "edgeColor": [0, 0, 0],
+    "lineWidth": 2
+  },
+  "rope": {
+    "faceColor": [0, 0.25, 1],
+    "faceAlpha": 0.3,
+    "edgeColor": [0, 0.25, 1],
+    "lineWidth": 2
+  },
+  "axes": {
+    "backgroundColor": [1, 1, 1],
+    "xOffsets": [-3, 1.5],
+    "yLimits": [-0.1, 2],
+    "plotBoxAspect": [2, 1, 1],
+    "title": "SLIP Quad-Load Animation"
+  },
+  "qualifications": {
+    "geometryPolicy": "High contrast changes the palette only; it retains the complete compound research geometry, source stroke widths, camera, and layer order."
+  }
+}

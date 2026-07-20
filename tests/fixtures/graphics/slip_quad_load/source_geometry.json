@@ -1,0 +1,29 @@
+{
+  "sourceRepository": "DLARlab/2025_Gait_Transitions_in_Load_Pulling_Quadrupeds_Insights",
+  "sourceCommit": "19f3133073c988cc0c3424a647b4adbb60a90b99",
+  "sourceFiles": [
+    "Stored_Functions/Graphics/ComputeLoadGraphics.m",
+    "Stored_Functions/Graphics/SLIP_Animation_Quad_Load.m",
+    "Section3_Gait_Transition_Replication/Section3_Gait_Transition_Replication.m"
+  ],
+  "loadCenter": [-2.0, 0.8],
+  "loadVertices": [[-2.8, 0], [-1.2, 0], [-1.2, 1.6], [-2.8, 1.6]],
+  "quadrupedCenter": [0.5, 1.1],
+  "ropeVertices": [[0.5, 1.1], [0.5, 1.1], [-2.0, 0.8], [-2.0, 0.8]],
+  "camera": {"xOffsets": [-3, 1.5], "yLimits": [-0.1, 2], "plotBoxAspect": [2, 1, 1]},
+  "style": {"faceColor": [0, 0, 0], "faceAlpha": 0.3, "edgeColor": [0, 0, 0], "lineWidth": 2},
+  "parameterRows": [
+    [0.1, 0.4, 0.5, 0.8, 0.2, 0.6, 0.7, 1.0, 1.5, 8, 20, 4, 1.1, 0, 0.4, 1, 2.4],
+    [0.2, 0.5, 0.6, 0.9, 0.3, 0.7, 0.8, 1.1, 1.75, 8, 21, 4, 1.2, 0, 0.6, 1, 2.4]
+  ],
+  "selectorCases": [
+    {"time": 1.499, "strideIndex": 1, "offset": 0, "globalFirstNine": [0.1, 0.4, 0.5, 0.8, 0.2, 0.6, 0.7, 1.0, 1.5]},
+    {"time": 1.5, "strideIndex": 2, "offset": 1.5, "globalFirstNine": [1.7, 2.0, 2.1, 2.4, 1.8, 2.2, 2.3, 2.6, 3.25]},
+    {"time": 4.0, "strideIndex": 2, "offset": 1.5, "globalFirstNine": [1.7, 2.0, 2.1, 2.4, 1.8, 2.2, 2.3, 2.6, 3.25]}
+  ],
+  "qualifications": {
+    "redistribution": "Source-derived numeric fixture; authority follows the pinned source decision.",
+    "parameterSwitch": "Two-row source behavior generalized to N rows with exact-boundary-later-row semantics.",
+    "rope": "Four duplicated endpoints intentionally retain the source zero-area patch path."
+  }
+}

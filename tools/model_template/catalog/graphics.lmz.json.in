@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0.0",
+  "defaultProfileByMaturity": {
+    "tutorial": "clean_generic",
+    "compatibility": "clean_generic",
+    "validated": "clean_generic",
+    "experimental": "clean_generic"
+  },
+  "requiredFrames": ["world", "body"],
+  "requiredParameters": [],
+  "profiles": [
+    {
+      "id": "clean_generic",
+      "label": "Clean generic",
+      "rendererClass": "lmz.viz.SceneRenderer2D",
+      "sceneFile": "scene.lmz.json",
+      "styleFile": "graphics/clean_generic_style.json",
+      "camera": {"xLimits": [-0.5, 2], "yLimits": [-0.1, 1.6], "dataAspectRatio": [1, 1, 1], "follow": false},
+      "axis": {"equal": true, "grid": false, "visible": true, "xLabel": "x", "yLabel": "y", "title": "Generated {{MODEL_ID}}", "backgroundColor": [1, 1, 1]},
+      "layers": ["ground", "model", "overlay"],
+      "overlays": ["trajectory"],
+      "plotProfile": "clean_generic",
+      "recordingProfile": {"frameCount": 40, "fps": 25, "dpi": 120},
+      "maturities": ["tutorial", "compatibility", "validated", "experimental"]
+    },
+    {
+      "id": "high_contrast",
+      "label": "High contrast",
+      "rendererClass": "lmz.viz.SceneRenderer2D",
+      "sceneFile": "scene.lmz.json",
+      "styleFile": "graphics/high_contrast_style.json",
+      "camera": {"xLimits": [-0.5, 2], "yLimits": [-0.1, 1.6], "dataAspectRatio": [1, 1, 1], "follow": false},
+      "axis": {"equal": true, "grid": false, "visible": true, "xLabel": "x", "yLabel": "y", "title": "Generated {{MODEL_ID}} — high contrast", "backgroundColor": [1, 1, 1]},
+      "layers": ["ground", "model", "overlay"],
+      "overlays": ["trajectory"],
+      "plotProfile": "high_contrast",
+      "recordingProfile": {"frameCount": 40, "fps": 25, "dpi": 120},
+      "maturities": ["tutorial", "compatibility", "validated", "experimental"]
+    }
+  ]
+}

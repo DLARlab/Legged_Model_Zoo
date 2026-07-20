@@ -59,6 +59,20 @@ classdef Model < lmz.api.LeggedModel
                 'label',{'Quadruped and load','Footfall sequence','Body and leg states', ...
                 'Load states','Ground reaction force','Tugline force','Sensitivity','R-squared'});
         end
+        function plotSimulation(~,axesMap,simulation,profile)
+            %PLOTSIMULATION Select source-derived or clean plotting behavior
+            % through the current visualization profile.
+            lmzmodels.slip_quad_load.QuadLoadPlotProvider. ...
+                plotBodyAndLegs(axesMap.Torso,simulation,profile);
+            lmzmodels.slip_quad_load.QuadLoadPlotProvider. ...
+                plotLoad(axesMap.Back,simulation,profile);
+            lmzmodels.slip_quad_load.QuadLoadPlotProvider. ...
+                plotFootfall(axesMap.Front,simulation,[],profile);
+            lmzmodels.slip_quad_load.QuadLoadPlotProvider. ...
+                plotGRF(axesMap.Forces,simulation,profile);
+            lmzmodels.slip_quad_load.QuadLoadPlotProvider. ...
+                plotTugline(axesMap.Auxiliary,simulation,[],profile);
+        end
     end
     methods (Access=private)
         function result=simulateTutorial(obj,request,context)

@@ -2,11 +2,17 @@ function violations=static_architecture_check(root)
 % Check forbidden constructs in generic framework packages.
 files=[dir(fullfile(root,'src','+lmz','**','*.m')); ...
     dir(fullfile(root,'models','+lmzmodels','**','*.m'))]; violations={};
+getframeOwner=fullfile(root,'src','+lmz','+compat','Graphics.m');
 patterns={'\<global\>','restoredefaultpath','addpath\s*\(\s*genpath','\<eval(in)?\s*\(','\<assignin\s*\('};
 for k=1:numel(files)
     path=fullfile(files(k).folder,files(k).name); text=fileread(path);
     for j=1:numel(patterns)
         if ~isempty(regexp(text,patterns{j},'once')), violations{end+1}=sprintf('%s: %s',path,patterns{j}); end %#ok<AGROW>
+    end
+    if ~strcmp(path,getframeOwner)&& ...
+            ~isempty(regexp(text,'\<getframe\s*\(','once'))
+        violations{end+1}=sprintf( ... %#ok<AGROW>
+            '%s: runtime getframe must route through lmz.compat.Graphics',path);
     end
 end
 restricted= [dir(fullfile(root,'src','+lmz','+gui','**','*.m')); ...
@@ -72,6 +78,75 @@ for k=1:numel(oldPackages)
     if exist(fullfile(root,'models','+lmzmodels',oldPackages{k}),'dir') == 7
         contents=dir(fullfile(root,'models','+lmzmodels',oldPackages{k},'*.m'));
         if ~isempty(contents), violations{end+1}=sprintf('Active old package: %s',oldPackages{k}); end %#ok<AGROW>
+    end
+end
+
+% Round 8 graphics boundaries.  The generic GUI may select profiles, but
+% model renderer classes and scientific channel layouts stay model-owned.
+simulationTab=fullfile(root,'src','+lmz','+gui','+tabs','SimulationTab.m');
+if exist(simulationTab,'file')==2
+    tabText=fileread(simulationTab);
+    if ~isempty(regexp(tabText,'lmzmodels\.|(?:Quadruped|Biped|QuadLoad)Renderer','once'))
+        violations{end+1}= ... %#ok<AGROW>
+            'SimulationTab hard-codes a model renderer instead of RendererFactory';
+    end
+end
+
+% Generic visualization code must consume named kinematics/observables.  A
+% raw numeric state column here would silently couple it to a model schema.
+visualizationFiles=dir(fullfile(root,'src','+lmz','+viz','*.m'));
+for k=1:numel(visualizationFiles)
+    path=fullfile(visualizationFiles(k).folder,visualizationFiles(k).name);
+    text=fileread(path);
+    if ~isempty(regexp(text,'\.States\s*\(\s*(?::|\d+)\s*,\s*\d+','once'))|| ...
+            ~isempty(regexp(text,'\.state\s*\(\s*\d+','once'))
+        violations{end+1}=sprintf( ... %#ok<AGROW>
+            '%s: numeric model-state indexing in generic visualization package',path);
+    end
+end
+
+% Model renderers own axes children only.  Figure creation, recording, and
+% dependencies on immutable source checkouts belong to framework services or
+% maintainer tooling, never an ordinary renderer.
+scientificPackages={'+slip_quadruped','+slip_biped','+slip_quad_load'};
+rendererPatterns={'\<figure\s*\(','\<uifigure\s*\(','\<VideoWriter\s*\(', ...
+    '\<imwrite\s*\(','\<getframe\s*\(', ...
+    'SLIP_Model_Zoo|Jerboa_Gait_Transitions|Load_Pulling_Quadrupeds'};
+for packageIndex=1:numel(scientificPackages)
+    rendererFiles=dir(fullfile(root,'models','+lmzmodels', ...
+        scientificPackages{packageIndex},'*Renderer.m'));
+    for fileIndex=1:numel(rendererFiles)
+        path=fullfile(rendererFiles(fileIndex).folder,rendererFiles(fileIndex).name);
+        text=fileread(path);
+        for patternIndex=1:numel(rendererPatterns)
+            if ~isempty(regexp(text,rendererPatterns{patternIndex},'once'))
+                violations{end+1}=sprintf('%s: forbidden renderer ownership token %s', ... %#ok<AGROW>
+                    path,rendererPatterns{patternIndex});
+            end
+        end
+    end
+end
+
+% Only clean_generic may opt into the deliberately simplified scientific
+% renderers.  Research and high-contrast scientific profiles retain the
+% compound ResearchRenderer geometry.
+for packageIndex=1:numel(scientificPackages)
+    modelId=scientificPackages{packageIndex}(2:end);
+    configPath=fullfile(root,'catalog',modelId,'graphics.lmz.json');
+    if exist(configPath,'file')~=2
+        violations{end+1}=sprintf('%s: missing graphics.lmz.json',modelId); %#ok<AGROW>
+        continue
+    end
+    config=lmz.compat.Json.decode(fileread(configPath));
+    profiles=config.profiles;
+    for profileIndex=1:numel(profiles)
+        profile=profiles(profileIndex);
+        if any(strcmp(profile.id,{'research_legacy','high_contrast'}))&& ...
+                isempty(strfind(profile.rendererClass,'.ResearchRenderer')) %#ok<STREMP>
+            violations{end+1}=sprintf( ... %#ok<AGROW>
+                '%s/%s does not use compound ResearchRenderer geometry', ...
+                modelId,profile.id);
+        end
     end
 end
 end

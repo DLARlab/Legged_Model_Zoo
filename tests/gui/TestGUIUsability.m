@@ -21,6 +21,37 @@ classdef TestGUIUsability < matlab.unittest.TestCase
             clear cleanup
         end
 
+        function recordingBusyStateLocksProfilesAndEnablesOnlyExportCancel(testCase)
+            [app,cleanup]=makeApp();simulation=app.tab('simulation');
+            controls=simulation.testHooks().Controls;
+            exportCancel=findobj(app.Figure, ...
+                'Tag','lmz-simulation-cancel-export');
+            testCase.verifyEqual(char(exportCancel.Enable),'off');
+
+            context=lmz.api.RunContext.synchronous(17);
+            app.Controller.State.RecordingState=struct('Active',true, ...
+                'Format','gif','Path',[tempname '.gif'],'Context',context);
+            drawnow;
+            testCase.verifyTrue(simulation.IsBusy);
+            testCase.verifyEqual(char(controls.VisualProfileDropDown.Enable),'off');
+            testCase.verifyEqual(char(controls.FPSSpinner.Enable),'off');
+            testCase.verifyEqual(char(exportCancel.Enable),'on');
+            testCase.verifyEqual(char(app.ModelDropDown.Enable),'off');
+            testCase.verifyEqual(char(app.OptimizationCancelButton.Enable),'off');
+            testCase.verifyEqual(char(app.tab('continuation').StopButton.Enable),'off');
+            cancelCallback=exportCancel.ButtonPushedFcn;
+            cancelCallback(exportCancel,[]);
+            testCase.verifyTrue(context.Cancellation.IsCancellationRequested);
+
+            app.Controller.State.RecordingState=struct('Active',false);
+            drawnow;
+            testCase.verifyFalse(simulation.IsBusy);
+            testCase.verifyEqual(char(controls.VisualProfileDropDown.Enable),'on');
+            testCase.verifyEqual(char(exportCancel.Enable),'off');
+            testCase.verifyEqual(char(app.ModelDropDown.Enable),'on');
+            clear cleanup
+        end
+
         function preferencesPersistResetAndExcludeRepository(testCase)
             preferences=testPreferences();cleanup=onCleanup(@()preferences.reset());
             folder=tempname;mkdir(folder);folderCleanup=onCleanup(@()rmdir(folder));

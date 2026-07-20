@@ -1,0 +1,52 @@
+{
+  "source": {
+    "repository": "DLARlab/SLIP_Model_Zoo",
+    "commit": "2c106101383ecee1b2a9d695efe09fbd72d5718a",
+    "adaptation": "Research geometry with an accessibility-oriented palette."
+  },
+  "body": {
+    "backgroundColor": [1, 1, 1],
+    "shadeColor": [0.25, 0.25, 0.25],
+    "edgeColor": [0, 0, 0],
+    "shadeWidth": 3,
+    "outlineWidth": 4
+  },
+  "leg": {
+    "springColor": [0.85, 0.2, 0],
+    "springWidth": 5,
+    "upperBackgroundColor": [1, 1, 1],
+    "shadeColor": [0.25, 0.25, 0.25],
+    "shadeWidth": 3,
+    "outlineColor": [0, 0, 0],
+    "outlineWidth": 3,
+    "lowerColor": [1, 1, 1],
+    "lowerEdgeColor": [0, 0, 0],
+    "lowerWidth": 3
+  },
+  "com": {
+    "outerColor": [1, 1, 1],
+    "edgeColor": [0, 0, 0],
+    "outerWidth": 5,
+    "innerWidth": 3,
+    "radius": 0.15
+  },
+  "ground": {
+    "fieldColor": [1, 1, 1],
+    "edgeColor": [0, 0, 0],
+    "hatchColor": [0, 0, 0],
+    "lineWidth": 0.5
+  },
+  "phase": {
+    "boxColor": [1, 1, 1],
+    "edgeColor": [0, 0, 0],
+    "lineWidth": 1.5,
+    "textColor": [0, 0, 0],
+    "fontSize": 10,
+    "titleFontSize": 15
+  },
+  "force": {
+    "color": [0.7, 0, 0.7],
+    "lineWidth": 1.2,
+    "scale": 0.025
+  }
+}

@@ -31,6 +31,7 @@ This is an internally testable release candidate, not a public binary release. T
 - Versioned GUI preferences for window position, default/high-contrast palette, and recent user-selected data/output folders
 - Timestamped, copyable status diagnostics and expandable error details
 - Stable generic hybrid-system and declarative 2-D scene contracts exercised by `tutorial_hopper` and an isolated external plugin fixture
+- Validated `research_legacy`, `clean_generic`, and `high_contrast` visualization profiles with compound source-derived quadruped, biped, and load/rope geometry, selectable analysis plots, stable live switching, and profile-aware recording
 - An inactive model-template generator and explicitly trusted external-plugin discovery; no core registry edit is needed for a plugin
 - Reproducible solve, continuation, and optimization artifacts with source/data hashes and a `reproduceRun` helper
 - Bounded JSON/MAT validation, canonical path checks, malformed-input tests, code analysis, benchmarks, coverage tooling, and local/remote CI definitions
@@ -97,7 +98,7 @@ The application opens on the SLIP quadruped RoadMap. A reliable first session is
 1. Use the header to choose a model and problem. Read the badge before interpreting a result: `validated • source-equivalent` has immutable numerical evidence, while `tutorial • tested` is an explanatory analytic workflow. **Run demo** runs only the selected built-in demonstration.
 2. In **Branches / Data**, load a built-in RoadMap, GaitMap, or load dataset. Choose one or all datasets, then click a curve or use the index/percentage controls to lock a point. Hover previews never replace the locked selection.
 3. In **Solution**, inspect named state, event-time, parameter, observable, residual/objective, diagnostics, and provenance groups. Edits create an isolated working copy. **Restore locked point** discards those edits; a read-only built-in source branch is never modified in place.
-4. In **Physical Simulation**, evaluate the working point, scrub normalized time, play/pause/stop, inspect model plots, and export supported frames, plots, GIF, or MP4. Export uses a temporary file and restores the displayed frame on success, cancellation, or error.
+4. In **Physical Simulation**, choose the visual profile, evaluate the working point, scrub normalized time, play/pause/stop, inspect model plots, and export supported frames, plots, GIF, or MP4. Validated scientific problems default to **Research legacy**; tutorial problems default to **Clean generic**. Export uses the selected renderer, writes profile metadata beside the output, uses a temporary file, and restores the displayed frame on success, cancellation, or error.
 5. Use **Solve / Seeds** only when the problem advertises `solve`. Accept or refine the current point, form an adjacent/manual pair, or generate a reproducible nearby second seed.
 6. Use **Continuation** only after a valid pair exists. Pause/resume/controlled-stop retain accepted points; checkpoint paths support atomic save and later resume. Homotopy/family controls list active parameters only.
 7. Use **Optimization** for `slip_biped/trajectory_fit` or `slip_quad_load/multi_stride_fit`. A bounded demonstration run is evidence that the pipeline and objective work, not proof of a global optimum.
@@ -125,7 +126,10 @@ Window position, palette, and user-selected recent data/output folders persist u
 13. The Continuation tab exposes homotopy/family scans only for active parameters. Use nearby `k_leg` targets for a dynamics-changing workflow; `phi_neutral` is visible as an inactive Results29 compatibility field and is disabled for transport. A family scan repeats one-dimensional continuation at targets; it is not two-dimensional continuation.
 14. Use **Save native…**, **Export legacy…**, **Save solution…**, or **Save result…** as appropriate. An unchanged imported branch reconstructs the source 29-row `results` matrix exactly. The Physical Simulation tab exposes GIF, MP4 where supported, PNG/PDF keyframes, five plot exports, and oscillator GIF; exports are temporary-file based, cancellation-aware, and restore the displayed animation frame.
 
-The complete command-line equivalent is [examples/demo_slip_quadruped_roadmap_workflow.m](examples/demo_slip_quadruped_roadmap_workflow.m).
+The complete command-line equivalent is
+[examples/demo_slip_quadruped_roadmap_workflow.m](examples/demo_slip_quadruped_roadmap_workflow.m).
+The model-level scientific and research-graphics guide is
+[models/+lmzmodels/+slip_quadruped/README.md](models/+lmzmodels/+slip_quadruped/README.md).
 
 ## SLIP Biped GaitMap Tutorial
 
@@ -455,9 +459,151 @@ Additional compatibility examples remain available (`demo_slip_biped_fit.m`, `de
 
 ## Visualization, animation, and recording
 
-Model-specific renderers consume the same named `SimulationResult` boundary. The quadruped draws torso/attachments/four legs, contacts, forces, and oscillators; the biped draws its point mass, two legs/feet, contacts, and forces; the load renderer adds the load body and tugline to the quadruped. `tutorial_hopper` demonstrates the generic declarative `SceneSpec`/`SceneRenderer2D` path. Scene JSON describes only supported ground, polygon/body, marker, link, spring, rope, force-vector, trail, and text primitives; it cannot evaluate expressions.
+Every renderer consumes the same named `SimulationResult` boundary. The three
+scientific models provide compound research renderers as well as deliberately
+simplified clean renderers. `tutorial_hopper` demonstrates the generic
+declarative `SceneSpec`/`SceneRenderer2D` path. Scene JSON describes only the
+allowlisted ground, polygon, marker, line, spring, rope, force-vector, trail,
+and text primitives; it cannot evaluate MATLAB expressions.
 
-`AnimationController` provides normalized-time scrubbing, FPS/speed/loop playback, and Play/Pause/Stop/Reset. Plot providers expose body/leg/load trajectories, footfalls, all available GRF channels, energy/oscillator/tugline histories, sensitivity data, and R-squared diagnostics. `RecorderService` exports GIF, MP4 where `VideoWriter` supports it, animation keyframes, plot PNG/PDF, and animated axes through atomic temporary files; it restores the source frame and closes video/file resources on success, cancellation, or error. Model authors should follow [the visualization authoring guide](docs/visualization-authoring.md) instead of adding model-ID conditionals to generic GUI code.
+`AnimationController` owns normalized-time scrubbing, FPS/speed/loop playback,
+and Play/Pause/Stop/Reset. Renderers only build axes-owned handles and update a
+requested frame. Plot providers expose the model's named analysis views.
+`RecorderService` exports GIF, MP4 where `VideoWriter` supports it, PNG/PDF
+keyframes and plots, and animated axes through atomic temporary files; it
+restores the displayed frame and closes resources on success, cancellation,
+or error. Model authors should follow [the visualization authoring
+guide](docs/visualization-authoring.md) instead of adding model-ID conditionals
+to generic GUI code.
+
+## Research Graphics Profiles
+
+Graphics are selected per problem through the model-owned
+`graphics.lmz.json`, `VisualizationProfileRegistry`, and `RendererFactory`.
+The scientific maturity label and graphics profile answer different questions:
+`source-equivalent` describes the problem's numerical validation, while
+`research_legacy` describes a source-derived graphics implementation. Neither
+label by itself is a blanket claim that every exported pixel is identical to an
+upstream screenshot.
+
+| Problem group | Default visual profile |
+| --- | --- |
+| `slip_quadruped/periodic_apex` | `research_legacy` |
+| `slip_biped/periodic_apex`, `slip_biped/trajectory_fit` | `research_legacy` |
+| `slip_quad_load/single_stride`, `slip_quad_load/multi_stride_fit` | `research_legacy` |
+| The three scientific models' `demo_stride` problems | `clean_generic` |
+| `tutorial_hopper/demo_hop`, `tutorial_hopper/periodic_hop` | `clean_generic` |
+
+The available choices mean:
+
+- **Research legacy** uses the source-derived compound body, limb, spring,
+  COM/COG, ground, load/rope, camera, and layer geometry implemented for the
+  applicable validated scientific problems. It does not copy the old figure,
+  path setup, playback loop, or video-writer ownership into a renderer.
+- **Clean generic** uses the declarative scene or the model's simple clean
+  renderer. Its straight links and compact markers are intentional and are not
+  presented as source-faithful scientific graphics.
+- **High contrast** is an accessibility adaptation. For the scientific models
+  it retains the compound research renderer when the profile is applicable but
+  deliberately changes colors and line widths. The profile dropdown only lists
+  choices allowed for the selected problem maturity.
+
+To use a profile in the GUI:
+
+1. Select the model and problem, then open **Physical Simulation**.
+2. Choose **Research legacy**, **Clean generic**, or **High contrast** from
+   **Visual profile**. The choice is stored separately for each model/problem.
+3. Use **Detailed**, **Ground**, **Forces**, and **Follow** where the selected
+   renderer supports them. **Reset camera** restores that profile's camera.
+4. Simulate or record. Switching profile safely replaces the renderer and the
+   animation GIF, MP4, or keyframes use the renderer currently displayed.
+
+The header's high-contrast application palette affects GUI chrome. The
+**High contrast** visual profile is the separate model-graphics choice above.
+
+For a short programmatic scientific session, use the public example helper:
+
+```matlab
+startup;
+session = lmz.examples.ResearchGraphics.open( ...
+    'slip_quadruped', 'research_legacy', 'off');
+cleanup = onCleanup(@() lmz.examples.ResearchGraphics.close(session));
+
+index = 1 + round(0.5 * (session.Renderer.frameCount() - 1));
+session.Renderer.updateFrame(index);
+imageData = session.Renderer.captureFrame();
+```
+
+The ready-to-run examples are:
+
+```matlab
+examplesRoot = fullfile(lmz.util.ProjectPaths.root(), 'examples');
+run(fullfile(examplesRoot, 'demo_quadruped_research_graphics.m')); % body/legs/COM/phase
+run(fullfile(examplesRoot, 'demo_biped_research_graphics.m'));     % body/COG/contact legs
+run(fullfile(examplesRoot, 'demo_quad_load_research_graphics.m')); % quadruped/load/rope
+run(fullfile(examplesRoot, 'demo_visual_profile_switching.m'));    % one frame, 3 profiles
+run(fullfile(examplesRoot, 'demo_research_graphics_recording.m')); % GIF plus metadata
+run(fullfile(examplesRoot, 'demo_graphics_comparison_gallery.m')); % 27 frames, 3 reports
+```
+
+These scripts use repository-contained simulations and fixtures. The gallery
+does not place a source checkout on the MATLAB path and does not contain or
+write source-derived comparison rasters; source recapture is a separate
+maintainer-only workflow described in
+[the comparison evidence guide](docs/graphics-comparison/README.md).
+
+For an already computed `simulation`, the lower-level public route is:
+
+```matlab
+registry = lmz.registry.ModelRegistry.discover();
+registryCleanup = onCleanup(@() delete(registry));
+profileRegistry = lmz.viz.VisualizationProfileRegistry(registry);
+factory = lmz.viz.RendererFactory(registry, profileRegistry);
+figureHandle = figure;
+figureCleanup = onCleanup(@() delete(figureHandle));
+axesHandle = axes('Parent', figureHandle);
+options = struct('ShowForces', false, 'DetailedOverlay', true, ...
+    'GroundVisible', true, 'CameraFollow', true, ...
+    'GroundStyle', 'hatched', 'Palette', 'research_legacy');
+[renderer, profile] = factory.createRenderer(axesHandle, simulation, ...
+    'slip_quadruped', 'periodic_apex', 'research_legacy', options);
+rendererCleanup = onCleanup(@() delete(renderer));
+```
+
+Pass profile metadata when recording outside the GUI. This creates the GIF and
+an adjacent `research-animation.gif.lmz.json` sidecar:
+
+```matlab
+target = fullfile(tempdir, 'research-animation.gif');
+metadata = struct('schemaVersion', '1.0.0', ...
+    'modelId', 'slip_quadruped', 'problemId', 'periodic_apex', ...
+    'visualizationProfile', profile.toStruct());
+lmz.services.RecorderService().recordGif(renderer, target, ...
+    struct('FrameCount', 40, 'DelayTime', 0.04, ...
+    'Metadata', metadata));
+```
+
+The GUI adds this profile sidecar for animation GIF, MP4, keyframe, static-plot,
+and oscillator-GIF exports. It also maps the profile's `frameCount`, `fps`, and
+`dpi` defaults into the applicable recording request; an explicit GUI/request
+option takes precedence. Direct `RecorderService` callers must supply
+`Metadata` explicitly and pass any desired operational overrides because the
+service receives a renderer, not a profile registry; otherwise its own defaults
+apply.
+
+Source-derived numeric geometry is kept in pure providers and checked against
+repository fixtures under `tests/fixtures/graphics`; the corresponding tests
+are under `tests/visualization`. The detailed file/formula map and intentional
+deviations are in [the legacy graphics audit](docs/legacy-graphics-audit.md).
+Portable image-metric helpers and hidden rendering do not substitute for human
+approval. The desktop side-by-side graphics review remains a separate manual
+gate, and [the test status](docs/TEST_STATUS.md) is authoritative for the latest
+executed evidence.
+
+Graphics retain the project's R2019b design target, but R2019b graphics runtime
+has not been executed. Current R2019b evidence is static/fallback auditing only;
+the recorded runtime and hidden-render evidence comes from the documented
+R2025b environment.
 
 ## Artifact format
 
@@ -595,13 +741,17 @@ coreToolboxDryRun = build_toolbox('core', struct('DryRun', true));
 
 Maintainers may exercise deterministic ZIP or `.mltbx` construction with `Mode='technical-validation'` and `RunInstallTest=true`. That mode labels the package `NOT_FOR_REDISTRIBUTION`, tests registry discovery, the permitted tutorial workflow, hidden GUI construction, artifact round trip, and path removal in an unrelated temporary MATLAB process, and deletes the package before returning. Only `Mode='public'` can retain output, and it fails before writing when the profile or project decision is unresolved. Do not edit decision fields or add a root license without owner-supplied authority. See [release/README.md](release/README.md), [docs/CI.md](docs/CI.md), [the benchmark guide](benchmarks/README.md), [the coverage policy](docs/COVERAGE.md), and [docs/TEST_STATUS.md](docs/TEST_STATUS.md).
 
-The audited Round 7 suite completed `195 run, 0 failed, 0 incomplete` in
-348.302462 seconds. The separate example gate passed all 25 public examples,
-and the clean-copy all-scientific-model test passed in a separate MATLAB
-process. The measured coverage run passed 194 tests (excluding only the policy
-test that required the measurement being created) and covered 7,401 of 9,792
-runtime statements, or 75.5821%. The pre-edit scientific baseline was
-`117 run, 0 failed, 0 incomplete`; it remains an explicit non-regression floor.
+The final Round 8 R2025b suite completed `275 run, 0 failed, 0 incomplete`.
+The separate example gate passed all 31 public examples, including a 27-frame
+three-model/three-profile graphics gallery, and the clean-copy child process
+rendered and captured `research_legacy` for all three scientific models without
+a sibling source repository path. The measured Round 7 starting coverage was
+7,401 of 9,792 runtime statements (75.5821%) across 174 files. The final Round
+8 coverage run passed all 275 tests and covered 9,601 of 12,546 statements
+(76.5264%) across 204 files while enforcing every stable-package floor. The
+pre-edit scientific baseline was `117 run, 0 failed, 0 incomplete`; it remains
+an explicit non-regression floor. See [the coverage policy](docs/COVERAGE.md)
+and [the test status](docs/TEST_STATUS.md) for the exact qualification.
 
 ## Troubleshooting
 
@@ -650,6 +800,6 @@ Scientific attribution: Ding and Gan, “Breaking Symmetries Leads to Diverse Qu
 
 The untouched Round 6 baseline was rerun under MATLAB R2025b Update 5 before Round 7 edits: `117 run, 0 failed, 0 incomplete`, with all 24 then-existing public examples and the three-scientific-model clean-copy workflow passing. Its scientific catalogs remain quadruped 9 branches/3,443 points, biped 6 branches/2,967 points, and load 2 datasets (one and two strides). No Round 7 work changes a scientific equation, source fixture, or regression tolerance.
 
-Round 7 adds version/API/artifact compatibility tests, a complete componentized GUI/event/preferences layer, centralized compatibility fallbacks, deterministic release tooling, the built-in and external analytic hopper proofs, stable generic hybrid/scene contracts, safe-input tests, run reproduction, code-quality checks, benchmarks, measured coverage, CI definitions, and governance/authoring documentation. The authoritative expanded suite passed 195/195, all 25 public examples passed, the clean-copy isolation gate passed, and the measured runtime statement rate is 75.5821%. Exact evidence is recorded in [docs/TEST_STATUS.md](docs/TEST_STATUS.md) and [docs/RELEASE_CANDIDATE_STATUS.md](docs/RELEASE_CANDIDATE_STATUS.md).
+Round 7 added version/API/artifact compatibility, the componentized GUI/event/preferences layer, compatibility fallbacks, release tooling, generic authoring proofs, security boundaries, reproduction, quality, benchmark, coverage, CI, and governance infrastructure. Round 8 adds source-audited compound research graphics, validated per-problem profiles/configuration, profile-aware GUI/recording, source-style plots, pure geometry fixtures, an 18-case source-versus-LMZ metric matrix, and clean-copy research rendering. The authoritative Round 8 suite passed 275/275, all 31 public examples passed, and the clean-copy isolation gate passed. Geometry-tested and image-metric-tested fidelity are recorded separately from the still-blocked human side-by-side review in [docs/TEST_STATUS.md](docs/TEST_STATUS.md) and [docs/RELEASE_CANDIDATE_STATUS.md](docs/RELEASE_CANDIDATE_STATUS.md).
 
 Release qualifications remain explicit: the human MATLAB desktop walkthrough is not executed; R2019b runtime is not executed; GitHub Actions workflows have not run remotely; and public core/scientific packaging is blocked by the missing project license and unresolved owner decisions. The present recommendation is an internal, numerically testable release candidate—not a public release.

@@ -25,6 +25,31 @@ summary, but runtime availability is derived from problem descriptors.
 `implementationClass` is executable trusted code; no class name is accepted
 from an unregistered external root.
 
+A visualizable model with `graphics.lmz.json` must also declare exactly one
+`visualizationContract` object:
+
+```json
+"visualizationContract": {
+  "frames": ["world", "body", "foot"],
+  "parameters": ["leg_length"]
+}
+```
+
+The object may contain only `frames` and `parameters`. `frames` must be a
+nonempty list of unique simple identifiers; `parameters` may be empty but, when
+present, follows the same uniqueness/identifier rule. Parameter entries name
+top-level roots in `SimulationResult.Parameters`, not nested fields or MATLAB
+expressions. During registry discovery, the graphics configuration's
+`requiredFrames` and `requiredParameters` must be subsets of these manifest
+lists.
+
+Every model advertising visualization currently also needs a contained
+`scene.lmz.json`, because registry discovery validates the base scene before it
+loads any optional profile configuration. When `graphics.lmz.json` is absent,
+`visualizationContract` is optional: the registry uses a declared contract when
+provided, otherwise it infers `frames` from the base scene and uses an empty
+parameter list.
+
 ## Problem descriptor
 
 Required fields are:
@@ -76,6 +101,232 @@ Scene schema `1.0.0` declares `frames` and `primitives`. Supported primitives,
 fields, aliases, and limits are listed in
 [visualization-authoring.md](visualization-authoring.md). Bindings are simple
 identifiers, never MATLAB expressions.
+
+## Graphics configuration
+
+A visualizable model may provide `catalog/<model-id>/graphics.lmz.json`.
+`ModelRegistry` parses and validates it during discovery, binds its named
+requirements to `manifest.json.visualizationContract`, and repeats that binding
+when `getGraphicsConfig(modelId)` returns the parsed configuration. If the file
+is absent, the registry synthesizes one `clean_generic` profile for all four
+maturities using the model's `scene.lmz.json`; constructing that declarative
+renderer still requires the model to return a visualization `PlotPlugin`.
+
+The root object uses graphics schema `1.0.0`:
+
+| Field | Required | Contract |
+| --- | --- | --- |
+| `schemaVersion` | yes | Exactly `1.0.0` |
+| `defaultProfileByMaturity` | yes | Object mapping known maturities to declared profile IDs |
+| `profiles` | yes | One to 32 profile objects with unique IDs |
+| `requiredFrames` | no | Simple identifier list bound to manifest `visualizationContract.frames` and required from each declared profile scene |
+| `requiredParameters` | no | Top-level parameter-root identifiers bound to manifest `visualizationContract.parameters` |
+
+Known maturities are `tutorial`, `compatibility`, `validated`, and
+`experimental`. Every graphics configuration must contain all four mappings,
+and each default must name an existing profile that lists that maturity.
+`defaultForMaturity` has no tutorial-or-first-profile fallback: an incomplete
+mapping fails configuration loading. Tutorial behavior is therefore explicit:
+built-in tutorial problems map to `clean_generic`, and a model without a
+graphics file receives the synthesized all-maturity `clean_generic` profile.
+The manifest does not select a profile. External models with a graphics file
+use that file's complete maturity mapping just like built-ins.
+
+Profile IDs, plot-profile IDs, layer names, overlay names, frame names, and
+required-parameter names are simple identifiers matching
+`^[A-Za-z][A-Za-z0-9_]*$`. They are data labels, not expressions.
+
+### Profile object
+
+Each profile requires:
+
+| Field | Contract |
+| --- | --- |
+| `id` | Unique simple identifier |
+| `label` | Nonempty GUI label |
+| `rendererClass` | Trusted class name, described below |
+| `camera` | Camera object using the allowlist below |
+| `axis` | Axes object using the allowlist below |
+| `layers` | Ordered list of known layer identifiers |
+| `overlays` | List of known optional overlays |
+| `plotProfile` | Simple identifier passed to model plot code |
+| `recordingProfile` | Declarative recording metadata object |
+| `maturities` | Nonempty list of known applicable maturities |
+
+The optional `sceneFile` and `styleFile` fields are relative paths contained by
+the model catalog directory. An empty or absent `sceneFile` is normal for a
+custom renderer. `lmz.viz.SceneRenderer2D` requires a model visualization
+plugin; when `sceneFile` is present, the factory uses that validated scene.
+Scene and style JSON remain data only: their contents are never evaluated as
+callbacks, expressions, arbitrary constructor arguments, or class definitions.
+
+The only framework renderer allowed directly from JSON is
+`lmz.viz.SceneRenderer2D`. Its unique resolution must be inside the framework
+`src` root. Every other class names already-trusted executable model/plugin code
+and must:
+
+- begin with the namespace registered for that catalog/code root;
+- resolve exactly once on the MATLAB path;
+- resolve inside the registered trusted code root; and
+- implement the stable renderer lifecycle checked by `RendererFactory`.
+
+For built-ins the registered prefix is `lmzmodels`. For an explicitly
+registered external plugin it is exactly the isolated namespace in
+`plugin.json` (for example `lmzmodels.example_hopper` or an `lmzplugins.*`
+namespace). Discovery rejects missing, ambiguous, namespace-escaping, and
+root-escaping renderer classes before profile use. `RendererFactory` then
+constructs the selected class and checks the public renderer lifecycle. These
+checks establish binding and provenance; trusted MATLAB plugin code is still
+executable code and is not sandboxed.
+
+### Camera fields
+
+The camera allowlist is:
+
+| Field | Validation |
+| --- | --- |
+| `xLimits`, `yLimits` | Two finite increasing numeric values |
+| `dataAspectRatio` | Three finite positive numeric values |
+| `follow` | Logical scalar |
+| `followWindow` | Positive finite scalar width, or two finite increasing offsets |
+| `position` | `[x y width height]` with finite values and positive width/height |
+
+Custom renderers decide how a valid `followWindow` or `position` maps to their
+camera. Unknown fields fail configuration loading.
+
+### Axis fields
+
+The axis allowlist is:
+
+| Field | Validation |
+| --- | --- |
+| `equal`, `grid`, `visible` | Logical scalar |
+| `xLabel`, `yLabel`, `title` | Character text |
+| `backgroundColor` | RGB or RGBA in `[0,1]` |
+
+### Layers and overlays
+
+Known layer identifiers are:
+
+```text
+ground, shadow, model, body, legs, com, load, rope,
+forces, phase, labels, overlay
+```
+
+Known overlay identifiers are:
+
+```text
+detailed_phase, phase_labels, force_vectors, contacts, trajectory
+```
+
+The ordered `layers` declaration is metadata and policy. A custom renderer is
+responsible for matching its handle creation/z-order to that declaration and
+for testing the order. `SceneRenderer2D` uses primitive order from the scene.
+
+### Recording profile
+
+Known fields are `frameCount`, `fps`, `dpi`, and `backgroundColor`. Numeric
+values must be finite and positive; color is RGB/RGBA in `[0,1]`. The GUI maps
+these defaults into applicable recording requests: `frameCount` for GIF/MP4,
+`fps` to GIF delay or MP4 FPS, and `dpi` to capture/export resolution. Explicit
+request options take precedence. Direct `RecorderService` calls remain governed
+by the options supplied to the call because the service does not resolve a
+profile itself.
+
+GIF/MP4, keyframe, plot, and axes-GIF calls write `<target>.lmz.json` when the
+caller supplies a nonempty `Metadata` struct. The GUI supplies artifact kind,
+model/problem IDs, the resolved visualization-profile descriptor, and creation time for
+animation, keyframe, static-plot, and oscillator-GIF exports. Direct service
+callers must supply equivalent metadata explicitly.
+
+### Style files
+
+A style file is one bounded JSON object. Validation is recursive for nested
+objects:
+
+- numeric values must be real and finite;
+- names ending in `color` must contain RGB or RGBA values in `[0,1]`;
+- names ending in `width`, `size`, `radius`, `length`, or `scale` must be
+  positive;
+- names ending in `alpha` must lie in `[0,1]`; and
+- character, logical, and cell values are accepted as declarative metadata.
+
+The renderer defines the semantic shape of its style object and should merge it
+with deterministic defaults. Keep inherited scientific constants in style or
+pure geometry providers, not in generic GUI code.
+
+### Required frames and parameters
+
+These lists form a two-stage binding rather than an executable lookup language:
+
+1. `GraphicsConfig.validateContract` requires every graphics
+   `requiredFrames`/`requiredParameters` name to be declared by the manifest's
+   `visualizationContract.frames`/`.parameters` list.
+2. For every profile with a nonempty `sceneFile`, configuration loading also
+   requires every `requiredFrames` name to occur in that validated scene.
+
+Profiles backed only by a custom renderer have no profile scene to check, but
+they remain bound to the manifest contract. Runtime providers are responsible
+for producing the declared named frames and for retrieving and validating the
+declared top-level parameter roots from `SimulationResult.Parameters`; the
+registry does not inspect a future simulation result while loading metadata.
+Neither list accepts state-vector positions, dotted paths, or expressions.
+
+For example, the load model declares the parameter roots
+`per_stride_parameters`, `quadruped`, and `load`. Nested values inside those
+containers are renderer/provider concerns; names such as `leg_length` or
+`back_attachment_ratio` would be incorrect contract entries unless they were
+actual top-level `SimulationResult.Parameters` fields.
+
+### Built-in default policy
+
+The built-in scientific configurations select `research_legacy` for all
+validated problems:
+
+```text
+slip_quadruped/periodic_apex
+slip_biped/periodic_apex
+slip_biped/trajectory_fit
+slip_quad_load/single_stride
+slip_quad_load/multi_stride_fit
+```
+
+Their tutorial `demo_stride` problems select `clean_generic`.
+`tutorial_hopper/demo_hop` and `tutorial_hopper/periodic_hop` also select
+`clean_generic`. `high_contrast` is an explicit alternative only where its
+`maturities` list makes it applicable; the GUI filters the list accordingly.
+If a saved GUI preference is absent from that filtered list, the GUI restores
+the problem's declared maturity default. This preference recovery is not a
+fallback for an incomplete `defaultProfileByMaturity` object; incomplete
+graphics policy is rejected during loading.
+
+`research_legacy` is source-derived geometry and styling, `clean_generic` is a
+deliberately simplified generic/clean view, and `high_contrast` is a deliberate
+accessibility adaptation. A high-contrast research renderer is not a claim that
+its palette matches the source.
+
+### Resolution API
+
+```matlab
+registry = lmz.registry.ModelRegistry.discover();
+profiles = lmz.viz.VisualizationProfileRegistry(registry);
+
+available = profiles.profilesForProblem(modelId, problemId);
+defaultProfile = profiles.defaultProfile(modelId, problemId);
+selected = profiles.resolve(modelId, problemId, profileId);
+factory = lmz.viz.RendererFactory(registry, profiles);
+[renderer, selected] = factory.createRenderer(axesHandle, simulation, ...
+    modelId, problemId, profileId, options);
+```
+
+An empty `profileId` resolves the maturity default. An explicit but
+inapplicable profile raises `lmz:Graphics:ProfileNotApplicable`; unknown IDs,
+untrusted/ambiguous classes, traversal, malformed colors, and invalid cameras
+fail before renderer construction.
+
+Graphics configuration remains independent of source checkouts. Source paths
+belong only in provenance records and maintainer capture tools, never in normal
+runtime configuration.
 
 ## Input limits
 

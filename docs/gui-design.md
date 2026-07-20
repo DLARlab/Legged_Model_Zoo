@@ -14,7 +14,7 @@ The six complete handle components are:
 | --- | --- |
 | `BranchTab` | Scientific catalogs, datasets, selection, hover, navigation, branch plots, import/export |
 | `SolutionTab` | Schema-aware editing, evaluation, projection, restore, save, and workflow handoff |
-| `SimulationTab` | Physical renderers, scientific plots, playback, recording, and export |
+| `SimulationTab` | Profile resolution, physical renderers, scientific plots, playback, recording, and export |
 | `SolveTab` | Reproducible perturbations, solve/refine, seed-pair construction, and overlay |
 | `ContinuationTab` | Live prediction/accept/reject presentation, pause/resume/stop, checkpoints, homotopy, and family scans |
 | `OptimizationTab` | Fit/cancel controls and objective, sensitivity/term, and R-squared presentation |
@@ -30,6 +30,9 @@ Tabs delegate scientific actions to `AppController`. The controller invokes
 services and owns state transitions; it stores no graphics handles and no
 callbacks that capture tabs or figures. Model-specific renderers and plot
 providers remain presentation adapters and do not alter scientific arrays.
+`SimulationTab` owns `VisualizationProfileRegistry`, `RendererFactory`, the
+current renderer/profile, and renderer-only controls. The GUI therefore never
+hard-codes a scientific renderer class in model-selection logic.
 
 ## State and synchronization
 
@@ -72,18 +75,55 @@ evaluation repopulates derived data.
 
 ## Simulation and extensibility
 
-The three migrated scientific models keep their existing renderer and plot
-provider dispatch as regression oracles. Other registered models may implement
-`getVisualizationPlugin`; the simulation component calls the plugin's
-`createRenderer(axes,simulation)` and optional
-`plotSimulation(axesStruct,simulation)` hooks. If no plugin exists, a generic
-named body trajectory is shown when possible, otherwise the GUI reports that no
+Each visualizable catalog may own `graphics.lmz.json`. On model/problem change,
+`SimulationTab` asks `VisualizationProfileRegistry` for the profiles applicable
+to the problem maturity. It uses the configured maturity default unless a
+valid per-model/problem preference exists. The built-in validated scientific
+problems default to `research_legacy`; tutorial problems default to
+`clean_generic`.
+
+The visible profile labels are **Research legacy**, **Clean generic**, and
+**High contrast** where applicable. `research_legacy` chooses a source-derived
+compound renderer. `clean_generic` chooses the declarative scene or the model's
+simple clean renderer and is not labeled source-faithful. Scientific
+`high_contrast` profiles retain compound research geometry but deliberately
+change palette/width; tutorial high contrast remains a generic scene style.
+
+Changing the visual profile disposes the animation controller and renderer,
+constructs the newly configured renderer through `RendererFactory`, redraws the
+model-owned plot views, and initializes the replacement at the first frame of
+the existing simulation. The tab shows the resolved label, renderer class, and
+plot-profile ID so configuration mistakes are visible rather than hidden.
+
+The renderer-option controls are:
+
+| Control | Renderer option/behavior |
+| --- | --- |
+| **Detailed** | `DetailedOverlay`; source phase/details where implemented |
+| **Ground** | Hatched, line, or hidden request; renderer may support a subset |
+| **Forces** | `ShowForces`; force arrows where the renderer supplies them |
+| **Follow** | `CameraFollow` |
+| **Reset camera** | Restores the selected profile's camera values |
+
+The header high-contrast palette styles application chrome. It is distinct from
+the Simulation tab's `high_contrast` model-graphics profile.
+
+Generic registered models implement `getVisualizationPlugin` and provide a
+validated scene. `RendererFactory` supplies `SceneRenderer2D` with that plugin,
+scene, simulation, resolved profile, and options. Model-owned
+`plotSimulation(axesStruct,simulation,profile)` may provide richer plot routing;
+otherwise named `PlotPlugin` descriptors are used. If no usable visualization
+exists, the tab shows a named body trajectory when possible or reports that no
 visualization was supplied. External models may also have no built-in branch
 dataset.
 
-Animation playback maps normalized stride time to physical samples and restores
-frame state after recording. GIF, MP4, keyframe, axes-GIF, and static-plot
-exports remain delegated to `RecorderService` with cooperative cancellation.
+Animation playback maps normalized stride time to physical samples. GIF, MP4,
+keyframe, axes-GIF, and static-plot exports remain delegated to
+`RecorderService` with cooperative cancellation, atomic temporary files, and
+frame restoration. Every GUI export includes an adjacent metadata sidecar with
+schema version, artifact kind, model/problem IDs, the resolved profile
+descriptor, and creation time. Profile `frameCount`, `fps`, and `dpi` values
+seed applicable requests; an explicit request/control value takes precedence.
 
 ## Usability and accessibility
 
@@ -99,20 +139,29 @@ history. Errors add a plain summary to status and open a dialog with
 expandable/copyable technical details when a desktop is available.
 
 `PreferencesStore` uses the versioned MATLAB preference namespace
-`LeggedModelZoo_GUI_v1`. It persists the window position, default/high-contrast
-palette, and user-chosen recent data/output folders, and exposes a reset action.
-Built-in repository paths are never recorded as recent folders. High-contrast
-selection and hover indicators differ by marker shape, fill, outline, and color
-rather than color alone.
+`LeggedModelZoo_GUI_v1`. Schema version 2 persists window position, the
+default/high-contrast application palette, user-chosen recent data/output
+folders, and one visualization-profile ID per model/problem. A stored profile
+is used only if it is still applicable; otherwise profile resolution returns to
+the current maturity default. Reset removes all of these preferences. Built-in
+repository paths are never recorded as recent folders. High-contrast selection
+and hover indicators differ by marker shape, fill, outline, and color rather
+than color alone.
 
 ## Verification boundary
 
 Headless tests cover transactional exact-once delivery, deterministic ordering,
 component APIs, one-refresh model changes, subscription disposal, busy-state
 precedence, preferences/reset, minimum sizing, tooltips, status timestamps, and
-palette distinguishability. Existing controller and callback-level scientific
-GUI tests remain non-regression gates for all three models.
+palette distinguishability. Profile tests cover maturity defaults,
+per-model/problem preference round trips, trusted factory dispatch, profile
+switch rebuilds, renderer lifecycle, and recording metadata. Numeric geometry
+tests are separate from GUI tests and remain the primary scientific graphics
+fidelity gate.
 
 OS-native dialogs, human hover ergonomics, actual keyboard focus traversal,
-playback timing, cancellation timing, codecs, and screenshots still require the
-manual MATLAB desktop checklist in `docs/MANUAL_DESKTOP_QA.md`.
+playback timing, cancellation timing, codecs, and side-by-side graphics review
+still require the manual MATLAB desktop checklist in
+`docs/MANUAL_DESKTOP_QA.md`. Hidden figures and image metrics are not human
+approval. R2019b graphics execution is also unverified; current R2019b evidence
+is static/fallback analysis only.

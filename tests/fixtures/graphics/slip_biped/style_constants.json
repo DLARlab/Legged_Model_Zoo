@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0.0",
+  "sourceCommit": "4595146c5881a5313bc8fe92de85099193ef9be9",
+  "springColor": [0, 0.265625, 0.6171875],
+  "springLineWidth": 5,
+  "leftFill": [0.7890625, 0.7890625, 0.7890625],
+  "rightFill": [1, 1, 1],
+  "legLineWidth": 3,
+  "bodyRadius": 0.2,
+  "bodyLineWidth": 5,
+  "cogRadius": 0.1,
+  "cogLineWidth": 3,
+  "pointFootRadius": 0.01,
+  "qualifiedDefaultColorPolicy": "Geometry is exact. Source patch colors that were left at MATLAB defaults are frozen as documented/intended black so results are release-independent."
+}

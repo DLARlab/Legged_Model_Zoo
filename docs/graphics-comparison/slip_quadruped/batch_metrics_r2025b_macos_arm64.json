@@ -1,0 +1,556 @@
+{
+  "schemaVersion": "1.0.0",
+  "modelId": "slip_quadruped",
+  "sourceCommit": "2c106101383ecee1b2a9d695efe09fbd72d5718a",
+  "matlabRelease": "2025b",
+  "platform": "MACA64",
+  "graphicsEnvironment": {
+    "renderer": "WebGL",
+    "vendor": "Google Inc. (Apple)",
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+    "device": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)"
+  },
+  "frameSize": [
+    640,
+    480
+  ],
+  "dataContract": {
+    "stateNames": [
+      "x",
+      "dx",
+      "y",
+      "dy",
+      "phi",
+      "dphi",
+      "alphaBL",
+      "dalphaBL",
+      "alphaFL",
+      "dalphaFL",
+      "alphaBR",
+      "dalphaBR",
+      "alphaFR",
+      "dalphaFR"
+    ],
+    "parameterNames": [
+      "BL_TD",
+      "BL_LO",
+      "FL_TD",
+      "FL_LO",
+      "BR_TD",
+      "BR_LO",
+      "FR_TD",
+      "FR_LO",
+      "tAPEX",
+      "k",
+      "ks",
+      "J",
+      "l_rest",
+      "osa",
+      "lb",
+      "kr"
+    ]
+  },
+  "canonicalCaseLabels": [
+    "flight_apex",
+    "one_leg_stance",
+    "two_leg_stance",
+    "asymmetric_body_morphology",
+    "detailed_phase_overlay"
+  ],
+  "frames": [
+    {
+      "index": 1,
+      "caseLabel": "flight_apex",
+      "caseMetadata": {
+        "coverageTags": [
+          "flight",
+          "apex"
+        ],
+        "expectedContacts": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "expectedContactCount": 0,
+        "morphology": "asymmetric_l_b_0_35",
+        "detailedOverlay": true,
+        "note": "Start-of-stride apex convention; every leg is at resting length."
+      },
+      "time": 0,
+      "state": [
+        1,
+        0.8,
+        1.2,
+        0,
+        0,
+        0,
+        0.2,
+        0,
+        -0.15,
+        0,
+        0.25,
+        0,
+        -0.1,
+        0
+      ],
+      "parameters": [
+        0.1,
+        0.4,
+        0.2,
+        0.5,
+        0.6,
+        0.9,
+        0.7,
+        0.95,
+        1,
+        20,
+        5,
+        0.1,
+        1,
+        0,
+        0.35,
+        1
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.067966907303599861,
+        "EdgeMapOverlap": 0.856892150606254,
+        "StructuralSimilarity": 0.9525981309443009,
+        "ForegroundBoundingBoxAgreement": 0.84937916975537431,
+        "ColorClusterAgreement": 0.97334814814814818,
+        "ReferenceBounds": [
+          39,
+          38,
+          646,
+          463
+        ],
+        "CandidateBounds": [
+          69,
+          52,
+          635,
+          439
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 2,
+      "caseLabel": "one_leg_stance",
+      "caseMetadata": {
+        "coverageTags": [
+          "one_leg_stance"
+        ],
+        "expectedContacts": [
+          true,
+          false,
+          false,
+          false
+        ],
+        "expectedContactCount": 1,
+        "morphology": "asymmetric_l_b_0_35",
+        "detailedOverlay": true,
+        "note": "Back-left stance exercises one compressed compound leg."
+      },
+      "time": 0.15,
+      "state": [
+        1.12,
+        0.8,
+        1.16,
+        0,
+        0.04,
+        0,
+        0.18,
+        0,
+        -0.12,
+        0,
+        0.22,
+        0,
+        -0.08,
+        0
+      ],
+      "parameters": [
+        0.1,
+        0.4,
+        0.2,
+        0.5,
+        0.6,
+        0.9,
+        0.7,
+        0.95,
+        1,
+        20,
+        5,
+        0.1,
+        1,
+        0,
+        0.35,
+        1
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.0666297091517397,
+        "EdgeMapOverlap": 0.86517831255436362,
+        "StructuralSimilarity": 0.95432713866398633,
+        "ForegroundBoundingBoxAgreement": 0.86502937221317855,
+        "ColorClusterAgreement": 0.9732691358024691,
+        "ReferenceBounds": [
+          39,
+          38,
+          635,
+          463
+        ],
+        "CandidateBounds": [
+          69,
+          52,
+          635,
+          439
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 3,
+      "caseLabel": "two_leg_stance",
+      "caseMetadata": {
+        "coverageTags": [
+          "two_leg_stance",
+          "force_reference"
+        ],
+        "expectedContacts": [
+          true,
+          true,
+          false,
+          false
+        ],
+        "expectedContactCount": 2,
+        "morphology": "asymmetric_l_b_0_35",
+        "detailedOverlay": true,
+        "note": "Back-left and front-left stance; force toggle reference frame."
+      },
+      "time": 0.3,
+      "state": [
+        1.24,
+        0.8,
+        1.18,
+        0,
+        -0.06,
+        0,
+        0.16,
+        0,
+        -0.1,
+        0,
+        0.2,
+        0,
+        -0.06,
+        0
+      ],
+      "parameters": [
+        0.1,
+        0.4,
+        0.2,
+        0.5,
+        0.6,
+        0.9,
+        0.7,
+        0.95,
+        1,
+        20,
+        5,
+        0.1,
+        1,
+        0,
+        0.35,
+        1
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.066651879830210856,
+        "EdgeMapOverlap": 0.86960504885993484,
+        "StructuralSimilarity": 0.95432357043535643,
+        "ForegroundBoundingBoxAgreement": 0.86502937221317855,
+        "ColorClusterAgreement": 0.972640987654321,
+        "ReferenceBounds": [
+          39,
+          38,
+          635,
+          463
+        ],
+        "CandidateBounds": [
+          69,
+          52,
+          635,
+          439
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 4,
+      "caseLabel": "asymmetric_body_morphology",
+      "caseMetadata": {
+        "coverageTags": [
+          "asymmetric_body_morphology"
+        ],
+        "expectedContacts": [
+          false,
+          false,
+          true,
+          false
+        ],
+        "expectedContactCount": 1,
+        "morphology": "pitched_body_l_b_0_35",
+        "detailedOverlay": true,
+        "note": "Noncentral body attachment and pitch expose COM offset behavior."
+      },
+      "time": 0.65,
+      "state": [
+        1.52,
+        0.8,
+        1.25,
+        0,
+        0.22,
+        0,
+        0.28,
+        0,
+        -0.2,
+        0,
+        0.3,
+        0,
+        -0.18,
+        0
+      ],
+      "parameters": [
+        0.1,
+        0.4,
+        0.2,
+        0.5,
+        0.6,
+        0.9,
+        0.7,
+        0.95,
+        1,
+        20,
+        5,
+        0.1,
+        1,
+        0,
+        0.35,
+        1
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.066580235997480725,
+        "EdgeMapOverlap": 0.86419883939691033,
+        "StructuralSimilarity": 0.95441080070916218,
+        "ForegroundBoundingBoxAgreement": 0.86502937221317855,
+        "ColorClusterAgreement": 0.97330666666666665,
+        "ReferenceBounds": [
+          39,
+          38,
+          635,
+          463
+        ],
+        "CandidateBounds": [
+          69,
+          52,
+          635,
+          439
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 5,
+      "caseLabel": "detailed_phase_overlay",
+      "caseMetadata": {
+        "coverageTags": [
+          "detailed_phase_overlay"
+        ],
+        "expectedContacts": [
+          false,
+          false,
+          true,
+          true
+        ],
+        "expectedContactCount": 2,
+        "morphology": "asymmetric_l_b_0_35",
+        "detailedOverlay": true,
+        "note": "Title, LH/LF/RF/RH labels, box, and stance/flight bars are visible."
+      },
+      "time": 0.8,
+      "state": [
+        1.64,
+        0.8,
+        1.2,
+        0,
+        0.1,
+        0,
+        0.24,
+        0,
+        -0.16,
+        0,
+        0.26,
+        0,
+        -0.12,
+        0
+      ],
+      "parameters": [
+        0.1,
+        0.4,
+        0.2,
+        0.5,
+        0.6,
+        0.9,
+        0.7,
+        0.95,
+        1,
+        20,
+        5,
+        0.1,
+        1,
+        0,
+        0.35,
+        1
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.066600373606500993,
+        "EdgeMapOverlap": 0.868749519440244,
+        "StructuralSimilarity": 0.95432455923882953,
+        "ForegroundBoundingBoxAgreement": 0.86502937221317855,
+        "ColorClusterAgreement": 0.973201975308642,
+        "ReferenceBounds": [
+          39,
+          38,
+          635,
+          463
+        ],
+        "CandidateBounds": [
+          69,
+          52,
+          635,
+          439
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    }
+  ],
+  "lmzRegressions": {
+    "forceVectorsOffOn": {
+      "caseLabel": "force_vectors_off_on",
+      "referenceCaseLabel": "two_leg_stance",
+      "sourceRendererHasForceLayer": false,
+      "forceOff": {
+        "showForces": false,
+        "visibleHandleCount": 0,
+        "nonzeroVectorCount": 0,
+        "imageSize": [
+          500,
+          675,
+          3
+        ],
+        "imageChecksum": 2.49350787E+8
+      },
+      "forceOn": {
+        "showForces": true,
+        "visibleHandleCount": 4,
+        "nonzeroVectorCount": 2,
+        "imageSize": [
+          500,
+          675,
+          3
+        ],
+        "imageChecksum": 2.49239966E+8
+      },
+      "differenceMetrics": {
+        "NormalizedRMSE": 0.016779689284361632,
+        "EdgeMapOverlap": 0.9912003417343016,
+        "StructuralSimilarity": 0.99763420526770841,
+        "ForegroundBoundingBoxAgreement": 1,
+        "ColorClusterAgreement": 0.99920691358024694,
+        "ReferenceBounds": [
+          69,
+          52,
+          635,
+          439
+        ],
+        "CandidateBounds": [
+          69,
+          52,
+          635,
+          439
+        ]
+      },
+      "rastersStored": false,
+      "passed": true
+    }
+  },
+  "summary": {
+    "normalizedRMSEMaximum": 0.067966907303599861,
+    "edgeMapOverlapMinimum": 0.856892150606254,
+    "foregroundBoundingBoxAgreementMinimum": 0.84937916975537431,
+    "colorClusterAgreementMinimum": 0.972640987654321
+  },
+  "thresholds": {
+    "normalizedRMSEMaximum": 0.35,
+    "edgeMapOverlapMinimum": 0.6,
+    "foregroundBoundingBoxAgreementMinimum": 0.84,
+    "colorClusterAgreementMinimum": 0.65
+  },
+  "sourceImagesStored": false,
+  "differenceImagesStored": false,
+  "humanApproved": false,
+  "qualification": "Source and LMZ were rendered headlessly at matched axes/camera. Target explicit black defaults and requested camera corrections are retained. No raster is redistributed; geometry tests remain primary.",
+  "passed": true
+}

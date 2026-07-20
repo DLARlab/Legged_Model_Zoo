@@ -129,6 +129,7 @@ classdef ModelRegistry < handle
                     modelIds{end + 1} = manifest.id; %#ok<AGROW>
                     manifest.catalogDirectory = files(index).folder;
                     manifest.trustedCodeRoot = info.CodeRoot;
+                    manifest.trustedNamespace = info.Namespace;
                     manifest.external = logical(info.External);
                     if isempty(entries)
                         entries = manifest;
@@ -182,6 +183,22 @@ classdef ModelRegistry < handle
 
         function capabilities = getCapabilities(obj, modelId)
             capabilities = obj.getManifest(modelId).capabilities;
+        end
+
+        function config = getGraphicsConfig(obj, modelId)
+            manifest = obj.getManifest(modelId);
+            if isfield(manifest, 'graphicsConfigPath') && ...
+                    ~isempty(manifest.graphicsConfigPath)
+                config = lmz.viz.GraphicsConfig.fromJson( ...
+                    manifest.graphicsConfigPath, manifest.catalogDirectory, ...
+                    manifest.trustedCodeRoot, manifest.trustedNamespace);
+            else
+                config = lmz.viz.GraphicsConfig.cleanGeneric( ...
+                    manifest.catalogDirectory, manifest.trustedCodeRoot, ...
+                    manifest.trustedNamespace);
+            end
+            contract = manifest.visualizationContract;
+            config.validateContract(contract.frames,contract.parameters);
         end
 
         function model = createModel(obj, modelId)
@@ -326,7 +343,43 @@ classdef ModelRegistry < handle
             if manifest.capabilities.visualize
                 scenePath = lmz.util.PathGuard.resolveWithin( ...
                     catalogDirectory, 'scene.lmz.json', true);
-                lmz.viz.SceneSpec.fromJson(scenePath, catalogDirectory);
+                scene = lmz.viz.SceneSpec.fromJson(scenePath, catalogDirectory);
+                graphicsPath = fullfile(catalogDirectory, 'graphics.lmz.json');
+                if exist(graphicsPath, 'file') == 2
+                    graphicsPath = lmz.util.PathGuard.canonical(graphicsPath, true);
+                    lmz.util.PathGuard.assertWithin(catalogDirectory, graphicsPath);
+                    if ~isfield(manifest,'visualizationContract')
+                        error('lmz:Registry:MissingVisualizationContract', ...
+                            ['A model with graphics.lmz.json must declare ' ...
+                            'visualizationContract in its manifest.']);
+                    end
+                    contract=lmz.registry.ModelRegistry. ...
+                        validateVisualizationContract(manifest.visualizationContract);
+                    config=lmz.viz.GraphicsConfig.fromJson(graphicsPath, ...
+                        catalogDirectory, info.CodeRoot, info.Namespace);
+                    config.validateContract(contract.frames,contract.parameters);
+                    manifest.visualizationContract=contract;
+                    manifest.graphicsConfigPath = graphicsPath;
+                else
+                    if isfield(manifest,'visualizationContract')
+                        contract=lmz.registry.ModelRegistry. ...
+                            validateVisualizationContract(manifest.visualizationContract);
+                        if ~all(ismember(contract.frames,scene.Frames))
+                            error('lmz:Registry:VisualizationContractScene', ...
+                                ['visualizationContract declares a frame ' ...
+                                'absent from scene.lmz.json.']);
+                        end
+                    else
+                        contract=struct('frames',{reshape(scene.Frames,1,[])}, ...
+                            'parameters',{{}});
+                    end
+                    manifest.visualizationContract=contract;
+                    manifest.graphicsConfigPath = '';
+                end
+            else
+                manifest.visualizationContract=struct('frames',{{}}, ...
+                    'parameters',{{}});
+                manifest.graphicsConfigPath = '';
             end
         end
 
@@ -497,6 +550,37 @@ classdef ModelRegistry < handle
                 error('lmz:Registry:InvalidStringList', ...
                     '%s must be a string list.', fieldName);
             end
+        end
+
+        function contract=validateVisualizationContract(value)
+            if ~isstruct(value)||~isscalar(value)|| ...
+                    ~all(isfield(value,{'frames','parameters'}))|| ...
+                    ~all(ismember(fieldnames(value),{'frames','parameters'}))
+                error('lmz:Registry:VisualizationContract', ...
+                    ['visualizationContract must contain only frames and ' ...
+                    'parameters string lists.']);
+            end
+            frames=lmz.registry.ModelRegistry.cellstrValue(value.frames,'frames');
+            if isempty(frames)
+                error('lmz:Registry:VisualizationContract', ...
+                    'Visualization contract frames cannot be empty.');
+            end
+            if isempty(value.parameters)
+                parameters={};
+            else
+                parameters=lmz.registry.ModelRegistry.cellstrValue( ...
+                    value.parameters,'parameters');
+            end
+            values=[frames parameters];
+            if numel(unique(frames))~=numel(frames)|| ...
+                    numel(unique(parameters))~=numel(parameters)|| ...
+                    any(cellfun(@(item)isempty(regexp(item, ...
+                    '^[A-Za-z][A-Za-z0-9_]*$','once')),values))
+                error('lmz:Registry:VisualizationContract', ...
+                    'Visualization contract names must be unique identifiers.');
+            end
+            contract=struct('frames',{reshape(frames,1,[])}, ...
+                'parameters',{reshape(parameters,1,[])});
         end
     end
 

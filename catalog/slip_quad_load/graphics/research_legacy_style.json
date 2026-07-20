@@ -1,0 +1,26 @@
+{
+  "load": {
+    "faceColor": [0, 0, 0],
+    "faceAlpha": 0.3,
+    "edgeColor": [0, 0, 0],
+    "lineWidth": 2
+  },
+  "rope": {
+    "faceColor": [0, 0, 0],
+    "faceAlpha": 0.3,
+    "edgeColor": [0, 0, 0],
+    "lineWidth": 2
+  },
+  "axes": {
+    "backgroundColor": [1, 1, 1],
+    "xOffsets": [-3, 1.5],
+    "yLimits": [-0.1, 2],
+    "plotBoxAspect": [2, 1, 1],
+    "title": "SLIP Quad-Load Animation"
+  },
+  "qualifications": {
+    "footfallColorLegendMismatch": true,
+    "twoStrideSourceSwitchGeneralized": true,
+    "sourceRecordingLoopPresent": false
+  }
+}

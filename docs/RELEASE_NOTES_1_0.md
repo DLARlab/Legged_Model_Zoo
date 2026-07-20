@@ -17,10 +17,23 @@ Highlights:
 - Reproducible MATLAB toolbox build support and a clean-install ZIP fallback.
 - Six owned GUI tab components, transactional presentation events, persistent
   versioned preferences, high-contrast presentation, and leak-tested disposal.
+- Per-problem `research_legacy`, `clean_generic`, and `high_contrast` graphics
+  profiles, source-audited compound geometry for all three scientific models,
+  source-style analysis plots, live profile switching, and profile-aware
+  GIF/MP4/keyframe metadata.
 - A built-in analytic hopper tutorial plus an independently registered
   external analytic plugin exercising the stable hybrid and scene contracts.
 - Model-template generation, safe input boundaries, run reproduction,
   benchmarks, measured coverage policy, CI definitions, and governance files.
+
+The closing R2025b suite passed 275/275 and all 31 public examples passed. The
+18-case headless source-comparison matrix and numeric geometry gates pass, and
+the clean-copy process renders all three research profiles without source
+repository paths. These are geometry-tested and image-metric-tested results;
+human desktop side-by-side approval remains blocked and is not claimed.
+The closing coverage run also passed all 275 tests and covered 9,601/12,546
+runtime statements (76.5264%) across 204 files while enforcing the existing
+stable-package floors.
 
 This is not a public release. No root project license or owner authorization
 record is present. Public core and scientific packages therefore remain

@@ -15,7 +15,9 @@ LeggedModelZooApp
      | slip_quad_load.SingleStrideProblem / MultiStrideFitProblem
   -> model-specific legacy evaluator (solver-free compatibility boundary)
   -> ProblemEvaluation / SimulationResult
-  -> QuadrupedRenderer and named plot providers
+  -> VisualizationProfileRegistry / RendererFactory
+  -> model-owned research renderer or generic SceneRenderer2D
+  -> named plot providers / RecorderService
 ```
 
 The GUI never calls model-specific evaluators or numerical algorithms directly.
@@ -45,14 +47,16 @@ Raw indexing is centralized in `Results29Layout/Adapter`, `Results14Layout/Adapt
 ## Dependency and extension boundaries
 
 ```text
-declarative catalog/data/scene
+declarative catalog/data/scene/graphics/style
         | bounded parse + schema/path validation
         v
 ModelRegistry --> trusted LeggedModel implementation
         |                |
         |                +--> model problem / schemas
         |                +--> HybridSystem (new native models)
-        |                +--> PlotPlugin / KinematicsFrame
+        |                +--> PlotPlugin / KinematicsFrame / pure geometry
+        |                +--> trusted Renderer implementation
+        +--> GraphicsConfig / VisualizationProfileRegistry
         v
 services --> solver / continuation / optimization algorithms
         |
@@ -100,15 +104,100 @@ records preserve every pre/post state and transition.
 Guard callbacks are possible only in trusted MATLAB implementations. Scene
 JSON and problem/catalog JSON cannot declare a callback or expression.
 
-## Generic visualization boundary
+## Visualization profile boundary
+
+`graphics.lmz.json` is model-owned declarative policy. `GraphicsConfig` loads
+it through bounded JSON, contains scene/style paths inside the model catalog,
+validates profile defaults and maturity applicability, and restricts renderer
+classes to the registered namespace/code root. JSON cannot contain state-vector
+indices, constructor expressions, or callbacks. A model without graphics JSON
+receives a synthesized `clean_generic` profile over its declarative scene.
+
+The runtime selection flow is:
+
+```text
+problem descriptor maturity
+        + per-model/problem GUI preference
+        v
+VisualizationProfileRegistry.resolve
+        v
+RendererFactory
+  |-- SceneRenderer2D + model PlotPlugin + validated SceneSpec
+  `-- trusted model renderer(axes, SimulationResult, profile, options)
+```
+
+All validated built-in scientific problems resolve to `research_legacy` by
+default. Their tutorial `demo_stride` problems and both tutorial-hopper
+problems resolve to `clean_generic`. `high_contrast` is an explicit applicable
+alternative, not an implicit global palette. The header application palette
+and model visual profile are separate preferences.
+
+`Renderer` defines the stable lifecycle: `initialize`, `updateFrame`,
+`setOptions`, `setProfile`, `frameCount`, `captureFrame`, `resetCamera`, `clear`,
+and `delete`. The renderer owns only children of the axes supplied to it. It
+builds handles once and mutates numeric graphics properties; it does not own a
+figure, playback loop, interpolation, output path, or video writer.
 
 `SceneSpec` is a validated declarative graph. `KinematicsFrame` supplies named
 finite frame poses/vectors for a simulation index. `SceneRenderer2D` maps the
-allowlisted primitive set to reused graphics handles and implements the same
-`updateFrame(index)` contract as scientific renderers. `PlotPlugin` supplies
-the scene, kinematics frames, and named plots. The built-in tutorial hopper and
-one quadruped tutorial use this path, while the quadruped model-specific
-scientific renderer remains a regression oracle.
+allowlisted primitive set to reused graphics handles. `PlotPlugin` supplies the
+scene, kinematics frames, and named plots. The tutorial hopper, generated-model
+template, external analytic-hopper fixture, and the quadruped clean fallback use
+this generic boundary. The biped/load clean profiles use model-owned simple
+renderers behind the same factory/lifecycle contract.
+
+Source-derived scientific renderers derive from `ResearchRenderer` and consume
+pure model geometry. `PatchGeometry`, `PolylineGeometry`, and
+`LayeredGeometry` keep vertices/faces/paths independent of MATLAB handles. The
+quadruped owns compound body/leg/COM/ground/phase geometry; the biped owns its
+body/COG/point-foot geometry; the load renderer composes quadruped geometry with
+load/rope geometry and per-stride parameter selection. Source checkouts are
+maintainer-only references and are not runtime dependencies.
+
+`research_legacy` means that audited source geometry, layer order, named camera
+behavior, and deterministic style constants are implemented and fixture-gated.
+It does not import source figure/path/playback ownership. `clean_generic` is a
+deliberately simplified view and is never called source-faithful.
+`high_contrast` retains compound research geometry for scientific profiles but
+deliberately changes colors and widths. Source-default color stabilization,
+the prompt-required equal quadruped aspect, generalized N-stride load selection,
+and modern analysis views are recorded deviations rather than hidden as pixel
+equivalence.
+
+Plot selection remains model-owned. `RendererFactory.renderPlots` passes the
+resolved profile to `plotSimulation` or the generic plugin. Models must
+distinguish audited source plot behavior from clean views and modern
+enrichments; animation fidelity does not automatically establish plot fidelity.
+
+## Animation and recording boundary
+
+```text
+SimulationResult --> AnimationController --> renderer.updateFrame(index)
+                                           --> renderer.captureFrame()
+selected profile --> GUI recording options/metadata --> RecorderService
+                                                   |--> target artifact
+                                                   `--> target.lmz.json
+```
+
+`AnimationController` owns normalized-time/index mapping, play/pause/stop,
+speed/FPS, and looping. `RecorderService` owns frame selection for export,
+cooperative cancellation, temporary files, GIF/MP4/keyframe/static encoding,
+resource cleanup, and restoration of the original renderer frame.
+
+The GUI maps the resolved profile's recording defaults into applicable
+requests, adds artifact-kind/model/problem/profile-descriptor/timestamp metadata,
+and writes a sidecar for animation GIF, MP4, keyframes, plots, and the
+oscillator GIF. The profile value is the resolved `VisualizationProfile`
+descriptor, including style path rather than an inline copy of the style JSON.
+Explicit request values override profile defaults. Direct service callers must
+pass both operational options and metadata because the service does not resolve
+model/profile configuration; omitted operational values use service defaults.
+
+This graphics architecture is written to the R2019b static target and routes
+release-sensitive export/video operations through compatibility adapters.
+R2019b graphics runtime is not verified; current runtime/hidden-render evidence
+comes from the recorded newer MATLAB environment, and desktop human approval is
+a separate manual gate.
 
 ## Artifact and RunContext lifecycle
 

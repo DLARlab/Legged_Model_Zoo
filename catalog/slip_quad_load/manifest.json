@@ -14,5 +14,9 @@
     "animate": true,
     "parameterHomotopy": false,
     "branchFamilyScan": false
+  },
+  "visualizationContract": {
+    "frames": ["world", "quadruped_center_of_mass", "load_center", "ground_contact"],
+    "parameters": ["per_stride_parameters", "quadruped", "load"]
   }
 }

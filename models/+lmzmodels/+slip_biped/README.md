@@ -150,15 +150,118 @@ to `fmincon`. The default is the active `Main.m` penalized `fms_cost_fun` path.
 
 ## Visualization and examples
 
-`BipedRenderer` animates the point mass, legs, feet, ground, and contact state.
-`BipedPlotProvider` creates body/leg trajectory, GRF, and normalized footfall
-plots. Repository examples are:
+The manifest visualization contract declares `world`, `body`, `foot_left`, and
+`foot_right` as named frames and declares no required parameter roots. The
+graphics configuration repeats that frame requirement. Registry discovery
+binds it to the manifest and validates any declared profile scene before a
+renderer can be selected; biped research geometry consumes named states,
+contacts, and event metadata at runtime rather than raw state-vector indices in
+configuration.
+
+The model owns three declared profiles in
+`catalog/slip_biped/graphics.lmz.json`:
+
+| Profile | Default/applicability | Renderer | Meaning |
+| --- | --- | --- | --- |
+| `research_legacy` | Default for validated `periodic_apex` and `trajectory_fit` | `lmzmodels.slip_biped.ResearchRenderer` | Source-derived compound geometry and camera |
+| `clean_generic` | Default for tutorial `demo_stride`; selectable for all maturities | `lmzmodels.slip_biped.BipedRenderer` | Simple point/straight-link presentation; not source-faithful |
+| `high_contrast` | Selectable for declared maturities | `lmzmodels.slip_biped.ResearchRenderer` | Compound research geometry with deliberately changed colors/widths |
+
+The GUI resolves this table by problem maturity. In **Physical Simulation**,
+choose a **Visual profile**, then optionally change ground visibility and camera
+follow. The detailed and force controls have no source overlay to reveal in the
+biped research renderer. A profile change safely rebuilds the renderer and the
+per-model/problem choice is retained in GUI preferences.
+
+### Research graphics mapping
+
+The source animation path constructs
+`SLIP_Model_Graphics_PointFeet_BipedalDemo`, interpolates each display state,
+and calls `update(state,eventTimes,time)`. LMZ keeps the interpolation/playback
+loop in `AnimationController` and maps the geometry as follows:
+
+| Source graphics behavior | LMZ owner |
+| --- | --- |
+| Radius-0.2 white circular body, black width-5 outline | `ResearchBodyGeometry` |
+| Four alternating radius-0.1 COG sectors | `ResearchCOGGeometry` |
+| Left/right spring, upper patch, lower shaped patch, and point foot | `ResearchLegGeometry` |
+| Strict wrapped contact and stance length `y/cos(alpha)`; flight length 1 | `ResearchLegGeometry` |
+| White ground mask and dense hatch | `ResearchGroundGeometry` |
+| Left leg behind ground/body; right leg above body; COG topmost | `ResearchRenderer` handle creation order |
+| Equal axes, x-follow half-width 1.5, y `[-0.3,2]` | profile/style plus `ResearchRenderer` |
+
+The blue spring edge is `[0 68 158]/256`; the left leg fill is
+`[202 202 202]/256`; the right leg remains white. The research renderer uses
+the event schedule when present and the named contact modes as a fallback. It
+builds axes children once and updates vertices only.
+
+### Qualified differences
+
+- The old renderer's figure ownership, `pause` loop, second recording figure,
+  MPEG-4 writer, and interpolation are intentionally replaced by shared LMZ
+  animation/recording services.
+- Source patches that inherited MATLAB defaults are assigned explicit black
+  outlines/ground styling so output is deterministic across releases.
+- Primary leg fixtures use the source post-update geometry. This intentionally
+  ignores the transient constructor-only left/right lower-width discrepancy
+  that the source setter immediately overwrites.
+- The audited source path plots eight state columns and left/right vertical GRF.
+  The research plot profile preserves source-style labels and limits the GRF
+  view to those two vertical channels. LMZ's normalized footfall, energy, and
+  gait views remain useful modern enrichments and are marked as such; the clean
+  plot profile retains the broader magnitude/horizontal/vertical GRF view.
+- `high_contrast` changes palette and line widths by design and therefore is not
+  a source-palette claim.
+
+### Programmatic rendering and recording
+
+The public helper loads the recommended walking branch, simulates
+`periodic_apex`, resolves the selected profile, and creates a hidden or visible
+classic-axes session:
+
+```matlab
+session = lmz.examples.ResearchGraphics.open( ...
+    'slip_biped', 'research_legacy', 'off');
+cleanup = onCleanup(@() lmz.examples.ResearchGraphics.close(session));
+summary = lmz.examples.ResearchGraphics.renderFrames( ...
+    session, [0 0.25 0.5 0.75 1]);
+```
+
+Record the selected renderer and include the resolved profile in the adjacent
+sidecar:
+
+```matlab
+target = fullfile(tempdir, 'biped-research.gif');
+metadata = struct('schemaVersion', '1.0.0', ...
+    'modelId', session.ModelId, 'problemId', session.ProblemId, ...
+    'visualizationProfile', session.Profile.toStruct());
+lmz.services.RecorderService().recordGif(session.Renderer, target, ...
+    struct('FrameCount', 40, 'DelayTime', 1/30, ...
+    'Metadata', metadata));
+```
+
+The GUI applies profile recording defaults and writes profile sidecars for its
+animation, keyframe, plot, and oscillator exports. Direct recorder calls must
+pass metadata explicitly.
+
+Numeric body/COG/left-leg/right-leg/contact/ground fixtures live under
+`tests/fixtures/graphics/slip_biped`; renderer and geometry tests live under
+`tests/visualization`. The detailed source/file/formula record is in
+`docs/legacy-graphics-audit.md`. Hidden rendering is not a completed human
+side-by-side review. R2019b is a static compatibility target only; graphics
+runtime evidence was collected on the documented newer MATLAB release.
+
+Repository examples are:
 
 ```text
 demo_slip_biped_gaitmap_workflow.m
 demo_slip_biped_solve.m
 demo_slip_biped_continuation.m
 demo_slip_biped_trajectory_fit.m
+demo_biped_research_graphics.m
+demo_visual_profile_switching.m
+demo_research_graphics_recording.m
+demo_graphics_comparison_gallery.m
 ```
 
 Each example is rerunnable, leaves a structured `output` value in the

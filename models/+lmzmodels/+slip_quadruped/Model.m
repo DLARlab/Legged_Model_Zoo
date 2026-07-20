@@ -58,6 +58,21 @@ classdef Model < lmz.api.LeggedModel
                 'oscillator'},'label',{'Torso and legs','Vertical GRF', ...
                 'Horizontal GRF','Footfall phases'});
         end
+        function plotSimulation(~,axesMap,simulation,profile)
+            %PLOTSIMULATION Populate the five GUI analysis axes through the
+            % model-owned source plot provider.  Keeping this dispatch here
+            % prevents the generic GUI from knowing model-specific channels.
+            lmzmodels.slip_quadruped.QuadrupedPlotProvider. ...
+                plotTorso(axesMap.Torso,simulation,profile);
+            lmzmodels.slip_quadruped.QuadrupedPlotProvider. ...
+                plotBackLegs(axesMap.Back,simulation,profile);
+            lmzmodels.slip_quadruped.QuadrupedPlotProvider. ...
+                plotFrontLegs(axesMap.Front,simulation,profile);
+            lmzmodels.slip_quadruped.QuadrupedPlotProvider. ...
+                plotGRF(axesMap.Forces,simulation,profile);
+            lmzmodels.slip_quadruped.QuadrupedPlotProvider. ...
+                plotOscillator(axesMap.Auxiliary,simulation,profile);
+        end
         function value = getVisualizationPlugin(obj)
             manifest = obj.registeredManifest();
             if isempty(manifest)

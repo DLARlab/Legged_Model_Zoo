@@ -14,5 +14,9 @@
     "animate": true,
     "parameterHomotopy": false,
     "branchFamilyScan": false
+  },
+  "visualizationContract": {
+    "frames": ["world", "body", "foot_left", "foot_right"],
+    "parameters": []
   }
 }

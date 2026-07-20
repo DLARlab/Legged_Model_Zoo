@@ -1,9 +1,9 @@
 classdef (Abstract) PlotPlugin < handle
     %PLOTPLUGIN Model-owned generic scene and named-plot extension point.
     methods
-        function renderer = createRenderer(obj, axesHandle, simulation)
+        function renderer = createRenderer(obj, axesHandle, simulation, varargin)
             renderer = lmz.viz.SceneRenderer2D( ...
-                axesHandle, obj.sceneSpec(), simulation, obj);
+                axesHandle, obj.sceneSpec(), simulation, obj, varargin{:});
         end
     end
     methods (Abstract)

@@ -1,0 +1,538 @@
+{
+  "schemaVersion": "1.0.0",
+  "modelId": "slip_biped",
+  "sourceCommit": "4595146c5881a5313bc8fe92de85099193ef9be9",
+  "matlabRelease": "2025b",
+  "platform": "MACA64",
+  "graphicsEnvironment": {
+    "renderer": "WebGL",
+    "vendor": "Google Inc. (Apple)",
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+    "device": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)"
+  },
+  "frameSize": [
+    640,
+    480
+  ],
+  "dataContract": {
+    "stateNames": [
+      "x",
+      "dx",
+      "y",
+      "dy",
+      "alphaL",
+      "dalphaL",
+      "alphaR",
+      "dalphaR"
+    ],
+    "parameterNames": [
+      "L_TD",
+      "L_LO",
+      "R_TD",
+      "R_LO",
+      "tAPEX"
+    ]
+  },
+  "canonicalCaseLabels": [
+    "flight",
+    "left_stance",
+    "right_stance",
+    "double_stance_wrapped_contact",
+    "walk_representative",
+    "run_representative",
+    "hop_representative"
+  ],
+  "frames": [
+    {
+      "index": 1,
+      "caseLabel": "flight",
+      "caseMetadata": {
+        "coverageTags": [
+          "flight"
+        ],
+        "expectedContacts": [
+          false,
+          false
+        ],
+        "expectedContactCount": 0,
+        "gaitLabel": "none",
+        "simulationFrameIndex": 3,
+        "wrappedContact": false,
+        "sourceSupport": "Pinned source renderer strict event-contact logic."
+      },
+      "time": 0.65,
+      "state": [
+        2.18,
+        0,
+        0.96,
+        0,
+        0.12,
+        0,
+        -0.18,
+        0
+      ],
+      "parameters": [
+        0.75,
+        0.25,
+        0.1,
+        0.6,
+        1
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.012266819090681952,
+        "EdgeMapOverlap": 0.9927141543467497,
+        "StructuralSimilarity": 0.99705044678801258,
+        "ForegroundBoundingBoxAgreement": 1,
+        "ColorClusterAgreement": 0.98827654320987657,
+        "ReferenceBounds": [
+          78,
+          179,
+          626,
+          415
+        ],
+        "CandidateBounds": [
+          78,
+          179,
+          626,
+          415
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 2,
+      "caseLabel": "left_stance",
+      "caseMetadata": {
+        "coverageTags": [
+          "left_stance"
+        ],
+        "expectedContacts": [
+          true,
+          false
+        ],
+        "expectedContactCount": 1,
+        "gaitLabel": "none",
+        "simulationFrameIndex": 4,
+        "wrappedContact": false,
+        "sourceSupport": "Pinned source renderer strict event-contact logic."
+      },
+      "time": 0.8,
+      "state": [
+        2.28,
+        0,
+        0.94,
+        0,
+        0.1,
+        0,
+        -0.14,
+        0
+      ],
+      "parameters": [
+        0.75,
+        0.25,
+        0.1,
+        0.6,
+        1
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.012276082321353026,
+        "EdgeMapOverlap": 0.99295614633037943,
+        "StructuralSimilarity": 0.99706768147756331,
+        "ForegroundBoundingBoxAgreement": 1,
+        "ColorClusterAgreement": 0.98839407407407409,
+        "ReferenceBounds": [
+          78,
+          183,
+          626,
+          415
+        ],
+        "CandidateBounds": [
+          78,
+          183,
+          626,
+          415
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 3,
+      "caseLabel": "right_stance",
+      "caseMetadata": {
+        "coverageTags": [
+          "right_stance"
+        ],
+        "expectedContacts": [
+          false,
+          true
+        ],
+        "expectedContactCount": 1,
+        "gaitLabel": "none",
+        "simulationFrameIndex": 2,
+        "wrappedContact": false,
+        "sourceSupport": "Pinned source renderer strict event-contact logic."
+      },
+      "time": 0.3,
+      "state": [
+        2.08,
+        0,
+        0.92,
+        0,
+        0.17,
+        0,
+        -0.25,
+        0
+      ],
+      "parameters": [
+        0.75,
+        0.25,
+        0.1,
+        0.6,
+        1
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.012340095144591738,
+        "EdgeMapOverlap": 0.9926779661016949,
+        "StructuralSimilarity": 0.99698420474099336,
+        "ForegroundBoundingBoxAgreement": 1,
+        "ColorClusterAgreement": 0.98815111111111109,
+        "ReferenceBounds": [
+          78,
+          187,
+          626,
+          415
+        ],
+        "CandidateBounds": [
+          78,
+          187,
+          626,
+          415
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 4,
+      "caseLabel": "double_stance_wrapped_contact",
+      "caseMetadata": {
+        "coverageTags": [
+          "double_stance",
+          "wrapped_contact"
+        ],
+        "expectedContacts": [
+          true,
+          true
+        ],
+        "expectedContactCount": 2,
+        "gaitLabel": "none",
+        "simulationFrameIndex": 1,
+        "wrappedContact": true,
+        "sourceSupport": "Pinned source renderer strict event-contact logic."
+      },
+      "time": 0.15,
+      "state": [
+        2,
+        0,
+        0.9,
+        0,
+        0.2,
+        0,
+        -0.3,
+        0
+      ],
+      "parameters": [
+        0.75,
+        0.25,
+        0.1,
+        0.6,
+        1
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.012415818121312551,
+        "EdgeMapOverlap": 0.99217924328894525,
+        "StructuralSimilarity": 0.99698277480975361,
+        "ForegroundBoundingBoxAgreement": 1,
+        "ColorClusterAgreement": 0.9880424691358024,
+        "ReferenceBounds": [
+          78,
+          190,
+          626,
+          411
+        ],
+        "CandidateBounds": [
+          78,
+          190,
+          626,
+          411
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 5,
+      "caseLabel": "walk_representative",
+      "caseMetadata": {
+        "coverageTags": [
+          "gait_representative",
+          "walking"
+        ],
+        "expectedContacts": [
+          true,
+          true
+        ],
+        "expectedContactCount": 2,
+        "gaitLabel": "walking",
+        "simulationFrameIndex": 1499,
+        "wrappedContact": true,
+        "sourceSupport": "Main.m Section 2 walking example, W1.mat index 30; rendered by ShowTrajectory_BipedalDemo."
+      },
+      "time": 1.0270865065903951,
+      "state": [
+        0.41471360015460412,
+        0.41467401169617257,
+        0.94536406556337427,
+        -6.7076757307914085E-5,
+        0.21608572452908006,
+        -0.41846002128590543,
+        -0.21586654125480914,
+        -0.41852997503063538
+      ],
+      "parameters": [
+        0.77956598709679381,
+        0.24778239032786917,
+        1.8069143645160128,
+        1.2751307677470574,
+        2.0546967548384143
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.01235465431362659,
+        "EdgeMapOverlap": 0.99236224768139658,
+        "StructuralSimilarity": 0.99699339545307686,
+        "ForegroundBoundingBoxAgreement": 1,
+        "ColorClusterAgreement": 0.98823012345679007,
+        "ReferenceBounds": [
+          78,
+          182,
+          626,
+          416
+        ],
+        "CandidateBounds": [
+          78,
+          182,
+          626,
+          416
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 6,
+      "caseLabel": "run_representative",
+      "caseMetadata": {
+        "coverageTags": [
+          "gait_representative",
+          "running"
+        ],
+        "expectedContacts": [
+          false,
+          false
+        ],
+        "expectedContactCount": 0,
+        "gaitLabel": "running",
+        "simulationFrameIndex": 1089,
+        "wrappedContact": false,
+        "sourceSupport": "Main.m Section 2 running example, R1.mat index 30; rendered by ShowTrajectory_BipedalDemo."
+      },
+      "time": 0.51033840250481355,
+      "state": [
+        1.353726259141889,
+        2.6686997444299405,
+        0.89850625023604225,
+        8.6772718633000481E-5,
+        0.584267074589512,
+        -0.38514188146414019,
+        -0.58419986325181661,
+        -0.38942565389980383
+      ],
+      "parameters": [
+        0.5967841799694078,
+        0.934491345700765,
+        0.08635900474601009,
+        0.42406617047736983,
+        1.0208503504467761
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.012645088578166678,
+        "EdgeMapOverlap": 0.99296315250767653,
+        "StructuralSimilarity": 0.99702466427044789,
+        "ForegroundBoundingBoxAgreement": 1,
+        "ColorClusterAgreement": 0.98755061728395066,
+        "ReferenceBounds": [
+          78,
+          191,
+          626,
+          410
+        ],
+        "CandidateBounds": [
+          78,
+          191,
+          626,
+          410
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 7,
+      "caseLabel": "hop_representative",
+      "caseMetadata": {
+        "coverageTags": [
+          "gait_representative",
+          "hopping"
+        ],
+        "expectedContacts": [
+          true,
+          true
+        ],
+        "expectedContactCount": 2,
+        "gaitLabel": "hopping",
+        "simulationFrameIndex": 993,
+        "wrappedContact": false,
+        "sourceSupport": "Main.m Section 2 hopping example, HP1.mat index 50; rendered by ShowTrajectory_BipedalDemo."
+      },
+      "time": 0.564667973037125,
+      "state": [
+        0.60756098012545523,
+        1.0326459797696772,
+        0.90809445608618544,
+        -0.00031618436760058426,
+        0.00013435030592640887,
+        -1.1371569463176345,
+        0.00013435030592477823,
+        -1.1371569463176352
+      ],
+      "parameters": [
+        0.32157691887035517,
+        0.8079953187767609,
+        0.32157691886969031,
+        0.8079953187767599,
+        1.129572237645726
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.011934320283390242,
+        "EdgeMapOverlap": 0.99471373532837559,
+        "StructuralSimilarity": 0.99726854414617538,
+        "ForegroundBoundingBoxAgreement": 1,
+        "ColorClusterAgreement": 0.98860839506172848,
+        "ReferenceBounds": [
+          78,
+          189,
+          626,
+          410
+        ],
+        "CandidateBounds": [
+          78,
+          189,
+          626,
+          410
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    }
+  ],
+  "lmzRegressions": {},
+  "summary": {
+    "normalizedRMSEMaximum": 0.012645088578166678,
+    "edgeMapOverlapMinimum": 0.99217924328894525,
+    "foregroundBoundingBoxAgreementMinimum": 1,
+    "colorClusterAgreementMinimum": 0.98755061728395066
+  },
+  "thresholds": {
+    "normalizedRMSEMaximum": 0.35,
+    "edgeMapOverlapMinimum": 0.6,
+    "foregroundBoundingBoxAgreementMinimum": 0.84,
+    "colorClusterAgreementMinimum": 0.65
+  },
+  "sourceImagesStored": false,
+  "differenceImagesStored": false,
+  "humanApproved": false,
+  "qualification": "Source and LMZ were rendered headlessly at matched axes/camera. Target explicit black defaults and requested camera corrections are retained. No raster is redistributed; geometry tests remain primary.",
+  "passed": true
+}

@@ -1,0 +1,642 @@
+{
+  "schemaVersion": "1.0.0",
+  "modelId": "slip_quad_load",
+  "sourceCommit": "19f3133073c988cc0c3424a647b4adbb60a90b99",
+  "matlabRelease": "2025b",
+  "platform": "MACA64",
+  "graphicsEnvironment": {
+    "renderer": "WebGL",
+    "vendor": "Google Inc. (Apple)",
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+    "device": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)"
+  },
+  "frameSize": [
+    640,
+    480
+  ],
+  "dataContract": {
+    "stateNames": [
+      "quad_x",
+      "quad_dx",
+      "quad_y",
+      "quad_dy",
+      "quad_phi",
+      "quad_dphi",
+      "alphaBL",
+      "dalphaBL",
+      "alphaFL",
+      "dalphaFL",
+      "alphaBR",
+      "dalphaBR",
+      "alphaFR",
+      "dalphaFR",
+      "load_x",
+      "load_dx",
+      "load_y",
+      "load_dy"
+    ],
+    "parameterNames": [
+      "source_P_01",
+      "source_P_02",
+      "source_P_03",
+      "source_P_04",
+      "source_P_05",
+      "source_P_06",
+      "source_P_07",
+      "source_P_08",
+      "source_P_09",
+      "source_P_10",
+      "source_P_11",
+      "source_P_12",
+      "source_P_13",
+      "source_P_14",
+      "source_P_15",
+      "source_P_16",
+      "source_P_17"
+    ]
+  },
+  "canonicalCaseLabels": [
+    "single_stride_stance",
+    "rope_slack_low_force",
+    "stride_boundary_before",
+    "stride_boundary_exact",
+    "stride_boundary_after",
+    "rope_loaded"
+  ],
+  "frames": [
+    {
+      "index": 1,
+      "caseLabel": "single_stride_stance",
+      "caseMetadata": {
+        "coverageTags": [
+          "single_stride_stance"
+        ],
+        "expectedContacts": [
+          true,
+          false,
+          true,
+          false
+        ],
+        "expectedStrideIndex": 1,
+        "boundaryRelation": "none",
+        "ropeCondition": "baseline",
+        "tuglineForce": 0.5,
+        "ropeLength": 2.5179356624028344,
+        "simulationFrameIndex": 1
+      },
+      "time": 0.3,
+      "state": [
+        0.5,
+        0.3,
+        1.1,
+        0,
+        0.1,
+        0,
+        0.05,
+        -0.4,
+        -0.08,
+        0.1,
+        0.11,
+        0.5,
+        -0.12,
+        -0.2,
+        -2,
+        0,
+        0.8,
+        0
+      ],
+      "parameters": [
+        0.1,
+        0.4,
+        0.5,
+        0.8,
+        0.2,
+        0.6,
+        0.7,
+        1,
+        1.5,
+        8,
+        20,
+        4,
+        1.1,
+        0,
+        0.4,
+        1,
+        2.4
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.046351560648412962,
+        "EdgeMapOverlap": 0.90625782227784735,
+        "StructuralSimilarity": 0.97729125648801529,
+        "ForegroundBoundingBoxAgreement": 0.8717077229008563,
+        "ColorClusterAgreement": 0.98859259259259258,
+        "ReferenceBounds": [
+          39,
+          79,
+          639,
+          406
+        ],
+        "CandidateBounds": [
+          68,
+          79,
+          636,
+          380
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 2,
+      "caseLabel": "rope_slack_low_force",
+      "caseMetadata": {
+        "coverageTags": [
+          "rope_slack",
+          "low_force"
+        ],
+        "expectedContacts": [
+          false,
+          true,
+          false,
+          false
+        ],
+        "expectedStrideIndex": 1,
+        "boundaryRelation": "none",
+        "ropeCondition": "slack_low_force",
+        "tuglineForce": 0.02,
+        "ropeLength": 0.31622776601683789,
+        "simulationFrameIndex": 2
+      },
+      "time": 0.7,
+      "state": [
+        0.6,
+        0.3,
+        1.15,
+        0,
+        0.05,
+        0,
+        0.03,
+        -0.2,
+        -0.04,
+        0.15,
+        0.05,
+        0.2,
+        -0.06,
+        -0.1,
+        0.3,
+        0,
+        1.05,
+        0
+      ],
+      "parameters": [
+        0.1,
+        0.4,
+        0.5,
+        0.8,
+        0.2,
+        0.6,
+        0.7,
+        1,
+        1.5,
+        8,
+        20,
+        4,
+        1.1,
+        0,
+        0.4,
+        1,
+        2.4
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.047253772263913148,
+        "EdgeMapOverlap": 0.89582432207619367,
+        "StructuralSimilarity": 0.97610810882193522,
+        "ForegroundBoundingBoxAgreement": 0.876080838567583,
+        "ColorClusterAgreement": 0.98931950617283948,
+        "ReferenceBounds": [
+          39,
+          79,
+          636,
+          406
+        ],
+        "CandidateBounds": [
+          68,
+          79,
+          636,
+          380
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 3,
+      "caseLabel": "stride_boundary_before",
+      "caseMetadata": {
+        "coverageTags": [
+          "stride_boundary",
+          "before"
+        ],
+        "expectedContacts": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "expectedStrideIndex": 1,
+        "boundaryRelation": "before",
+        "ropeCondition": "transition",
+        "tuglineForce": 0.8,
+        "ropeLength": 2.4382165613415063,
+        "simulationFrameIndex": 3
+      },
+      "time": 1.499,
+      "state": [
+        0.75,
+        0.3,
+        1.17,
+        0,
+        0.14,
+        0,
+        0.06,
+        -0.3,
+        -0.07,
+        0.2,
+        0.1,
+        0.4,
+        -0.11,
+        -0.1,
+        -1.65,
+        0,
+        0.74,
+        0
+      ],
+      "parameters": [
+        0.1,
+        0.4,
+        0.5,
+        0.8,
+        0.2,
+        0.6,
+        0.7,
+        1,
+        1.5,
+        8,
+        20,
+        4,
+        1.1,
+        0,
+        0.4,
+        1,
+        2.4
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.044594238577057715,
+        "EdgeMapOverlap": 0.91341040094264514,
+        "StructuralSimilarity": 0.97885111979690376,
+        "ForegroundBoundingBoxAgreement": 0.876080838567583,
+        "ColorClusterAgreement": 0.98891358024691356,
+        "ReferenceBounds": [
+          39,
+          79,
+          636,
+          406
+        ],
+        "CandidateBounds": [
+          68,
+          79,
+          636,
+          380
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 4,
+      "caseLabel": "stride_boundary_exact",
+      "caseMetadata": {
+        "coverageTags": [
+          "stride_boundary",
+          "exact"
+        ],
+        "expectedContacts": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "expectedStrideIndex": 2,
+        "boundaryRelation": "exact",
+        "ropeCondition": "transition",
+        "tuglineForce": 0.9,
+        "ropeLength": 2.4490449158804743,
+        "simulationFrameIndex": 4
+      },
+      "time": 1.5,
+      "state": [
+        0.751,
+        0.3,
+        1.17,
+        0,
+        0.14,
+        0,
+        0.06,
+        -0.3,
+        -0.07,
+        0.2,
+        0.1,
+        0.4,
+        -0.11,
+        -0.1,
+        -1.66,
+        0,
+        0.74,
+        0
+      ],
+      "parameters": [
+        1.7,
+        2,
+        2.1,
+        2.4,
+        1.8,
+        2.2,
+        2.3,
+        2.6,
+        3.25,
+        8,
+        21,
+        4,
+        1.2,
+        0,
+        0.6,
+        1,
+        2.4
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.0446454112461221,
+        "EdgeMapOverlap": 0.91682484363817407,
+        "StructuralSimilarity": 0.97876519270560691,
+        "ForegroundBoundingBoxAgreement": 0.88768455828371,
+        "ColorClusterAgreement": 0.98857283950617281,
+        "ReferenceBounds": [
+          39,
+          79,
+          636,
+          406
+        ],
+        "CandidateBounds": [
+          68,
+          79,
+          636,
+          384
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 5,
+      "caseLabel": "stride_boundary_after",
+      "caseMetadata": {
+        "coverageTags": [
+          "stride_boundary",
+          "after"
+        ],
+        "expectedContacts": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "expectedStrideIndex": 2,
+        "boundaryRelation": "after",
+        "ropeCondition": "transition",
+        "tuglineForce": 1,
+        "ropeLength": 2.4598747935616556,
+        "simulationFrameIndex": 5
+      },
+      "time": 1.501,
+      "state": [
+        0.752,
+        0.3,
+        1.17,
+        0,
+        0.14,
+        0,
+        0.06,
+        -0.3,
+        -0.07,
+        0.2,
+        0.1,
+        0.4,
+        -0.11,
+        -0.1,
+        -1.67,
+        0,
+        0.74,
+        0
+      ],
+      "parameters": [
+        1.7,
+        2,
+        2.1,
+        2.4,
+        1.8,
+        2.2,
+        2.3,
+        2.6,
+        3.25,
+        8,
+        21,
+        4,
+        1.2,
+        0,
+        0.6,
+        1,
+        2.4
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.044645464829251871,
+        "EdgeMapOverlap": 0.915282649861857,
+        "StructuralSimilarity": 0.97876347490933946,
+        "ForegroundBoundingBoxAgreement": 0.88768455828371,
+        "ColorClusterAgreement": 0.98856987654320994,
+        "ReferenceBounds": [
+          39,
+          79,
+          636,
+          406
+        ],
+        "CandidateBounds": [
+          68,
+          79,
+          636,
+          384
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    },
+    {
+      "index": 6,
+      "caseLabel": "rope_loaded",
+      "caseMetadata": {
+        "coverageTags": [
+          "rope_loaded"
+        ],
+        "expectedContacts": [
+          false,
+          true,
+          false,
+          false
+        ],
+        "expectedStrideIndex": 2,
+        "boundaryRelation": "none",
+        "ropeCondition": "loaded",
+        "tuglineForce": 1.8,
+        "ropeLength": 3.546110545372211,
+        "simulationFrameIndex": 6
+      },
+      "time": 2.2,
+      "state": [
+        1.1,
+        0.3,
+        1.22,
+        0,
+        0.2,
+        0,
+        0.08,
+        -0.1,
+        -0.05,
+        0.4,
+        0.09,
+        0.2,
+        -0.09,
+        0.1,
+        -2.4,
+        0,
+        0.65,
+        0
+      ],
+      "parameters": [
+        1.7,
+        2,
+        2.1,
+        2.4,
+        1.8,
+        2.2,
+        2.3,
+        2.6,
+        3.25,
+        8,
+        21,
+        4,
+        1.2,
+        0,
+        0.6,
+        1,
+        2.4
+      ],
+      "sourceImageSize": [
+        500,
+        675,
+        3
+      ],
+      "targetImageSize": [
+        500,
+        675,
+        3
+      ],
+      "metrics": {
+        "NormalizedRMSE": 0.045776821534460506,
+        "EdgeMapOverlap": 0.90775168864586686,
+        "StructuralSimilarity": 0.97792769345895236,
+        "ForegroundBoundingBoxAgreement": 0.876080838567583,
+        "ColorClusterAgreement": 0.9879683950617284,
+        "ReferenceBounds": [
+          39,
+          79,
+          636,
+          406
+        ],
+        "CandidateBounds": [
+          68,
+          79,
+          636,
+          380
+        ]
+      },
+      "reviewOutcome": "batch_metrics_pass",
+      "passed": true
+    }
+  ],
+  "lmzRegressions": {},
+  "summary": {
+    "normalizedRMSEMaximum": 0.047253772263913148,
+    "edgeMapOverlapMinimum": 0.89582432207619367,
+    "foregroundBoundingBoxAgreementMinimum": 0.8717077229008563,
+    "colorClusterAgreementMinimum": 0.9879683950617284
+  },
+  "thresholds": {
+    "normalizedRMSEMaximum": 0.35,
+    "edgeMapOverlapMinimum": 0.6,
+    "foregroundBoundingBoxAgreementMinimum": 0.84,
+    "colorClusterAgreementMinimum": 0.65
+  },
+  "sourceImagesStored": false,
+  "differenceImagesStored": false,
+  "humanApproved": false,
+  "qualification": "Source and LMZ were rendered headlessly at matched axes/camera. Target explicit black defaults and requested camera corrections are retained. No raster is redistributed; geometry tests remain primary.",
+  "passed": true
+}

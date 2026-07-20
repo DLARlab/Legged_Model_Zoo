@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "1.0.0",
+  "body": {
+    "faceColor": [1, 1, 1],
+    "edgeColor": [0, 0, 0],
+    "lineWidth": 5
+  },
+  "cog": {
+    "faceColors": [[1, 1, 1], [0, 0, 0], [1, 1, 1], [0, 0, 0]],
+    "edgeColor": [0, 0, 0],
+    "lineWidth": 3
+  },
+  "spring": {
+    "faceColor": [0, 0, 0],
+    "edgeColor": [0, 0.265625, 0.6171875],
+    "lineWidth": 5
+  },
+  "leftLeg": {
+    "faceColor": [0.7890625, 0.7890625, 0.7890625],
+    "edgeColor": [0, 0, 0],
+    "lineWidth": 3
+  },
+  "rightLeg": {
+    "faceColor": [1, 1, 1],
+    "edgeColor": [0, 0, 0],
+    "lineWidth": 3
+  },
+  "ground": {
+    "maskFaceColor": [1, 1, 1],
+    "maskEdgeColor": [0, 0, 0],
+    "maskLineWidth": 0.5,
+    "hatchFaceColor": [0, 0, 0],
+    "hatchEdgeColor": [0, 0, 0],
+    "hatchLineWidth": 0.5
+  },
+  "axes": {
+    "backgroundColor": [1, 1, 1],
+    "xFollowHalfWidth": 1.5,
+    "yLimits": [-0.3, 2]
+  },
+  "qualifications": {
+    "defaultColorPolicy": "The source left several patch colors at MATLAB defaults. This profile freezes its documented black-outline and black-ground intent so rendering is release-independent."
+  }
+}

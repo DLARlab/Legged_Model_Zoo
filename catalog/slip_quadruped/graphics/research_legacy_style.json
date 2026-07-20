@@ -1,0 +1,52 @@
+{
+  "source": {
+    "repository": "DLARlab/SLIP_Model_Zoo",
+    "commit": "2c106101383ecee1b2a9d695efe09fbd72d5718a",
+    "blackDefaultAdaptation": "Theme-dependent source edges are explicit RGB black."
+  },
+  "body": {
+    "backgroundColor": [1, 1, 1],
+    "shadeColor": [0.8, 0.8, 0.8],
+    "edgeColor": [0, 0, 0],
+    "shadeWidth": 3,
+    "outlineWidth": 4
+  },
+  "leg": {
+    "springColor": [0.95703125, 0.51171875, 0.2265625],
+    "springWidth": 5,
+    "upperBackgroundColor": [1, 1, 1],
+    "shadeColor": [0.8, 0.8, 0.8],
+    "shadeWidth": 3,
+    "outlineColor": [0, 0, 0],
+    "outlineWidth": 3,
+    "lowerColor": [1, 1, 1],
+    "lowerEdgeColor": [0, 0, 0],
+    "lowerWidth": 3
+  },
+  "com": {
+    "outerColor": [1, 1, 1],
+    "edgeColor": [0, 0, 0],
+    "outerWidth": 5,
+    "innerWidth": 3,
+    "radius": 0.15
+  },
+  "ground": {
+    "fieldColor": [1, 1, 1],
+    "edgeColor": [0, 0, 0],
+    "hatchColor": [0, 0, 0],
+    "lineWidth": 0.5
+  },
+  "phase": {
+    "boxColor": [1, 1, 1],
+    "edgeColor": [0, 0, 0],
+    "lineWidth": 1.5,
+    "textColor": [0, 0, 0],
+    "fontSize": 10,
+    "titleFontSize": 15
+  },
+  "force": {
+    "color": [0.75, 0.1, 0.1],
+    "lineWidth": 1.2,
+    "scale": 0.025
+  }
+}

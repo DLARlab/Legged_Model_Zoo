@@ -148,7 +148,7 @@ classdef ContinuationTab < lmz.gui.tabs.BaseTab
             if isfield(obj.Capabilities,'parameterHomotopy'),homotopy=obj.Capabilities.parameterHomotopy;end
             if isfield(obj.Capabilities,'branchFamilyScan'),family=obj.Capabilities.branchFamilyScan;end
             enableControls(obj.ActionControls,supported&&~obj.IsBusy);
-            enableControls(obj.CancelControls,obj.IsBusy);
+            enableControls(obj.CancelControls,obj.cancelControlsEnabled());
             setEnable(obj.HomotopyButton,homotopy&&~obj.IsBusy);
             setEnable(obj.FamilyScanButton,family&&~obj.IsBusy);
             setEnable(obj.ParameterDropDown,(homotopy||family)&&~obj.IsBusy);

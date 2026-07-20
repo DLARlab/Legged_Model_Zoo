@@ -10,6 +10,86 @@ Immutable reference repositories selected from the common workspace root:
 
 Round 5 copies the complete quadruped `1_Roadmap` folder: nine MAT branches, two reference FIG files, and no Finder metadata. `roadmap_manifest.json` records all source hashes. Round 6 additionally copies six biped GaitMap MAT branches, two biped trajectory-fit MAT inputs, one 44-entry load single-stride MAT, and one 57-entry load transition MAT. Their manifests record source paths, commits, exact dimensions, hashes, and native artifact paths. All three source repositories were clean before capture and are checked again after validation.
 
+## Round 8 research graphics provenance
+
+Round 8 does not copy the legacy handle-owning graphics classes into normal
+runtime. It adapts their numeric geometry and visual constants into pure model
+providers, deterministic styles, and native renderer lifecycle classes. The
+quadruped graphics map is pinned to `DLARlab/SLIP_Model_Zoo` commit
+`2c106101383ecee1b2a9d695efe09fbd72d5718a`; the biped map is pinned to
+`DLARlab/2022_A_Template_Model_Explains_Jerboa_Gait_Transitions` commit
+`4595146c5881a5313bc8fe92de85099193ef9be9`; and the load-specific map is
+pinned to `DLARlab/2025_Gait_Transitions_in_Load_Pulling_Quadrupeds_Insights`
+commit `19f3133073c988cc0c3424a647b4adbb60a90b99`.
+
+| Local provider/composition | Pinned upstream graphics source | Adaptation or qualification |
+|---|---|---|
+| `lmzmodels.slip_quadruped.ResearchBodyGeometry` | `SLIP_Quadruped/2_Graphic_ToolBox/SLIP_Quadrupedal_Graphics/GraphicFunctions/ComputeBodyGraphics.m` | Pure 80-vertex body, shading faces, outline, skew, rotation, and translation. |
+| `lmzmodels.slip_quadruped.ResearchLegGeometry` | `SLIP_Quadruped/2_Graphic_ToolBox/SLIP_Quadrupedal_Graphics/GraphicFunctions/ComputeLegGraphics.m` and `ComputeJoint_LegLA.m` in the same directory | Pure six-layer compound-leg geometry plus named hip, angle, length, strict-contact, and one-wrap event access. |
+| `lmzmodels.slip_quadruped.ResearchCOMGeometry` | `SLIP_Quadruped/2_Graphic_ToolBox/SLIP_Quadrupedal_Graphics/GraphicFunctions/SLIP_Animation_Quad.m`, COM construction/update | Source outer and quartered inner symbol represented as indexed faces. |
+| `lmzmodels.slip_quadruped.ResearchGroundGeometry` | `SLIP_Quadruped/2_Graphic_ToolBox/SLIP_Quadrupedal_Graphics/GraphicFunctions/SLIP_Animation_Quad.m`, ground construction | Source field and one dense 20,002-vertex/5,001-face hatch; built once rather than as independent stripe handles. |
+| `lmzmodels.slip_quadruped.ResearchPhaseDiagramGeometry` | `SLIP_Quadruped/2_Graphic_ToolBox/SLIP_Quadrupedal_Graphics/GraphicFunctions/ComputePhaseDiagram.m` | Source box, labels, BL/BR/FL/FR ordering, and wrapped bars; equal touchdown/liftoff is defined as an empty bar because the source leaves it undefined. |
+| `lmzmodels.slip_biped.ResearchBodyGeometry` | `Stored_Functions/Graphics/DrawBody.m` and `SetDrawBody.m` | Pure post-update radius-0.2 body vertices. |
+| `lmzmodels.slip_biped.ResearchCOGGeometry` | `Stored_Functions/Graphics/SLIP_Model_Graphics_PointFeet_BipedalDemo.m`, COG construction/update | Four source quadrant columns flattened into four explicit faces. |
+| `lmzmodels.slip_biped.ResearchLegGeometry` | `Stored_Functions/Graphics/DrawLegsPointFeet.m`, `DrawLegsLeftPointFeet.m`, `SetDrawLegsPointFeet.m`, and `SLIP_Model_Graphics_PointFeet_BipedalDemo.m` | Primary output preserves the shared post-update formula actually used for both legs; constructor-only asymmetry remains separately measurable. |
+| `lmzmodels.slip_biped.ResearchGroundGeometry` | `Stored_Functions/Graphics/SLIP_Model_Graphics_PointFeet_BipedalDemo.m`, ground construction | Exact white mask and dense hatch geometry. |
+| Load renderer shared quadruped composition | `Stored_Functions/Graphics/ComputeBodyGraphics.m`, `ComputeJoint_LegLA.m`, `ComputeLegGraphics.m`, and shared COM/ground construction in `SLIP_Animation_Quad_Load.m`; the three helper files are byte-identical to the pinned quadruped versions | Reuses the quadruped providers rather than duplicating equations; this composition therefore references both pinned source families. |
+| `lmzmodels.slip_quad_load.ResearchLoadGeometry` | `Stored_Functions/Graphics/ComputeLoadGraphics.m` | Pure four-vertex load using source `load_y` half-width/half-height behavior. |
+| `lmzmodels.slip_quad_load.ResearchRopeGeometry` | `Stored_Functions/Graphics/SLIP_Animation_Quad_Load.m`, `DrawRopeLoad`/`SetRopeLoad` | Retains the four duplicated endpoints as the source zero-area patch rather than simplifying it to a line. |
+
+`ResearchStyle.m` and `graphics/research_legacy_style.json` under each
+scientific model preserve the source colors, widths, alpha, camera, and layer
+intent associated with those mappings. Where the source relies on MATLAB
+patch defaults, the research profiles freeze the documented dark outline and
+ground intent as explicit RGB black so results do not change with MATLAB
+release or theme. The `high_contrast` files are local accessibility
+adaptations that retain the research geometry and source layer structure; they
+are conservatively treated as derivatives of the same source graphics while
+authority is pending. The `clean_generic` scenes/styles are native LMZ
+material and are not presented as source graphics.
+
+The quadruped source does not call `axis equal`; Round 8 explicitly requires
+equal aspect for its research profile. That camera choice is an intentional
+prompt-level deviation, not a claim of exact source axis behavior. The biped
+source and target both use equal aspect. The load target retains the source
+plot-box aspect `[2,1,1]` rather than replacing it with equal aspect.
+
+Maintainer-only numeric capture is implemented by
+`tools/maintainers/capture_quadruped_graphics_baselines.m`,
+`capture_biped_graphics_baselines.m`, and
+`capture_quad_load_graphics_baselines.m`. Each verifies the exact commit and a
+clean source checkout before temporarily adding only the required graphics
+directory. Their default outputs are the respective
+`tests/fixtures/graphics/<model>/source_capture.json` files and contain numeric
+vertices, faces, endpoints, camera/style constants, and summaries. Primary
+regression tests additionally consume the reviewed source-derived fixtures
+`slip_quadruped/source_geometry_r2025b_macos_arm64.json`,
+`slip_biped/source_canonical_full.json` plus `ground_summary.json`, and
+`slip_quad_load/source_geometry.json`. Those primary fixtures are not the
+capture scripts' current default output paths, so changing or regenerating
+them requires an explicit source-review step. Ordinary tests and runtime do
+not access the sibling source repositories.
+
+`tools/maintainers/compare_research_graphics_images.m` renders matched source
+and LMZ frames into a temporary directory, computes normalized RMSE, edge-map
+overlap, structural similarity when available, foreground bounding-box
+agreement, and color-cluster agreement, then deletes the temporary rasters.
+Only non-raster measurement records are retained in
+`docs/graphics-comparison/<model>/batch_metrics_r2025b_macos_arm64.json`.
+Those JSON files contain scalar metrics, image dimensions/bounds, thresholds,
+environment metadata, pass flags, and explicit `sourceImagesStored: false`,
+`differenceImagesStored: false`, and `humanApproved: false`; they contain no
+pixels or encoded images. No Round 8 source or difference raster is committed.
+
+The adapted geometry providers, source-faithful style constants, numeric
+fixtures/fingerprints, and any locally generated source or difference raster
+inherit the applicable pinned repository's unresolved redistribution
+authority. The non-raster metric JSON remains source-referenced validation
+evidence and is not a license grant or human visual approval. The synthetic
+performance benchmark in `tools/maintainers/benchmark_research_renderers.m`
+is different: it uses repository-contained simulations and has no source
+checkout runtime dependency.
+
 The migrated compatibility files are recorded individually:
 
 | Local file | Source path at commit `2c1061…` | Local modification |
@@ -18,7 +98,7 @@ The migrated compatibility files are recorded individually:
 | `+legacy/EventTimingRegulation.m` | `SLIP_Quadruped/4_Solution_Management/EventTimingRegulation.m` | Package-safe primary name. |
 | `+legacy/GaitIdentification.m` | `SLIP_Quadruped/4_Solution_Management/Gait_Identification.m` | Package-safe primary name/helper call; `downsample(1:N,rate)` replaced by equivalent `1:rate:N` to remove a toolbox-only dependency. |
 
-The source's separately stored `Func_alphaB_VA_v2.m` and `Func_alphaF_VA_v2.m` duplicate the functions embedded in `Quadrupedal_ZeroFun_v2`; only the embedded authoritative copies are active locally. `KinematicsProvider`, renderer, and plot code are native reimplementations of named equations and behavior rather than copies of the historical graphics classes.
+The source's separately stored `Func_alphaB_VA_v2.m` and `Func_alphaF_VA_v2.m` duplicate the functions embedded in `Quadrupedal_ZeroFun_v2`; only the embedded authoritative copies are active locally. `KinematicsProvider`, renderer lifecycle, and plot code are native implementations. The Round 8 `Research*Geometry` providers adapt the numeric formulas mapped above rather than copying the historical figure/axes-owning graphics classes.
 
 The 11 copied data/figure filenames, source paths, byte counts, SHA-256 values, kinds, and inferred gait summaries are enumerated in `examples/data/slip_quadruped/RoadMap/roadmap_manifest.json`. Nine native artifacts are derived local products and retain the corresponding source digest.
 

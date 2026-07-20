@@ -1,0 +1,10 @@
+{
+  "ground": {"color": [0, 0, 0], "lineWidth": 1.5},
+  "body": {"color": [0, 0, 0], "lineWidth": 7},
+  "center": {"color": [0.15, 0.15, 0.15], "markerSize": 7},
+  "load": {"faceColor": [0.5, 0.5, 0.55], "edgeColor": [0.2, 0.2, 0.2], "markerSize": 14},
+  "rope": {"color": [0.45, 0.25, 0.1], "lineWidth": 2},
+  "legs": {"colors": [[0.2, 0.45, 0.85], [0.85, 0.35, 0.2], [0.2, 0.65, 0.35], [0.65, 0.3, 0.8]], "lineWidth": 2.5, "markerSize": 7},
+  "forces": {"color": [0.75, 0.1, 0.1], "lineWidth": 1.2, "scale": 0.02},
+  "camera": {"marginFraction": 0.05, "verticalPadding": 0.35}
+}

@@ -1,0 +1,117 @@
+{
+  "schemaVersion": "1.0.0",
+  "defaultProfileByMaturity": {
+    "tutorial": "clean_generic",
+    "compatibility": "clean_generic",
+    "validated": "research_legacy",
+    "experimental": "clean_generic"
+  },
+  "requiredFrames": [
+    "world",
+    "body",
+    "foot_bl",
+    "foot_fl",
+    "foot_br",
+    "foot_fr"
+  ],
+  "requiredParameters": [
+    "l_leg",
+    "l_b"
+  ],
+  "profiles": [
+    {
+      "id": "research_legacy",
+      "label": "Research legacy",
+      "rendererClass": "lmzmodels.slip_quadruped.ResearchRenderer",
+      "sceneFile": "",
+      "styleFile": "graphics/research_legacy_style.json",
+      "camera": {
+        "xLimits": [-0.5, 2.5],
+        "yLimits": [-0.1, 2.0],
+        "dataAspectRatio": [1, 1, 1],
+        "follow": true,
+        "followWindow": [-1.5, 1.5]
+      },
+      "axis": {
+        "equal": true,
+        "grid": false,
+        "visible": false,
+        "title": "",
+        "backgroundColor": [1, 1, 1]
+      },
+      "layers": ["legs", "ground", "body", "com", "forces", "phase", "labels"],
+      "overlays": ["detailed_phase"],
+      "plotProfile": "research_legacy",
+      "recordingProfile": {
+        "frameCount": 120,
+        "fps": 25,
+        "dpi": 120,
+        "backgroundColor": [1, 1, 1]
+      },
+      "maturities": ["validated"]
+    },
+    {
+      "id": "clean_generic",
+      "label": "Clean generic",
+      "rendererClass": "lmz.viz.SceneRenderer2D",
+      "sceneFile": "scene.lmz.json",
+      "styleFile": "graphics/clean_generic_style.json",
+      "camera": {
+        "xLimits": [-1, 10],
+        "yLimits": [-0.1, 2.0],
+        "dataAspectRatio": [1, 1, 1],
+        "follow": false
+      },
+      "axis": {
+        "equal": true,
+        "grid": true,
+        "visible": true,
+        "xLabel": "x",
+        "yLabel": "y",
+        "title": "Clean generic SLIP quadruped",
+        "backgroundColor": [1, 1, 1]
+      },
+      "layers": ["ground", "model", "overlay"],
+      "overlays": [],
+      "plotProfile": "clean_generic",
+      "recordingProfile": {
+        "frameCount": 120,
+        "fps": 25,
+        "dpi": 120,
+        "backgroundColor": [1, 1, 1]
+      },
+      "maturities": ["tutorial", "compatibility", "validated", "experimental"]
+    },
+    {
+      "id": "high_contrast",
+      "label": "High contrast",
+      "rendererClass": "lmzmodels.slip_quadruped.ResearchRenderer",
+      "sceneFile": "",
+      "styleFile": "graphics/high_contrast_style.json",
+      "camera": {
+        "xLimits": [-0.5, 2.5],
+        "yLimits": [-0.1, 2.0],
+        "dataAspectRatio": [1, 1, 1],
+        "follow": true,
+        "followWindow": [-1.5, 1.5]
+      },
+      "axis": {
+        "equal": true,
+        "grid": false,
+        "visible": false,
+        "title": "",
+        "backgroundColor": [1, 1, 1]
+      },
+      "layers": ["legs", "ground", "body", "com", "forces", "phase", "labels"],
+      "overlays": ["detailed_phase"],
+      "plotProfile": "research_legacy",
+      "recordingProfile": {
+        "frameCount": 120,
+        "fps": 25,
+        "dpi": 120,
+        "backgroundColor": [1, 1, 1]
+      },
+      "maturities": ["validated"]
+    }
+  ]
+}

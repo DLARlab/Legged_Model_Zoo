@@ -26,11 +26,11 @@ classdef TestRedistributionInventory < matlab.unittest.TestCase
             testCase.verifyTrue(any(strncmp(categories,'scientific-load',15)));
         end
 
-        function promptsAndMaintainerCaptureToolsAreExcluded(testCase)
+        function localPromptsAreAbsentAndMaintainerToolsAreExcluded(testCase)
             [~,manifest]=scan_redistribution();entries=manifest.files;
-            categories={entries.category};indices=find(strcmp(categories,'maintainer-prompt'));
-            testCase.verifyNotEmpty(indices);
-            for index=indices,testCase.verifyEmpty(entries(index).profiles);end
+            paths={entries.relativePath};
+            testCase.verifyFalse(any(contains(paths,'Prompt.md')));
+            categories={entries.category};
             indices=find(strcmp(categories,'maintainer-only-tool'));
             testCase.verifyNotEmpty(indices);
             for index=indices,testCase.verifyEmpty(entries(index).releaseRoles);end

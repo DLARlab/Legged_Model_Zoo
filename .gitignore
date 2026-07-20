@@ -16,3 +16,6 @@ Legged_Model_Zoo-*.zip.sha256
 # Platform metadata
 .DS_Store
 Thumbs.db
+
+# Local Codex task prompts are development inputs, not project sources.
+Legged_Model_Zoo_*Prompt.md

@@ -5,7 +5,7 @@ classdef PreferencesStore < handle
         ProjectRoot
     end
     properties (Constant)
-        SchemaVersion = 1
+        SchemaVersion = 2
     end
 
     methods
@@ -68,6 +68,26 @@ classdef PreferencesStore < handle
             obj.rememberRecent('RecentOutputFolder',value);
         end
 
+        function value=visualizationProfile(obj,modelId,problemId,fallback)
+            if nargin<4,fallback='';end
+            name=profilePreferenceName(modelId,problemId);
+            value=obj.get(name,fallback);
+            if ~ischar(value)||isempty(regexp(value, ...
+                    '^[A-Za-z][A-Za-z0-9_]*$','once'))
+                value=fallback;
+            end
+        end
+
+        function setVisualizationProfile(obj,modelId,problemId,profileId)
+            name=profilePreferenceName(modelId,problemId);
+            if ~ischar(profileId)||isempty(regexp(profileId, ...
+                    '^[A-Za-z][A-Za-z0-9_]*$','once'))
+                error('lmz:GUI:VisualizationProfile', ...
+                    'Visualization profile must be a simple identifier.');
+            end
+            obj.set(name,profileId);
+        end
+
         function reset(obj)
             if ispref(obj.Namespace), rmpref(obj.Namespace); end
         end
@@ -77,7 +97,8 @@ classdef PreferencesStore < handle
                 'Palette',obj.palette(), ...
                 'WindowPosition',obj.windowPosition([40 40 1460 900]), ...
                 'RecentDataFolder',obj.recentDataFolder(''), ...
-                'RecentOutputFolder',obj.recentOutputFolder(''));
+                'RecentOutputFolder',obj.recentOutputFolder(''), ...
+                'VisualizationProfiles',obj.visualizationProfiles());
         end
     end
 
@@ -114,7 +135,31 @@ classdef PreferencesStore < handle
                 value = fallback;
             end
         end
+
+        function values=visualizationProfiles(obj)
+            values=struct();
+            if ~ispref(obj.Namespace),return,end
+            preferences=getpref(obj.Namespace);names=fieldnames(preferences);
+            prefix='VisualizationProfile_';
+            for index=1:numel(names)
+                name=names{index};
+                if strncmp(name,prefix,numel(prefix))
+                    values.(name(numel(prefix)+1:end))=preferences.(name);
+                end
+            end
+        end
     end
+end
+
+function name=profilePreferenceName(modelId,problemId)
+modelId=char(modelId);problemId=char(problemId);
+expression='^[a-z][a-z0-9_]*$';
+if isempty(regexp(modelId,expression,'once'))|| ...
+        isempty(regexp(problemId,expression,'once'))
+    error('lmz:GUI:VisualizationPreferenceKey', ...
+        'Model and problem IDs must be lowercase identifiers.');
+end
+name=['VisualizationProfile_' modelId '__' problemId];
 end
 
 function value = canonicalPath(value)

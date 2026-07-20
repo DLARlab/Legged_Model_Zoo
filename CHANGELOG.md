@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.0.0-rc.1 — Round 8 research graphics fidelity
+
+- Added validated `research_legacy`, `clean_generic`, and `high_contrast`
+  visualization profiles for the quadruped, biped, and quadruped-with-load.
+  Scientific problems select compound research geometry, while tutorials and
+  generic plugins retain the clean generic profile (declarative where
+  configured).
+- Added pure, namespaced source-derived geometry for the quadruped body,
+  springs/legs, COM, dense ground, and phase overlay; the biped body, quartered
+  COG, compound point-foot legs/contact behavior, and ground; and the load body,
+  duplicated-endpoint rope, and per-stride geometry selection. Load rendering
+  composes the shared quadruped providers rather than duplicating them.
+- Added stable research renderers and a trusted renderer factory/configuration
+  path with classic-axes and UIAxes support, in-place frame updates, profile
+  switching, selected-profile recording, cleanup, and source camera/layer
+  behavior. High contrast retains the compound research geometry and source
+  silhouette while deliberately adapting palette and selected line widths.
+- Added selectable source-style scientific plots for quadruped trajectories,
+  forces, and phase views; biped trajectories, forces, events, energy, and gait;
+  and load footfalls, leg trajectories, tugline force, sensitivity, and
+  R-squared readouts.
+- Added pinned numeric geometry fixtures and direct equivalence tests.
+  Quadruped source comparisons are exact to at most `2.22e-16`; biped and load
+  geometry are fixture-backed at their pinned source commits, with no
+  source-repository runtime dependency.
+- Added headless matched-camera source-versus-LMZ comparisons. Maximum
+  normalized RMSE and minimum edge overlap across the expanded canonical matrix
+  are `0.067967` / `0.856892` (five quadruped cases), `0.012645` / `0.992179`
+  (seven biped cases), and `0.047254` / `0.895824` (six load cases). Minimum
+  foreground-box agreement is `0.849379`, `1.000000`, and `0.871708`; minimum
+  color-cluster agreement is `0.972641`, `0.987551`, and `0.987968`,
+  respectively. All values pass the recorded platform-tolerant thresholds.
+- Added cross-model renderer performance coverage. Median R2025b construction,
+  100-frame update, profile-switch, and capture times are documented in
+  `docs/TEST_STATUS.md`; all owned handle identities remain stable.
+- Re-ran programmatic coverage on the frozen closing tree: all 275 tests passed
+  while covering 9,601/12,546 runtime statements (76.5264%) across 204 files,
+  and every tracked stable-package floor passed.
+- Committed numeric metrics and fixtures only. Source, LMZ, and difference
+  rasters are not retained while redistribution authority is unresolved.
+  Human desktop side-by-side review remains blocked, and R2019b evidence
+  remains static/fallback-only. The final clean R2025b suite passed 275/275,
+  all 31 public examples passed, and the clean-copy child process rendered the
+  `research_legacy` profile for all three scientific models without a source
+  repository runtime path.
+
 ## 1.0.0-rc.1 — Round 7 release candidate
 
 - Added root Semantic Versioning and the `lmz.util.Version` contract for

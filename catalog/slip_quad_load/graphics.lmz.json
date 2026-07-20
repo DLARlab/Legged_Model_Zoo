@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "1.0.0",
+  "defaultProfileByMaturity": {
+    "tutorial": "clean_generic",
+    "compatibility": "clean_generic",
+    "validated": "research_legacy",
+    "experimental": "clean_generic"
+  },
+  "requiredFrames": ["world", "quadruped_center_of_mass", "load_center", "ground_contact"],
+  "requiredParameters": ["per_stride_parameters", "quadruped", "load"],
+  "profiles": [
+    {
+      "id": "research_legacy",
+      "label": "Research legacy",
+      "rendererClass": "lmzmodels.slip_quad_load.ResearchRenderer",
+      "styleFile": "graphics/research_legacy_style.json",
+      "camera": {
+        "yLimits": [-0.1, 2.0],
+        "follow": true,
+        "followWindow": [-3.0, 1.5]
+      },
+      "axis": {
+        "equal": false,
+        "grid": false,
+        "visible": false,
+        "title": "SLIP Quad-Load Animation",
+        "backgroundColor": [1, 1, 1]
+      },
+      "layers": ["ground", "legs", "body", "com", "load", "rope"],
+      "overlays": [],
+      "plotProfile": "research_legacy",
+      "recordingProfile": {"frameCount": 120, "fps": 20, "dpi": 120, "backgroundColor": [1, 1, 1]},
+      "maturities": ["validated"]
+    },
+    {
+      "id": "clean_generic",
+      "label": "Clean generic",
+      "rendererClass": "lmzmodels.slip_quad_load.QuadLoadRenderer",
+      "styleFile": "graphics/clean_generic_style.json",
+      "camera": {"follow": false},
+      "axis": {
+        "equal": true,
+        "grid": true,
+        "visible": true,
+        "xLabel": "x",
+        "yLabel": "y",
+        "title": "Scientific SLIP quadruped with load",
+        "backgroundColor": [1, 1, 1]
+      },
+      "layers": ["ground", "model", "load", "rope", "forces", "phase"],
+      "overlays": ["force_vectors", "phase_labels"],
+      "plotProfile": "clean_generic",
+      "recordingProfile": {"frameCount": 80, "fps": 25, "dpi": 120, "backgroundColor": [1, 1, 1]},
+      "maturities": ["tutorial", "compatibility", "validated", "experimental"]
+    },
+    {
+      "id": "high_contrast",
+      "label": "High contrast",
+      "rendererClass": "lmzmodels.slip_quad_load.ResearchRenderer",
+      "styleFile": "graphics/high_contrast_style.json",
+      "camera": {
+        "yLimits": [-0.1, 2.0],
+        "follow": true,
+        "followWindow": [-3.0, 1.5]
+      },
+      "axis": {
+        "equal": false,
+        "grid": false,
+        "visible": false,
+        "title": "SLIP Quad-Load Animation",
+        "backgroundColor": [1, 1, 1]
+      },
+      "layers": ["ground", "legs", "body", "com", "load", "rope"],
+      "overlays": [],
+      "plotProfile": "research_legacy",
+      "recordingProfile": {"frameCount": 120, "fps": 20, "dpi": 150, "backgroundColor": [1, 1, 1]},
+      "maturities": ["validated"]
+    }
+  ]
+}

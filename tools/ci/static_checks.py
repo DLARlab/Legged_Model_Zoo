@@ -53,6 +53,8 @@ def manifest_inventory_files():
             continue
         if path.name == ".DS_Store" or path.stem.lower() == "thumbs":
             continue
+        if PROMPT_PATTERN.search(path.name):
+            continue
         if path.suffix.lower() in {".asv", ".autosave", ".mltbx", ".zip", ".sha256"}:
             continue
         if rel.as_posix() == "release/redistribution_manifest.json":

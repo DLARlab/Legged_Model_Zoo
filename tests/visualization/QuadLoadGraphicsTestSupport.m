@@ -1,0 +1,63 @@
+classdef QuadLoadGraphicsTestSupport
+    %QUADLOADGRAPHICSTESTSUPPORT Deterministic local load graphics data.
+    methods (Static)
+        function value=fixture()
+            root=fullfile(lmz.util.ProjectPaths.tests(),'fixtures', ...
+                'graphics','slip_quad_load');
+            value=lmz.io.SafeJson.read(fullfile(root,'source_geometry.json'), ...
+                'Root',root);
+        end
+
+        function simulation=simulation()
+            time=[0;1.5;2.2;3.25];
+            states=zeros(numel(time),18);
+            states(:,1)=[0.5;0.75;1;1.25];
+            states(:,2)=0.3;
+            states(:,3)=[1.1;1.15;1.2;1.25];
+            states(:,5)=[0.10;0.15;0.20;0.25];
+            states(:,7)=[0.05;0.06;0.07;0.08];
+            states(:,8)=[-0.4;-0.3;-0.2;-0.1];
+            states(:,9)=[-0.08;-0.07;-0.06;-0.05];
+            states(:,10)=[0.1;0.2;0.3;0.4];
+            states(:,11)=[0.11;0.10;0.09;0.08];
+            states(:,12)=[0.5;0.4;0.3;0.2];
+            states(:,13)=[-0.12;-0.11;-0.10;-0.09];
+            states(:,14)=[-0.2;-0.1;0;0.1];
+            states(:,15)=[-2;-1.8;-1.6;-1.4];
+            states(:,17)=[0.8;0.75;0.7;0.65];
+            modes=struct('back_left',[false;true;true;false], ...
+                'front_left',[false;false;true;false], ...
+                'back_right',false(4,1),'front_right',false(4,1), ...
+                'stride_index',[1;2;2;2]);
+            rows=QuadLoadGraphicsTestSupport.fixture().parameterRows;
+            quadruped=zeros(17,1);quadruped(11)=1.1;quadruped(13)=0.4;
+            parameters=struct('stride_count',2, ...
+                'per_stride_parameters',rows,'quadruped',quadruped, ...
+                'load',zeros(4,1));
+            observables=struct('normalized_stride_time',time, ...
+                'stride_count',2,'tugline_force',[0.20;0.45;0.30;0.10]);
+            forces=zeros(numel(time),12);
+            interim=lmz.api.SimulationResult(time, ...
+                lmzmodels.slip_quad_load.PhysicalStateSchema.create(),states, ...
+                modes,observables,parameters,struct('source','graphics-test'), ...
+                struct('sourceCommit', ...
+                '19f3133073c988cc0c3424a647b4adbb60a90b99'), ...
+                'GroundReactionForces',forces);
+            kinematics=lmzmodels.slip_quad_load.KinematicsProvider.compute(interim);
+            simulation=lmz.api.SimulationResult(interim.Time, ...
+                interim.StateSchema,interim.States,interim.Modes, ...
+                interim.Observables,interim.Parameters,interim.Diagnostics, ...
+                interim.Provenance,'GroundReactionForces',forces, ...
+                'Kinematics',kinematics);
+        end
+
+        function profile=profile(identifier)
+            if nargin<1,identifier='research_legacy';end
+            root=fullfile(lmz.util.ProjectPaths.catalog(),'slip_quad_load');
+            config=lmz.viz.GraphicsConfig.fromJson( ...
+                fullfile(root,'graphics.lmz.json'),root, ...
+                lmz.util.ProjectPaths.models(),'lmzmodels');
+            profile=config.getProfile(identifier);
+        end
+    end
+end

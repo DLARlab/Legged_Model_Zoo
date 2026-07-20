@@ -19,7 +19,27 @@ without inventing a high target or encouraging meaningless tests. New code is
 expected to add relevant tests; maintainers should deliberately remeasure and
 explain any baseline change.
 
-## Round 7 measured baseline
+## Round 8 closing measurement
+
+The closing measurement ran on 2026-07-19 with MATLAB R2025b Update 5 after
+the redistribution inventory was refreshed and frozen. All 275 tests passed;
+no runtime file was excluded. The report covered 9,601 of 12,546 statements
+across 204 files and 25 packages, for an overall rate of 76.5264%.
+
+| Stable package | Covered / total statements | Round 8 rate | Enforced Round 7 floor |
+|---|---:|---:|---:|
+| `lmz.api` | 110 / 140 | 78.5714% | 73.5714% |
+| `lmz.data` | 416 / 504 | 82.5397% | 77.5397% |
+| `lmz.io` | 312 / 363 | 85.9504% | 80.9504% |
+| `lmz.registry` | 302 / 365 | 82.7397% | 78.4356% |
+| `lmz.services` | 493 / 648 | 76.0802% | 69.4932% |
+
+Every stable-package floor passed. The tracked policy remains the independently
+measured Round 7 floor; this run verified it but did not silently rewrite it.
+The complete JSON and Cobertura reports were written to the MATLAB temporary
+directory as build evidence and are not committed.
+
+## Round 7 starting measured baseline
 
 The baseline was measured on 2026-07-19 with MATLAB R2025b Update 5. The run
 executed 194 tests: the complete then-current suite except the single policy
@@ -45,8 +65,8 @@ Example:
 startup;
 addpath(fullfile(pwd, 'tools'));
 [report, results] = run_coverage(struct( ...
-    'OutputPath', fullfile(pwd, 'coverage', 'latest.json'), ...
-    'CoberturaPath', fullfile(pwd, 'coverage', 'coverage.xml'), ...
+    'OutputPath', fullfile(tempdir, 'lmz-coverage.json'), ...
+    'CoberturaPath', fullfile(tempdir, 'lmz-coverage.xml'), ...
     'EnforceBaseline', true));
 assert(~any([results.Failed]));
 assert(~any([results.Incomplete]));

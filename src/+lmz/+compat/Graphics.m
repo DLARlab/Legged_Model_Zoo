@@ -23,6 +23,27 @@ classdef Graphics
             lmz.compat.Graphics.exportFallback(axesHandle, path, resolution);
         end
 
+        function imageData = captureAxes(axesHandle, resolution, forceFallback)
+            %CAPTUREAXES Return a deterministic RGB capture of classic/UI axes.
+            if nargin < 2 || isempty(resolution)
+                resolution = 120;
+            end
+            if nargin < 3
+                forceFallback = false;
+            end
+            temporary = lmz.compat.Files.temporary(tempdir, '.png');
+            cleanup = onCleanup(@() deleteIfPresent(temporary));
+            lmz.compat.Graphics.exportAxes(axesHandle, temporary, ...
+                resolution, forceFallback);
+            imageData = imread(temporary);
+            if ismatrix(imageData)
+                imageData = repmat(imageData, 1, 1, 3);
+            elseif size(imageData, 3) > 3
+                imageData = imageData(:, :, 1:3);
+            end
+            clear cleanup
+        end
+
         function tf = preferredExporterAvailable(forceFallback)
             if nargin < 1
                 forceFallback = false;
@@ -33,29 +54,105 @@ classdef Graphics
 
     methods (Static, Access = private)
         function exportFallback(axesHandle, path, resolution)
-            drawnow;
-            frame = getframe(axesHandle);
             [~, ~, extension] = fileparts(path);
+            device = lmz.compat.Graphics.printDevice(extension);
+            [figureHandle, ~] = ...
+                lmz.compat.Graphics.copyToClassicAxes(axesHandle);
+            cleanup = onCleanup(@() delete(figureHandle));
+            drawnow;
+            set(figureHandle, 'PaperPositionMode', 'auto');
+            print(figureHandle, path, device, sprintf('-r%d', resolution));
+            clear cleanup
+        end
+
+        function device = printDevice(extension)
             switch lower(extension)
-                case {'.png', '.jpg', '.jpeg', '.tif', '.tiff'}
-                    imwrite(frame.cdata, path);
+                case '.png'
+                    device = '-dpng';
+                case {'.jpg', '.jpeg'}
+                    device = '-djpeg';
+                case {'.tif', '.tiff'}
+                    device = '-dtiff';
                 case '.pdf'
-                    figureHandle = figure('Visible', 'off', 'Color', 'white');
-                    cleanup = onCleanup(@() delete(figureHandle));
-                    copyAxes = axes('Parent', figureHandle, ...
-                        'Position', [0 0 1 1]);
-                    image(copyAxes, frame.cdata);
-                    axis(copyAxes, 'image');
-                    axis(copyAxes, 'off');
-                    set(copyAxes, 'YDir', 'reverse');
-                    print(figureHandle, path, '-dpdf', ...
-                        sprintf('-r%d', resolution));
-                    clear cleanup
+                    device = '-dpdf';
                 otherwise
                     error('lmz:Compatibility:GraphicsType', ...
                         ['Fallback export supports PNG, JPEG, TIFF, ' ...
                         'and PDF files.']);
             end
         end
+
+        function [figureHandle, copyAxes] = copyToClassicAxes(sourceAxes)
+            drawnow;
+            position = getpixelposition(sourceAxes, true);
+            width = max(320, round(position(3)));
+            height = max(240, round(position(4)));
+            background = sourceAxes.Color;
+            if ~isnumeric(background) || numel(background) ~= 3
+                background = [1 1 1];
+            end
+            figureHandle = figure('Visible', 'off', 'Color', background, ...
+                'Units', 'pixels', 'Position', [50 50 width height]);
+            copyAxes = axes('Parent', figureHandle, 'Units', 'normalized', ...
+                'Position', [0.10 0.10 0.84 0.84]);
+            lmz.compat.Graphics.copyAxesProperties(sourceAxes, copyAxes);
+            children = allchild(sourceAxes);
+            decorations = [sourceAxes.XLabel;sourceAxes.YLabel; ...
+                sourceAxes.ZLabel;sourceAxes.Title];
+            for index = 1:numel(decorations)
+                children(children == decorations(index)) = [];
+            end
+            if ~isempty(children)
+                copyobj(flipud(children(:)), copyAxes);
+            end
+            lmz.compat.Graphics.copyAxesText(sourceAxes.XLabel, copyAxes.XLabel);
+            lmz.compat.Graphics.copyAxesText(sourceAxes.YLabel, copyAxes.YLabel);
+            lmz.compat.Graphics.copyAxesText(sourceAxes.ZLabel, copyAxes.ZLabel);
+            lmz.compat.Graphics.copyAxesText(sourceAxes.Title, copyAxes.Title);
+        end
+
+        function copyAxesProperties(sourceAxes, targetAxes)
+            names = {'XLim','YLim','ZLim','XScale','YScale','ZScale', ...
+                'XDir','YDir','ZDir','Color','XColor','YColor','ZColor', ...
+                'Box','LineWidth','FontName','FontSize','FontWeight', ...
+                'FontAngle','XGrid','YGrid','ZGrid','GridLineStyle', ...
+                'XMinorGrid','YMinorGrid','ZMinorGrid','CLim','View', ...
+                'DataAspectRatio','DataAspectRatioMode', ...
+                'PlotBoxAspectRatio','PlotBoxAspectRatioMode','Visible'};
+            for index = 1:numel(names)
+                name = names{index};
+                if isprop(sourceAxes, name) && isprop(targetAxes, name)
+                    try
+                        targetAxes.(name) = sourceAxes.(name);
+                    catch
+                        % Release-specific read-only/incompatible properties
+                        % retain their classic-axes defaults.
+                    end
+                end
+            end
+            try
+                colormap(targetAxes, colormap(sourceAxes));
+            catch
+            end
+        end
+
+        function copyAxesText(sourceText, targetText)
+            names = {'String','Color','Interpreter','FontName','FontSize', ...
+                'FontWeight','FontAngle','HorizontalAlignment', ...
+                'VerticalAlignment','Visible'};
+            for index = 1:numel(names)
+                name = names{index};
+                if isprop(sourceText, name) && isprop(targetText, name)
+                    try
+                        targetText.(name) = sourceText.(name);
+                    catch
+                    end
+                end
+            end
+        end
     end
+end
+
+function deleteIfPresent(path)
+if exist(path, 'file') == 2, delete(path); end
 end
