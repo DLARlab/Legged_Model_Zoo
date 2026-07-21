@@ -107,6 +107,51 @@ Set `CheckpointPath` in the continuation options to save resumable native
 state. The generic continuation service handles pause, stop, backtracking,
 duplicate detection, and checkpoint resume.
 
+## Direct mixed-section shooting
+
+Use `section_transition` for distinct biped section IDs. The registered route
+supports named-event, descending state-plane, and safe composite endpoints. It
+owns the start-section coordinates and schedule, integrates the biped adapter
+directly, and compares the terminal node with an explicit target. The source
+apex orbit initializes a fresh contract once and is not called during residual
+evaluation.
+
+```matlab
+transition = model.createProblem('section_transition',struct( ...
+    'StartSectionId','left_touchdown', ...
+    'StopSectionId','descending_y_0_95', ...
+    'StartStateFreeMask',true, ...
+    'TargetStateFreeMask',true, ...
+    'EventFreeMask',false));
+u0 = transition.getDecisionSchema().defaults();
+p = transition.getParameterSchema().defaults();
+context = lmz.api.RunContext.synchronous(42);
+evaluation = transition.evaluate(u0,p,context,false);
+direct = transition.evaluateShooting(u0,p,context,false);
+
+assert(strcmp(transition.Formulation,'transition'));
+assert(~transition.Horizon.Target.PeriodicClosure);
+assert(evaluation.PhysicalValidity);
+assert(direct.SegmentResults{1}.Crossing.Accepted);
+assert(direct.SegmentResults{1}.Crossing.CrossingDirection == -1);
+assert(~direct.SegmentResults{1}.Diagnostics.ApexOracleUsed);
+```
+
+The default left-touchdown-to-descending-plane seed is a 13-decision,
+14-residual direct transition with scaled residual norm
+`1.876276911616515e-14`. The reverse plane-to-right-touchdown path reaches an
+accepted transverse crossing but retains contact residual
+`0.04299363542136695`; left-to-right touchdown similarly retains
+`0.04299360548669684`. Those two are candidates, not root claims. The safe
+left-touchdown composite target has residual `1.299946006845806e-13`.
+
+Residual diagnostics keep
+`segment_1_contact_constraints`, `segment_1_section_residual`,
+`interface_1_defect`, and `final_transition_target` separate. There is no
+`final_section_closure`. Use `periodic_orbit` or `multiple_shooting` for a
+same-section periodic request. See `docs/scientific-section-shooting.md` for
+the full pair matrix, mask semantics, and crossing qualifications.
+
 ## Source-equivalent trajectory fitting
 
 The fit decision has 16 entries: the 12 periodic variables followed by

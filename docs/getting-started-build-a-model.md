@@ -303,3 +303,33 @@ For a migrated scientific model, generated smoke tests are insufficient. Add
 immutable source provenance, dataset hashes, numerical-oracle tolerances,
 section evidence, timing equivalence, energy-transition tests, and artifact
 migrations as described in [testing-a-model.md](testing-a-model.md).
+
+## 16. Add optional multiple shooting
+
+Add this only after one direct section-to-section simulation is reliable. Define
+a `SectionStateSchema` from named physical-state coordinates, construct
+`ShootingNode` and `ShootingSegment` records with explicit sections/sides,
+schedules, controls, physical data, and energy/work mode, and join them in a
+`ShootingHorizon`. Let `ShootingDecisionSchema` bind free node coordinates,
+schedule coordinates, controls, selected physical parameters, targets, and
+gauges by name.
+
+The model-owned adapter derives from `lmz.shooting.SectionSimulationAdapter`
+and implements `simulateSegment`. One call must directly propagate exactly the
+configured segment and return finite `TerminalState`, symmetry-aligned
+`TerminalCoordinates`, `ContactResiduals`, `SectionResidual`,
+`EnergyResidual`, crossing/event information, simulation, physical validity,
+and diagnostics. Do not simulate from an apex and relabel a later crossing, and
+do not call an inner solver.
+
+Register a problem factory that returns `MultipleShootingProblem` (or its
+periodic/transition specialization) with an inert configuration and a
+model-owned adapter. Function-handle evaluators are allowed only for trusted
+in-process experiments; their problem contract is non-reproducible and cannot
+be saved. Test every advertised section/side/occurrence, residual block,
+interface defect, event order, energy/work condition, rank report, artifact
+round trip, and reproduction hash. See
+[model-author-guide.md](model-author-guide.md),
+[multiple-shooting.md](multiple-shooting.md), and
+[horizon-feasibility.md](horizon-feasibility.md); use
+`tutorial_hopper/multiple_shooting` as the small executable reference.

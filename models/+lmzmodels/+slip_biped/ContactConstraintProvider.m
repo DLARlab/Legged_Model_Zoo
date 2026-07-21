@@ -59,6 +59,51 @@ classdef ContactConstraintProvider < lmz.schedule.ContactConstraintProvider
             if nargin<2,configuration=struct();end
             decision=lmzmodels.slip_biped.PeriodicDecisionSchema.create().defaults();
             parameters=lmzmodels.slip_biped.OffsetParameterSchema.create().defaults();
+            startId=fieldOr(configuration,'StartSectionId','apex');
+            stopId=fieldOr(configuration,'StopSectionId',startId);
+            if ~strcmp(startId,'apex')||~strcmp(stopId,'apex')
+                if ~strcmp(startId,stopId)
+                    error('lmz:Timing:UnsupportedSection', ...
+                        ['Biped timing currently supports identical section ' ...
+                        'endpoints; mixed endpoints require a transition ' ...
+                        'shooting problem.']);
+                end
+                sectionConfiguration=configuration;
+                if isfield(configuration,'PhysicalParameters')
+                    parameters=configuration.PhysicalParameters(:);
+                    sectionConfiguration.SourceParameterValues=parameters;
+                end
+                periodic=model.createProblem( ...
+                    'periodic_orbit',sectionConfiguration);
+                if isempty(periodic.SectionCodec)|| ...
+                        isempty(periodic.SectionAdapter)
+                    error('lmz:Timing:UnsupportedSection', ...
+                        'Selected biped section has no direct adapter.');
+                end
+                provider=lmzmodels.slip_biped. ...
+                    SectionContactConstraintProvider( ...
+                    periodic.SectionCodec,periodic.SectionAdapter);
+                decoded=periodic.SectionCodec.decode( ...
+                    periodic.getDecisionSchema().defaults());
+                initial=decoded.InitialState;
+                if isfield(configuration,'InitialState')
+                    initial=configuration.InitialState(:);
+                    if numel(initial)==7,initial=[0;initial];end
+                end
+                template=decoded.EventSchedule;
+                timingConfiguration=configuration;
+                if ~isfield(timingConfiguration,'MinimumGap')
+                    timingConfiguration.MinimumGap=0;
+                end
+                schedule=lmz.schedule.ContactConstraintProvider. ...
+                    scheduleFromConfiguration(provider.eventNames(), ...
+                    template.times(),template.ReturnTime, ...
+                    timingConfiguration);
+                problem=lmz.schedule.SectionReturnTimingProblem(model, ...
+                    'section_return_timing',provider,initial,parameters, ...
+                    schedule,configuration);
+                return
+            end
             initial=decision(1:7);
             if isfield(configuration,'InitialState'),initial=configuration.InitialState(:);end
             if isfield(configuration,'PhysicalParameters'),parameters=configuration.PhysicalParameters(:);end

@@ -5,7 +5,8 @@ classdef TestSolveModeControls < matlab.unittest.TestCase
                 'tutorial_hopper','periodic_orbit'); %#ok<ASGLU>
             solveTab=app.tab('solve');controller=app.Controller;
             expected={'Periodic orbit','Contact timings only', ...
-                'N-stride periodic orbit','Timing sequence'};
+                'N-stride periodic orbit','Timing sequence', ...
+                'Multiple shooting','Horizon feasibility'};
             testCase.verifyEqual(solveTab.SolveModeDropDown.Items,expected);
 
             Round9GUITestSupport.change(solveTab.SolveModeDropDown, ...

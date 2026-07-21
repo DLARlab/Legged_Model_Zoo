@@ -11,6 +11,8 @@ classdef StrideSpec
         ControlParameters
         ParameterOverrides
         InitialStateSource
+        InitialSectionState
+        DeclaredWork
         CompletionStatus
         Diagnostics
         Lineage
@@ -29,6 +31,8 @@ classdef StrideSpec
             addParameter(parser,'ControlParameters',struct(),@isDataValue);
             addParameter(parser,'ParameterOverrides',struct(),@isstruct);
             addParameter(parser,'InitialStateSource','specified',@isTextScalar);
+            addParameter(parser,'InitialSectionState',zeros(0,1),@isFiniteVector);
+            addParameter(parser,'DeclaredWork',0,@isFiniteScalar);
             addParameter(parser,'CompletionStatus','supplied',@isCompletionStatus);
             addParameter(parser,'Diagnostics',struct(),@isstruct);
             addParameter(parser,'Lineage',struct(),@isstruct);
@@ -43,6 +47,8 @@ classdef StrideSpec
             obj.ControlParameters=values.ControlParameters;
             obj.ParameterOverrides=values.ParameterOverrides;
             obj.InitialStateSource=char(values.InitialStateSource);
+            obj.InitialSectionState=values.InitialSectionState(:);
+            obj.DeclaredWork=values.DeclaredWork;
             obj.CompletionStatus=char(values.CompletionStatus);
             obj.Diagnostics=values.Diagnostics;
             obj.Lineage=values.Lineage;
@@ -88,6 +94,8 @@ classdef StrideSpec
                 'ControlParameters',plainValue(obj.ControlParameters), ...
                 'ParameterOverrides',obj.ParameterOverrides, ...
                 'InitialStateSource',obj.InitialStateSource, ...
+                'InitialSectionState',obj.InitialSectionState, ...
+                'DeclaredWork',obj.DeclaredWork, ...
                 'CompletionStatus',obj.CompletionStatus, ...
                 'Diagnostics',obj.Diagnostics,'Lineage',obj.Lineage);
         end
@@ -103,6 +111,12 @@ classdef StrideSpec
                 error('lmz:MultiStride:StrideSpecStruct', ...
                     'Stored stride specification is incomplete.');
             end
+            initialSectionState=zeros(0,1);
+            if isfield(value,'InitialSectionState')
+                initialSectionState=value.InitialSectionState;
+            end
+            declaredWork=0;
+            if isfield(value,'DeclaredWork'),declaredWork=value.DeclaredWork;end
             obj=lmz.multistride.StrideSpec('Index',value.Index, ...
                 'StartSectionId',value.StartSectionId, ...
                 'StopSectionId',value.StopSectionId, ...
@@ -113,6 +127,8 @@ classdef StrideSpec
                 'ControlParameters',value.ControlParameters, ...
                 'ParameterOverrides',value.ParameterOverrides, ...
                 'InitialStateSource',value.InitialStateSource, ...
+                'InitialSectionState',initialSectionState, ...
+                'DeclaredWork',declaredWork, ...
                 'CompletionStatus',value.CompletionStatus, ...
                 'Diagnostics',value.Diagnostics,'Lineage',value.Lineage);
         end
@@ -143,6 +159,13 @@ value=isstruct(source)||(~isempty(source)&&isobject(source)&& ...
 end
 function value=isDataValue(source)
 value=isnumeric(source)||islogical(source)||isstruct(source)||isempty(source);
+end
+function value=isFiniteVector(source)
+value=isnumeric(source)&&isreal(source)&&(isempty(source)||isvector(source))&& ...
+    all(isfinite(source(:)));
+end
+function value=isFiniteScalar(source)
+value=isnumeric(source)&&isreal(source)&&isscalar(source)&&isfinite(source);
 end
 function validateSchedule(value)
 if isstruct(value)&&isfield(value,'Times')

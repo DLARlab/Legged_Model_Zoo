@@ -1,7 +1,7 @@
 # API stability
 
 Legged Model Zoo uses Semantic Versioning. The framework release candidate is
-`1.0.0-rc.1`; prerelease status means the documented contract is being frozen,
+`1.0.0-rc.2`; prerelease status means the documented contract is being frozen,
 not that public redistribution has been authorized.
 
 ## Stability classes
@@ -51,15 +51,48 @@ document explicitly says otherwise. The stable hybrid/scene surfaces above
 are protected by the built-in and external analytic-hopper contract tests;
 appearance defaults and non-documented helper methods remain internal.
 
+Round 10 adds the following **provisional** public surfaces. Their serialized
+meaning is documented and tested, but their signatures may still change before
+the final 1.0 release:
+
+- `lmz.shooting.SectionStateSchema`, `SectionSimulationAdapter`,
+  `ShootingNode`, `ShootingSegment`,
+  `ShootingHorizon`, `ShootingDecisionSchema`, `InterfaceDefect`,
+  `MultipleShootingProblem`, its periodic/transition specializations,
+  `ShootingResult`, `FeasibilityReport`, `ShootingInitializer`, and
+  `HorizonContinuation`;
+- `lmz.solvers.RankAwareNonlinearSolver` and `LsqnonlinSolver`;
+- `lmz.services.ContactTimingService`, `TimingContinuationService`,
+  `MultipleShootingService`, `FeasibilityAnalysisService`, and
+  `HorizonContinuationService`;
+- `lmz.schedule.TimingResidualPolicy`, `TimingGauge`, and
+  `TimingFamilyProblem`; and
+- native stride-plan, section-local codec/adapter, horizon-template, and
+  shooting/horizon GUI configuration added in Rounds 9 and 10.
+
+Four model-owned Round 10 facades are explicit exceptions because the public
+quad-load evidence examples instantiate them directly: `lmzmodels.slip_quad_load.StrideTemplateLibrary`,
+`QuadLoadFeasibilityEvidence`, `QuadLoadMultipleShootingProblem`, and
+`QuadLoadHorizonContinuation`. These four classes are provisional public APIs;
+their signatures may change before 1.0, but any such change requires release
+notes and an updated example. Other model-specific classes under `lmzmodels`,
+including scientific section adapters, evaluators, codecs, and compatibility
+oracles, remain internal even when a registered problem, one of these facades,
+or a public service delegates to them. Their inert problem configuration,
+result, and artifact payloads remain the preferred cross-version boundary.
+
 Legacy evaluator packages, Results14/Results29/X_accum adapters, and deprecated
 model IDs are legacy-import-only. They are not model-authoring APIs.
 
 ## Artifact compatibility
 
-Artifacts written by framework 1.x retain `schemaVersion = 1.0.0`. New
+Artifacts written by framework 1.x, including rc.2, retain
+`schemaVersion = 1.0.0`. New
 artifacts also record `artifactSchemaVersion`, `frameworkVersion`,
 `modelVersion`, `problemVersion`, and `minimumMatlabRelease`. Round 5 and Round
-6 schema-1.0 artifacts remain readable. Extra fields are additive; required
+6 schema-1.0 artifacts remain readable. Round 9/10 timing, shooting,
+feasibility, and continuation payloads use additive artifact types and fields;
+they do not change the schema version. Extra fields are additive; required
 field meaning and array orientation cannot change within schema 1.0.
 
 Readers reject unknown future schema versions instead of guessing. A future

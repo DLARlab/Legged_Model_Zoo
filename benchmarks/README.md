@@ -1,9 +1,11 @@
 # Performance benchmarks
 
-`run_benchmarks` measures 21 release workflows: the 14 historical Round 7
+`run_benchmarks` measures 29 release workflows: the 14 historical Round 7
 startup/discovery, scientific data/evaluation, rendering, short solve and
 continuation, GUI, and artifact paths plus seven Round 9 section, timing,
-stride-plan, requested-N simulation/objective, and GUI-refresh paths. Run it
+stride-plan, requested-N simulation/objective, and GUI-refresh paths, and eight
+Round 10 rectangular-timing, two-/three-/five-segment shooting, Jacobian,
+periodic-correction, horizon-continuation, and GUI-diagnostics paths. Run it
 from a fresh MATLAB process after `startup`:
 
 ```matlab
@@ -16,7 +18,7 @@ The tracked historical Round 7 measurement is
 from MATLAB R2025b on macOS arm64. The tracked Round 9 addendum is
 `round9_r2025b_macos_arm64.json`; it records the seven new workflows over three
 warm repetitions. All medians are below their conservative budgets. Regenerate
-the complete current 21-workflow report explicitly with:
+the complete current 29-workflow report explicitly with:
 
 ```matlab
 report = run_benchmarks(struct( ...
@@ -42,10 +44,12 @@ headless controller-only constructor is not counted as GUI construction:
 report = run_benchmarks(struct('Repetitions', 1, 'GateOnly', true));
 ```
 
-Round 7 intentionally adds no evaluation cache. First profile the complete
-benchmark on the target workflow. If repeated scientific evaluation dominates,
-any future cache must be bounded, version/data-hash keyed, explicitly clearable,
-and tested for invalidation and cross-run isolation.
+There is no process-global numerical cache. A multiple-shooting residual call
+retains each segment result only within that immutable evaluation, so residual
+blocks, physical diagnostics, and optional simulations share one propagation
+without allowing stale results after a decision edit. Any future cross-call
+cache must be bounded, version/data-hash keyed, explicitly clearable, and tested
+for invalidation and cross-run isolation.
 
 The recorded profile does not justify a cache: scientific evaluations remain
 well below one second, the three-point continuation median is about 1.70

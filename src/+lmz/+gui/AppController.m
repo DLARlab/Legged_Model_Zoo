@@ -38,7 +38,8 @@ classdef AppController < handle
             obj.State.LockedSelection=[];obj.State.HoverSelection=[];obj.State.WorkingSolution=[];
             obj.State.WorkingEvaluation=[];
             obj.State.SolvedSolution=[];obj.State.SolveResult=[];
-            obj.State.TimingResult=[];obj.State.SectionTransferResult=[];
+            obj.State.ShootingResult=[];obj.State.TimingResult=[];
+            obj.State.SectionTransferResult=[];
             obj.State.SeedPair=[];
             obj.State.ContinuationPreview=[];obj.State.ContinuationResult=[];
             obj.State.OptimizationResult=[];obj.State.RequestedStrideCount=1;
@@ -127,18 +128,41 @@ classdef AppController < handle
                 error('lmz:GUI:UnknownSection', ...
                     'Configured start or stop section is not in the model catalog.');
             end
+            sameSection=strcmp(configuration.StartSectionId, ...
+                configuration.StopSectionId);
+            if strcmp(obj.State.ProblemId,'section_transition')&&sameSection
+                error('lmz:GUI:TransitionSections', ...
+                    ['section_transition requires distinct endpoints; use ' ...
+                    'multiple_shooting for same-section periodic closure.']);
+            elseif strcmp(obj.State.ProblemId,'multiple_shooting')&& ...
+                    ~sameSection
+                error('lmz:GUI:PeriodicShootingSections', ...
+                    ['multiple_shooting requires the same start and stop ' ...
+                    'section; use section_transition for direct mixed ' ...
+                    'endpoints.']);
+            end
             start=catalog.descriptor(configuration.StartSectionId);
             stop=catalog.descriptor(configuration.StopSectionId);
             configuration=completeSectionConfiguration( ...
                 configuration,start,stop,catalog);
             model=obj.Registry.createModel(obj.State.ModelId);
-            model.createProblem(obj.State.ProblemId, ...
+            problem=model.createProblem(obj.State.ProblemId, ...
                 obj.problemConfigurationForCreation( ...
                 obj.State.ProblemId,configuration));
             changed=~isequaln(configuration,obj.State.ProblemConfiguration);
             if changed
+                if isa(problem,'lmz.api.SimulationProblem')|| ...
+                        isa(problem, ...
+                        'lmz.multistride.NStrideSimulationProblem')
+                    replacement=obj.makeTutorialSolution(obj.State.ProblemId);
+                else
+                    replacement=problem.makeSolution( ...
+                        problem.getDecisionSchema().defaults(), ...
+                        problem.getParameterSchema().defaults(),[]);
+                end
                 obj.invalidateDerived();
                 obj.State.ProblemConfiguration=configuration;
+                obj.State.WorkingSolution=replacement;
                 obj.State.Status=sprintf( ...
                     'Configured return from %s to %s.', ...
                     configuration.StartSectionId,configuration.StopSectionId);
@@ -148,16 +172,21 @@ classdef AppController < handle
         function setSolveMode(obj,mode)
             mode=char(mode);
             modes={'Periodic orbit','Contact timings only', ...
-                'N-stride periodic orbit','Timing sequence'};
+                'N-stride periodic orbit','Timing sequence', ...
+                'Multiple shooting','Horizon feasibility'};
             if ~any(strcmp(mode,modes))
                 error('lmz:GUI:SolveMode','Unknown solve mode %s.',mode);
             end
             ids=obj.problemIds();target='';
             switch mode
                 case 'Periodic orbit'
-                    if any(strcmp(ids,'periodic_orbit')),target='periodic_orbit'; ...
-                    elseif any(strcmp(ids,'periodic_apex')),target='periodic_apex'; ...
-                    elseif any(strcmp(ids,'periodic_hop')),target='periodic_hop';end
+                    if any(strcmp(ids,'periodic_orbit'))
+                        target='periodic_orbit';
+                    elseif any(strcmp(ids,'periodic_apex'))
+                        target='periodic_apex';
+                    elseif any(strcmp(ids,'periodic_hop'))
+                        target='periodic_hop';
+                    end
                 case 'Contact timings only'
                     if any(strcmp(ids,'section_return_timing'))
                         target='section_return_timing';
@@ -170,6 +199,19 @@ classdef AppController < handle
                     if any(strcmp(ids,'contact_timing_sequence'))
                         target='contact_timing_sequence';
                     end
+                case {'Multiple shooting','Horizon feasibility'}
+                    if strcmp(mode,'Multiple shooting')&& ...
+                            strcmp(obj.State.ProblemId,'section_transition')
+                        target='section_transition';
+                    else
+                        candidates={'multiple_shooting', ...
+                            'multiple_shooting_horizon'};
+                        for index=1:numel(candidates)
+                            if any(strcmp(ids,candidates{index}))
+                                target=candidates{index};break
+                            end
+                        end
+                    end
             end
             if isempty(target)
                 error('lmz:GUI:SolveModeUnavailable', ...
@@ -177,6 +219,194 @@ classdef AppController < handle
             end
             obj.selectProblem(target);
             obj.State.SolveMode=mode;
+            if strcmp(mode,'Horizon feasibility')
+                obj.setShootingSettings(struct( ...
+                    'ShootingFormulation','horizon_feasibility', ...
+                    'Formulation','feasibility'));
+            end
+        end
+
+        function configuration=setShootingSettings(obj,changes)
+            if ~isstruct(changes)||~isscalar(changes)
+                error('lmz:GUI:ShootingConfiguration', ...
+                    'Shooting settings must be a scalar struct.');
+            end
+            allowed={'ShootingFormulation','Formulation','Solver', ...
+                'InterfaceStateMask','EventFreeMask','ControlFreeMask', ...
+                'EnergyWorkMode','ResidualTolerance','HorizonLength', ...
+                'TemplateInitializer'};
+            names=fieldnames(changes);
+            if ~all(ismember(names,allowed))
+                unknown=names{find(~ismember(names,allowed),1)};
+                error('lmz:GUI:ShootingConfiguration', ...
+                    'Unknown shooting setting %s.',unknown);
+            end
+            configuration=obj.State.ProblemConfiguration;
+            for index=1:numel(names)
+                configuration.(names{index})=changes.(names{index});
+            end
+            if strcmp(obj.State.ProblemId,'section_transition')
+                if isfield(changes,'ShootingFormulation')&& ...
+                        ~strcmp(changes.ShootingFormulation, ...
+                        'multiple_shooting')
+                    error('lmz:GUI:TransitionFormulation', ...
+                        ['section_transition is a direct multiple-shooting ' ...
+                        'formulation.']);
+                end
+                if isfield(changes,'Formulation')&& ...
+                        ~strcmp(changes.Formulation,'transition')
+                    error('lmz:GUI:TransitionFormulation', ...
+                        ['section_transition must retain the transition ' ...
+                        'horizon formulation.']);
+                end
+                if isfield(changes,'HorizonLength')&& ...
+                        changes.HorizonLength~=1
+                    error('lmz:GUI:TransitionHorizon', ...
+                        ['section_transition is one direct segment; select ' ...
+                        'multiple_shooting for a periodic multi-segment ' ...
+                        'horizon.']);
+                end
+                configuration.ShootingFormulation='multiple_shooting';
+                configuration.Formulation='transition';
+                configuration.HorizonLength=1;
+            end
+            configuration=validateShootingConfiguration(configuration);
+            model=obj.Registry.createModel(obj.State.ModelId);
+            problem=model.createProblem(obj.State.ProblemId, ...
+                obj.problemConfigurationForCreation( ...
+                obj.State.ProblemId,configuration));
+            if ~isa(problem,'lmz.shooting.MultipleShootingProblem')
+                error('lmz:GUI:ShootingProblem', ...
+                    'Selected problem does not support multiple shooting.');
+            end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.invalidateDerived();
+            obj.State.ProblemConfiguration=configuration;
+            obj.State.WorkingSolution=problem.makeSolution( ...
+                problem.getDecisionSchema().defaults(), ...
+                problem.getParameterSchema().defaults(),[]);
+            obj.State.Status=sprintf( ...
+                'Rebuilt %d-segment shooting problem.', ...
+                problem.Horizon.segmentCount());
+        end
+
+        function value=shootingEditorData(obj)
+            configuration=validateShootingConfiguration( ...
+                obj.State.ProblemConfiguration);
+            value=struct('Available',false,'Configuration',configuration, ...
+                'UnknownCount',0,'ResidualCount',0,'SegmentCount',0, ...
+                'NodeCount',0,'Diagnostics',struct(), ...
+                'NativeConfiguration',struct(), ...
+                'ResidualClassification','not-run','EventNames',{{}}, ...
+                'EventFreeMask',false(0,1),'ReturnTimeFree',false);
+            try
+                problem=obj.problem(obj.State.ProblemId);
+            catch
+                return
+            end
+            if ~isa(problem,'lmz.shooting.MultipleShootingProblem'),return,end
+            value.Available=true;
+            value.NativeConfiguration=problem.Configuration;
+            value.UnknownCount=problem.unknownDimension();
+            value.ResidualCount=problem.residualDimension();
+            value.SegmentCount=problem.Horizon.segmentCount();
+            value.NodeCount=problem.Horizon.nodeCount();
+            schedule=problem.Horizon.Segments{1}.EventSchedule;
+            if isa(schedule,'lmz.schedule.EventSchedule')
+                value.EventNames=schedule.names();
+                value.EventFreeMask=schedule.freeMask();
+                value.ReturnTimeFree=~schedule.ReturnTimeFixed;
+            end
+            if ~isempty(obj.State.ShootingResult)
+                value.Diagnostics=obj.State.ShootingResult.Diagnostics;
+                value.ResidualClassification= ...
+                    obj.State.ShootingResult.FeasibilityReport.Classification;
+            end
+        end
+
+        function rows=sectionCombinationData(obj)
+            rows=struct('StartSectionId',{},'StopSectionId',{}, ...
+                'StartStateSide',{},'StopStateSide',{}, ...
+                'Classification',{},'Reason',{}, ...
+                'EditableStatePlane',{},'Composite',{}, ...
+                'StatePlaneSummary',{},'CompositeSummary',{});
+            ids=obj.sectionIds();
+            for first=1:numel(ids)
+                start=obj.sectionDescriptor(ids{first});
+                for second=1:numel(ids)
+                    stop=obj.sectionDescriptor(ids{second});
+                    same=strcmp(ids{first},ids{second});
+                    classification='unsupported';reason= ...
+                        'mixed endpoints require a model transition codec';
+                    transitionProblem=strcmp(obj.State.ProblemId, ...
+                        'section_transition');
+                    periodicShooting=strcmp(obj.State.ProblemId, ...
+                        'multiple_shooting');
+                    if transitionProblem&&same
+                        classification='unsupported';
+                        reason=['section_transition requires distinct ' ...
+                            'endpoints; select multiple_shooting for ' ...
+                            'same-section periodic closure'];
+                    elseif transitionProblem&& ...
+                            any(strcmp(obj.State.ModelId, ...
+                            {'slip_quadruped','slip_biped'}))&& ...
+                            scientificTransitionKind(start.kind)&& ...
+                            scientificTransitionKind(stop.kind)
+                        [classification,qualification]= ...
+                            scientificTransitionSupport(obj.State.ModelId, ...
+                            ids{first},ids{second});
+                        if strcmp(classification,'validated')
+                            reason=['tested direct section_transition with an ' ...
+                                'explicit terminal target; ' qualification];
+                        else
+                            reason=['section_transition adapter available; ' ...
+                                'this exact pair is not numerically validated'];
+                        end
+                    elseif same
+                        if strcmp(stop.validationStatus,'tested')|| ...
+                                strcmp(stop.validationStatus,'source-equivalent')
+                            classification='validated';reason='catalog tested';
+                        else
+                            classification='experimental';
+                            reason='catalog section is not yet source-validated';
+                        end
+                    elseif strcmp(obj.State.ModelId,'slip_quad_load')&& ...
+                            strcmp(ids{first},'apex')&& ...
+                            strcmp(ids{second},'stride_boundary')
+                        if strcmp(obj.State.ProblemId, ...
+                                'section_return_timing')
+                            classification='validated';
+                            reason=['timing only: tested direct ' ...
+                                'apex-to-stride-boundary return'];
+                        else
+                            classification='unsupported';
+                            reason=['unsupported by ' ...
+                                'multiple_shooting_horizon; select Contact ' ...
+                                'timings only for this direct return'];
+                        end
+                    elseif periodicShooting&& ...
+                            any(strcmp(obj.State.ModelId, ...
+                            {'slip_quadruped','slip_biped'}))
+                        reason=['multiple_shooting is same-section periodic ' ...
+                            'closure; select section_transition for direct ' ...
+                            'mixed endpoints'];
+                    end
+                    statePlaneSummary=sectionStatePlaneSummary(stop);
+                    compositeSummary=sectionCompositeSummary(stop);
+                    reason=appendSectionSummary(reason,statePlaneSummary, ...
+                        compositeSummary);
+                    rows(end+1,1)=struct( ...
+                        'StartSectionId',ids{first}, ...
+                        'StopSectionId',ids{second}, ...
+                        'StartStateSide',start.stateSide, ...
+                        'StopStateSide',stop.stateSide, ...
+                        'Classification',classification,'Reason',reason, ...
+                        'EditableStatePlane',strcmp(stop.kind,'state_plane'), ...
+                        'Composite',strcmp(stop.kind,'composite'), ...
+                        'StatePlaneSummary',statePlaneSummary, ...
+                        'CompositeSummary',compositeSummary); %#ok<AGROW>
+                end
+            end
         end
 
         function setEventFreeMask(obj,freeMask,returnTimeFree)
@@ -613,7 +843,7 @@ classdef AppController < handle
         function dataset=openBranch(obj,path)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             variables=whos('-file',path);names={variables.name};service=lmz.services.BranchService();
-            if numel(names)==1&&strcmp(names{1},'artifact')
+            if isscalar(names)&&strcmp(names{1},'artifact')
                 branch=service.loadNativeBranch(path);readOnly=false;
             elseif any(strcmp(names,'results'))
                 resultInfo=variables(strcmp(names,'results'));
@@ -630,8 +860,11 @@ classdef AppController < handle
             elseif any(strcmp(names,'X_accum'))&&strcmp(obj.State.ModelId,'slip_quad_load')
                 [branch,~]=service.loadQuadLoadDataset( ...
                     obj.problem('multi_stride_fit'),path);readOnly=true;
-            else,error('lmz:GUI:BranchFile', ...
-                    'MAT file is not a native, Results14/29, or X_accum dataset.');end
+            else
+                error('lmz:GUI:BranchFile', ...
+                    ['MAT file is not a native, Results14/29, or X_accum ' ...
+                    'dataset.']);
+            end
             if ~strcmp(branch.ModelId,obj.State.ModelId)
                 error('lmz:GUI:BranchModel', ...
                     'The branch belongs to %s, not selected model %s.', ...
@@ -665,7 +898,7 @@ classdef AppController < handle
             variables=whos('-file',path);names={variables.name};service=lmz.services.BranchService();
             if any(strcmp(names,'results'))||any(strcmp(names,'X_accum'))
                 branch=service.reloadLegacySource(obj.problem(dataset.Branch.ProblemId),path);
-            elseif numel(names)==1&&strcmp(names{1},'artifact')
+            elseif isscalar(names)&&strcmp(names{1},'artifact')
                 branch=service.loadNativeBranch(path);
             else
                 error('lmz:GUI:ReloadType','The active dataset source is not a supported branch file.');
@@ -801,10 +1034,17 @@ classdef AppController < handle
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             solution=obj.State.WorkingSolution;
             if any(strcmp(name,solution.DecisionSchema.names()))
-                values=solution.DecisionValues;values(solution.DecisionSchema.indexOf(name))=value;solution=solution.withDecisionValues(values);
+                values=solution.DecisionValues;
+                values(solution.DecisionSchema.indexOf(name))=value;
+                solution=solution.withDecisionValues(values);
             elseif any(strcmp(name,solution.ParameterSchema.names()))
-                values=solution.ParameterValues;values(solution.ParameterSchema.indexOf(name))=value;solution=solution.withParameterValues(values);
-            else,error('lmz:GUI:WorkingValue','Unknown working value %s.',name);end
+                values=solution.ParameterValues;
+                values(solution.ParameterSchema.indexOf(name))=value;
+                solution=solution.withParameterValues(values);
+            else
+                error('lmz:GUI:WorkingValue', ...
+                    'Unknown working value %s.',name);
+            end
             obj.invalidateDerived();obj.State.WorkingSolution=solution.withoutDerivedData();
         end
         function solution=restoreWorkingSolution(obj)
@@ -894,6 +1134,22 @@ classdef AppController < handle
                 obj.State.WorkingEvaluation=evaluation;
                 obj.State.Simulation=result.Simulation;
                 obj.State.Status='Contact timing solve complete';
+                return
+            end
+            if isa(problem,'lmz.shooting.MultipleShootingProblem')
+                if ~isfield(options,'Solver')
+                    options.Solver=fieldOr( ...
+                        obj.State.ProblemConfiguration,'Solver','auto');
+                end
+                result=lmz.services.MultipleShootingService().solve( ...
+                    problem,obj.State.WorkingSolution,options,obj.Context);
+                obj.State.ShootingResult=result;
+                obj.State.SolveResult=result.SolveResult;
+                obj.State.SolvedSolution=result.SolveResult.Solution;
+                obj.State.WorkingSolution=result.SolveResult.Solution;
+                obj.State.WorkingEvaluation=result.SolveResult.Evaluation;
+                obj.State.Status=sprintf('Multiple shooting: %s.', ...
+                    result.FeasibilityReport.Classification);
                 return
             end
             result=lmz.services.SolveService().solve(problem,obj.State.WorkingSolution,options,obj.Context);
@@ -995,15 +1251,19 @@ classdef AppController < handle
             model=obj.Registry.createModel(obj.State.ModelId);
             if strcmp(id,'trajectory_fit')
                 problem=model.createProblem(id,struct('EnforceConstraints',false));
-                if isempty(fieldnames(options)),options=struct('Algorithm','sqp', ...
+                if isempty(fieldnames(options))
+                    options=struct('Algorithm','sqp', ...
                         'MaxIterations',3,'MaxFunctionEvaluations',150, ...
                         'ConstraintTolerance',0.2,'OptimalityTolerance',1e-3, ...
-                        'StepTolerance',1e-3);end
+                        'StepTolerance',1e-3);
+                end
             elseif strcmp(id,'multi_stride_fit')
                 problem=model.createProblem(id,struct());
-                if isempty(fieldnames(options)),options=struct('Algorithm','sqp', ...
+                if isempty(fieldnames(options))
+                    options=struct('Algorithm','sqp', ...
                         'MaxIterations',1,'MaxFunctionEvaluations',30, ...
-                        'OptimalityTolerance',1e-5,'StepTolerance',1e-5);end
+                        'OptimalityTolerance',1e-5,'StepTolerance',1e-5);
+                end
             elseif strcmp(id,'n_stride_fit')
                 if isempty(obj.State.StridePlan)
                     error('lmz:GUI:MissingStridePlan', ...
@@ -1099,6 +1359,7 @@ classdef AppController < handle
                 'CandidateSimulation',lmz.gui.PresentationEvents.SimulationChanged; ...
                 'SolvedSolution',lmz.gui.PresentationEvents.SolveResultChanged; ...
                 'SolveResult',lmz.gui.PresentationEvents.SolveResultChanged; ...
+                'ShootingResult',lmz.gui.PresentationEvents.SolveResultChanged; ...
                 'TimingResult',lmz.gui.PresentationEvents.SolveResultChanged; ...
                 'SectionTransferResult', ...
                     lmz.gui.PresentationEvents.ProblemConfigurationChanged; ...
@@ -1142,14 +1403,60 @@ classdef AppController < handle
                 else
                     ids=catalog.listSections();sectionId=ids{1};
                 end
-                descriptor=catalog.descriptor(sectionId);
-                configuration=completeSectionConfiguration(struct( ...
-                    'StartSectionId',sectionId,'StopSectionId',sectionId), ...
-                    descriptor,descriptor,catalog);
+                if strcmp(problemId,'section_transition')
+                    [startId,stopId]=defaultTransitionSections( ...
+                        modelId,catalog,sectionId);
+                    start=catalog.descriptor(startId);
+                    stop=catalog.descriptor(stopId);
+                    configuration=completeSectionConfiguration(struct( ...
+                        'StartSectionId',startId,'StopSectionId',stopId), ...
+                        start,stop,catalog);
+                else
+                    descriptor=catalog.descriptor(sectionId);
+                    configuration=completeSectionConfiguration(struct( ...
+                        'StartSectionId',sectionId, ...
+                        'StopSectionId',sectionId), ...
+                        descriptor,descriptor,catalog);
+                end
             catch
                 configuration=struct();
             end
             configuration.StrideCount=1;
+            if any(strcmp(problemId,{'multiple_shooting', ...
+                    'multiple_shooting_horizon','section_transition'}))
+                configuration.ShootingFormulation='multiple_shooting';
+                if strcmp(problemId,'section_transition')
+                    configuration.Formulation='transition';
+                    configuration.EventFreeMask=false;
+                    horizonLength=1;
+                else
+                    configuration.Formulation='periodic';
+                    configuration.EventFreeMask=[true true];
+                    horizonLength=max(2,obj.State.RequestedStrideCount);
+                end
+                configuration.Solver='auto';
+                configuration.InterfaceStateMask=true;
+                configuration.ControlFreeMask=false;
+                configuration.EnergyWorkMode='diagnostic_only';
+                if strcmp(modelId,'slip_quad_load')&& ...
+                        strcmp(problemId,'multiple_shooting_horizon')
+                    configuration.EnergyWorkMode='energy_neutral';
+                end
+                configuration.ResidualTolerance=1e-7;
+                configuration.HorizonLength=horizonLength;
+                configuration.TemplateInitializer='schema_defaults';
+                if strcmp(problemId,'multiple_shooting')&& ...
+                        any(strcmp(modelId, ...
+                        {'slip_quadruped','slip_biped'}))
+                    descriptor=catalog.descriptor( ...
+                        configuration.StartSectionId);
+                    coordinateCount=numel(descriptor.CoordinateNames);
+                    configuration.InterfaceStateMask= ...
+                        defaultScientificInterfaceMask( ...
+                        coordinateCount,horizonLength);
+                    configuration.EventFreeMask=false;
+                end
+            end
             if any(strcmp(problemId,{'n_stride_simulation', ...
                     'n_stride_periodic','contact_timing_sequence'}))
                 configuration.NumberOfStrides=max(1, ...
@@ -1164,12 +1471,15 @@ classdef AppController < handle
                 value='N-stride periodic orbit';
             elseif strcmp(problemId,'contact_timing_sequence')
                 value='Timing sequence';
+            elseif any(strcmp(problemId,{'multiple_shooting', ...
+                    'multiple_shooting_horizon','section_transition'}))
+                value='Multiple shooting';
             else
                 value='Periodic orbit';
             end
         end
 
-        function value=problemConfigurationForCreation(~,problemId,value)
+        function value=problemConfigurationForCreation(obj,problemId,value)
             if strcmp(problemId,'n_stride_simulation')
                 allowed={'NumberOfStrides','InitialDecision','StridePlan', ...
                     'CompletionPolicy','EnergyPolicy','EnergyNeutralOnly', ...
@@ -1178,6 +1488,33 @@ classdef AppController < handle
                     'MaximumStrides','Provenance'};
                 names=fieldnames(value);remove=names(~ismember(names,allowed));
                 if ~isempty(remove),value=rmfield(value,remove);end
+            elseif strcmp(problemId,'multiple_shooting_horizon')
+                count=fieldOr(value,'HorizonLength', ...
+                    fieldOr(value,'NumberOfStrides',3));
+                value.NumberOfStrides=count;
+                value.FreeNodeMask=loadNodeMask(fieldOr(value, ...
+                    'InterfaceStateMask',true),count);
+                value.FreeControlMask=loadControlMask(fieldOr(value, ...
+                    'ControlFreeMask',false),count);
+                value.EnergyMode=fieldOr(value,'EnergyWorkMode', ...
+                    'diagnostic_only');
+                initializer=fieldOr(value,'TemplateInitializer', ...
+                    'schema_defaults');
+                [value.TemplateId,value.InitializationStrategy, ...
+                    value.UseTemplateControls]=loadInitializer(initializer);
+            elseif strcmp(problemId,'multiple_shooting')&& ...
+                    any(strcmp(obj.State.ModelId, ...
+                    {'slip_quadruped','slip_biped'}))
+                count=fieldOr(value,'HorizonLength',2);
+                catalog=obj.Registry.getPoincareSectionRegistry( ...
+                    obj.State.ModelId);
+                sectionId=fieldOr(value,'StartSectionId', ...
+                    catalog.DefaultSectionByProblem.multiple_shooting);
+                descriptor=catalog.descriptor(sectionId);
+                coordinateCount=numel(descriptor.CoordinateNames);
+                value.InterfaceStateMask=scientificInterfaceMask( ...
+                    fieldOr(value,'InterfaceStateMask',[]), ...
+                    coordinateCount,count);
             end
         end
 
@@ -1306,7 +1643,8 @@ classdef AppController < handle
         function invalidateDerived(obj)
             obj.State.WorkingEvaluation=[];obj.State.CandidateSimulation=[];obj.State.Simulation=[];
             obj.State.SolvedSolution=[];obj.State.SolveResult=[];obj.State.SeedPair=[];
-            obj.State.TimingResult=[];obj.State.SectionTransferResult=[];
+            obj.State.ShootingResult=[];obj.State.TimingResult=[];
+            obj.State.SectionTransferResult=[];
             obj.State.ContinuationPreview=[];obj.State.ContinuationResult=[];obj.State.OptimizationResult=[];
         end
         function applyEvaluation(obj,problem,evaluation)
@@ -1386,7 +1724,7 @@ classdef AppController < handle
                 'Classification',struct(),'Feasibility',struct('Valid',true), ...
                 'Lineage',struct(), ...
                 'Provenance',struct('source','built-in-tutorial'), ...
-                'CreatedAt',datestr(now,30));
+                'CreatedAt',lmz.compat.Timestamp.current());
             solution=lmz.data.Solution(value);
         end
         function datasets=writableDatasets(obj)
@@ -1423,6 +1761,277 @@ if ~isnumeric(value.MinimumReturnTime)|| ...
         ~isfinite(value.MinimumReturnTime)||value.MinimumReturnTime<0
     error('lmz:GUI:MinimumReturnTime', ...
         'Minimum return time must be finite and nonnegative.');
+end
+end
+
+function value=validateShootingConfiguration(value)
+defaults=struct('ShootingFormulation','multiple_shooting', ...
+    'Formulation','periodic','Solver','auto', ...
+    'InterfaceStateMask',true,'EventFreeMask',[true true], ...
+    'ControlFreeMask',false,'EnergyWorkMode','diagnostic_only', ...
+    'ResidualTolerance',1e-7,'HorizonLength',2, ...
+    'TemplateInitializer','schema_defaults');
+names=fieldnames(defaults);
+for index=1:numel(names)
+    if ~isfield(value,names{index}),value.(names{index})=defaults.(names{index});end
+end
+if ~ischar(value.ShootingFormulation)||~any(strcmp( ...
+        value.ShootingFormulation,{'single_shooting','multiple_shooting', ...
+        'timing_only','horizon_feasibility'}))
+    error('lmz:GUI:ShootingFormulation','Shooting formulation is invalid.');
+end
+if ~ischar(value.Formulation)|| ...
+        ~any(strcmp(value.Formulation,{'periodic','transition','feasibility'}))
+    error('lmz:GUI:ShootingFormulation','Horizon formulation is invalid.');
+end
+if ~ischar(value.Solver)||~any(strcmp(value.Solver, ...
+        {'auto','fsolve','lsqnonlin','fmincon_feasibility'}))
+    error('lmz:GUI:ShootingSolver','Shooting solver selection is invalid.');
+end
+masks={'InterfaceStateMask','EventFreeMask','ControlFreeMask'};
+for index=1:numel(masks)
+    item=value.(masks{index});
+    if ~(islogical(item)|| ...
+            (isnumeric(item)&&isreal(item)&&all(ismember(item(:),[0 1]))))
+        error('lmz:GUI:ShootingMask','%s must be a logical mask.',masks{index});
+    end
+    value.(masks{index})=logical(item);
+end
+if ~ischar(value.EnergyWorkMode)||~any(strcmp(value.EnergyWorkMode, ...
+        {'energy_neutral','bounded_work','prescribed_work','diagnostic_only'}))
+    error('lmz:GUI:ShootingEnergy','Energy/work mode is invalid.');
+end
+if ~isnumeric(value.ResidualTolerance)|| ...
+        ~isscalar(value.ResidualTolerance)|| ...
+        ~isfinite(value.ResidualTolerance)||value.ResidualTolerance<=0
+    error('lmz:GUI:ShootingTolerance', ...
+        'Residual tolerance must be finite and positive.');
+end
+if ~isnumeric(value.HorizonLength)||~isscalar(value.HorizonLength)|| ...
+        ~isfinite(value.HorizonLength)||value.HorizonLength<1|| ...
+        value.HorizonLength~=fix(value.HorizonLength)
+    error('lmz:GUI:ShootingHorizon', ...
+        'Horizon length must be a positive integer.');
+end
+if ~ischar(value.TemplateInitializer)||isempty(value.TemplateInitializer)
+    error('lmz:GUI:ShootingInitializer', ...
+        'Template initializer must be nonempty text.');
+end
+end
+
+function value=loadNodeMask(source,strideCount)
+source=logical(source);
+widths=[14 15];nodeCount=strideCount+1;
+if isscalar(source)
+    value=source;
+else
+    value=[];
+    for width=widths
+        if isvector(source)&&numel(source)==width
+            value=repmat(reshape(source,1,[]),nodeCount,1);break
+        elseif isequal(size(source),[nodeCount width])
+            value=source;break
+        elseif numel(source)==nodeCount*width
+            value=reshape(source,width,nodeCount).';break
+        end
+    end
+    if isempty(value)
+        error('lmz:GUI:LoadShootingNodeMask', ...
+            ['Load interface masks must be scalar, 14-coordinate apex or ' ...
+            '15-coordinate stride-boundary masks, or one mask per N+1 node.']);
+    end
+end
+end
+
+function value=loadControlMask(source,strideCount)
+source=logical(source);width=4;
+if isscalar(source)
+    value=source;
+elseif isvector(source)&&numel(source)==width
+    value=repmat(reshape(source,1,[]),strideCount,1);
+elseif numel(source)==strideCount*width
+    value=reshape(source,width,strideCount).';
+else
+    error('lmz:GUI:LoadShootingControlMask', ...
+        ['Load control masks must be scalar, four stiffness entries, or ' ...
+        'four entries for each stride.']);
+end
+end
+
+function [templateId,strategy,useTemplateControls]=loadInitializer(source)
+useTemplateControls=false;
+knownIds={'individual_1_tr_single','individual_1_tr_to_rl', ...
+    'individual_1_identical_tr_to_rl','individual_1_tr_to_tl'};
+if any(strcmp(source,knownIds))
+    templateId=source;strategy='exact_source_horizon';return
+end
+templateId='individual_1_tr_to_rl';
+switch source
+    case {'schema_defaults','exact_source_horizon'}
+        strategy='exact_source_horizon';
+    case 'nearest_compatible_template'
+        strategy='nearest_compatible_template';
+        useTemplateControls=true;
+    case 'phase_compatible_repeat'
+        strategy='phase_compatible_repeat';
+    otherwise
+        error('lmz:GUI:LoadShootingInitializer', ...
+            'Unknown load shooting initializer %s.',source);
+end
+end
+
+function value=sectionStatePlaneSummary(descriptor)
+value='';
+if ~strcmp(descriptor.kind,'state_plane'),return,end
+value=sprintf('state plane %s = %.12g, direction %d', ...
+    descriptor.stateName,descriptor.threshold,descriptor.crossingDirection);
+end
+
+function value=scientificTransitionKind(kind)
+value=any(strcmp(kind,{'named_event','state_plane','composite'}));
+end
+
+function [startId,stopId]=defaultTransitionSections(modelId,catalog,startId)
+switch modelId
+    case 'slip_quadruped'
+        stopId='descending_y_0_9';
+    case 'slip_biped'
+        stopId='descending_y_0_95';
+    otherwise
+        error('lmz:GUI:TransitionModel', ...
+            'section_transition is unavailable for %s.',modelId);
+end
+if ~catalog.hasSection(startId)||~catalog.hasSection(stopId)|| ...
+        strcmp(startId,stopId)
+    error('lmz:GUI:TransitionDefaults', ...
+        'The catalog does not provide distinct tested transition defaults.');
+end
+end
+
+function value=defaultScientificInterfaceMask(coordinateCount,count)
+value=false(coordinateCount,count+1);
+if count>1,value(:,2:count)=true;end
+end
+
+function value=scientificInterfaceMask(source,coordinateCount,count)
+if isempty(source)
+    value=defaultScientificInterfaceMask(coordinateCount,count);return
+end
+if ~(islogical(source)||(isnumeric(source)&&isreal(source)&& ...
+        all(ismember(source(:),[0 1]))))
+    error('lmz:GUI:ScientificShootingMask', ...
+        'The scientific interface mask must be logical.');
+end
+source=logical(source);
+if isscalar(source)|| ...
+        (isvector(source)&&numel(source)==coordinateCount)|| ...
+        isequal(size(source),[coordinateCount count+1])
+    value=source;
+elseif numel(source)==coordinateCount*(count+1)
+    value=reshape(source,coordinateCount,count+1);
+elseif mod(numel(source),coordinateCount)==0
+    value=defaultScientificInterfaceMask(coordinateCount,count);
+else
+    error('lmz:GUI:ScientificShootingMask', ...
+        ['The scientific interface mask must be scalar, one section ' ...
+        'coordinate vector, or coordinate-by-(N+1).']);
+end
+end
+
+function [value,qualification]=scientificTransitionSupport( ...
+        modelId,startId,stopId)
+if strcmp(modelId,'slip_quadruped')
+    validated={ ...
+        'back_left_touchdown','descending_y_0_9','low'; ...
+        'descending_y_0_9','back_left_touchdown','candidate'; ...
+        'back_left_touchdown','front_left_touchdown','low'; ...
+        'back_left_touchdown_descending','front_left_touchdown','low'; ...
+        'back_left_touchdown','back_left_touchdown_descending','low'};
+else
+    validated={ ...
+        'left_touchdown','descending_y_0_95','low'; ...
+        'descending_y_0_95','right_touchdown','candidate'; ...
+        'left_touchdown','right_touchdown','candidate'; ...
+        'left_touchdown_descending','right_touchdown','candidate'; ...
+        'left_touchdown','left_touchdown_descending','low'};
+end
+match=find(strcmp(startId,validated(:,1))& ...
+    strcmp(stopId,validated(:,2)),1);
+if ~isempty(match)
+    value='validated';
+    if strcmp(validated{match,3},'low')
+        qualification=['tolerance-satisfying transition seed; ' ...
+            'no periodic-root claim'];
+    else
+        qualification=['accepted-crossing candidate with a nonzero contact ' ...
+            'residual; no root or periodic claim'];
+    end
+else
+    value='experimental';
+    qualification='';
+end
+end
+
+function value=sectionCompositeSummary(descriptor)
+value='';
+if ~strcmp(descriptor.kind,'composite'),return,end
+parameters=descriptor.parameters;primary='unspecified';conditions={};
+if isfield(parameters,'primarySectionId'),primary=parameters.primarySectionId;end
+if isfield(parameters,'conditions')
+    source=parameters.conditions;
+    if isstruct(source),source=num2cell(source(:));end
+    if iscell(source)
+        for index=1:numel(source)
+            conditions{end+1}=compositeConditionText(source{index}); %#ok<AGROW>
+        end
+    end
+end
+if isempty(conditions)
+    conditionText='not declared';
+else
+    conditionText=strjoin(conditions,' | ');
+end
+value=sprintf('composite primary %s; conditions: %s', ...
+    primary,conditionText);
+end
+
+function value=compositeConditionText(condition)
+if ~isstruct(condition)||~isscalar(condition)
+    value='unreadable condition';return
+end
+parts={};kind=fieldOr(condition,'kind','condition');
+if isfield(condition,'stateName')
+    parts{end+1}=['state ' char(condition.stateName)];
+elseif isfield(condition,'eventId')
+    parts{end+1}=['event ' char(condition.eventId)];
+elseif isfield(condition,'eventName')
+    parts{end+1}=['event ' char(condition.eventName)];
+else
+    parts{end+1}=strrep(char(kind),'_',' ');
+end
+if isfield(condition,'comparator')
+    parts{end+1}=['comparator ' char(condition.comparator)];
+end
+if isfield(condition,'threshold')&&isnumeric(condition.threshold)&& ...
+        isscalar(condition.threshold)
+    parts{end+1}=sprintf('threshold %.12g',condition.threshold);
+end
+if isfield(condition,'tolerance')&&isnumeric(condition.tolerance)&& ...
+        isscalar(condition.tolerance)
+    parts{end+1}=sprintf('tolerance %.12g',condition.tolerance);
+end
+if isfield(condition,'stateSide')
+    parts{end+1}=['side ' char(condition.stateSide)];
+end
+value=strjoin(parts,', ');
+end
+
+function value=appendSectionSummary(reason,statePlane,composite)
+details={};
+if ~isempty(statePlane),details{end+1}=statePlane;end
+if ~isempty(composite),details{end+1}=composite;end
+if isempty(details),value=reason;else
+    value=[reason '; ' strjoin(details,'; ')];
 end
 end
 

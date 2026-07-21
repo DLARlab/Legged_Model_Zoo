@@ -55,15 +55,51 @@ if strcmp(artifact.artifactType,'n-stride-periodic-run')
         artifact.stridePlan);
 end
 problem = [];
-if strcmp(artifact.artifactType,'contact-timing-run')
+if any(strcmp(artifact.artifactType,{'multiple-shooting-run', ...
+        'horizon-feasibility-run','horizon-continuation-run'}))
+    requireField(artifact,'shootingHorizon');
+    requireField(artifact,'shootingProblemContract');
+    contract=artifact.shootingProblemContract;
+    configuration=contract.Configuration;
+    configuration.Horizon=lmz.shooting.ShootingHorizon.fromStruct( ...
+        artifact.shootingHorizon);
+    configuration.ShootingDecisionSchema= ...
+        lmz.shooting.ShootingDecisionSchema.fromStruct( ...
+        contract.DecisionSchema);
+    problem=model.createProblem(artifact.problemId,configuration);
+    reproducedContract=problem.contract();
+    if ~strcmp(lmz.io.ArtifactStore.dataHash(reproducedContract), ...
+            artifact.shootingProblemContractHash)
+        error('lmz:Reproduce:ShootingProblemContract', ...
+            ['Reconstructed shooting problem does not match the recorded ' ...
+            'hash-bound problem contract.']);
+    end
+elseif strcmp(artifact.artifactType,'contact-timing-run')
     storedTiming=lmz.data.ContactTimingResult.fromStruct( ...
         artifact.contactTimingResult);
-    configuration=struct('InitialState',storedTiming.FixedInitialState, ...
-        'PhysicalParameters',storedTiming.FixedPhysicalParameters, ...
-        'EventSchedule',storedTiming.InputSchedule, ...
-        'StartSectionId',storedTiming.InputSchedule.StartSectionId, ...
-        'StopSectionId',storedTiming.InputSchedule.StopSectionId);
-    problem=model.createProblem(artifact.problemId,configuration);
+    configuration.InitialState=storedTiming.FixedInitialState;
+    configuration.PhysicalParameters=storedTiming.FixedPhysicalParameters;
+    configuration.EventSchedule=storedTiming.InputSchedule;
+    configuration.StartSectionId=storedTiming.InputSchedule.StartSectionId;
+    configuration.StopSectionId=storedTiming.InputSchedule.StopSectionId;
+    timingFamily=fieldOr(configuration,'TimingFamily',false);
+    gauges=fieldOr(configuration,'TimingGauges',{});
+    base=model.createProblem(artifact.problemId,configuration);
+    if timingFamily
+        problem=lmz.schedule.TimingFamilyProblem(base, ...
+            lmz.schedule.TimingGauge.arrayFrom(gauges),configuration);
+    else
+        problem=base;
+    end
+elseif strcmp(artifact.artifactType,'continuation-run')&& ...
+        fieldOr(configuration,'TimingFamily',false)
+    contract=fieldOr(artifact.runProvenance, ...
+        'TimingFamilyProblemContract',struct());
+    base=reconstructTimingFamilyBase(model,artifact.problemId, ...
+        configuration,contract);
+    problem=lmz.schedule.TimingFamilyProblem(base, ...
+        lmz.schedule.TimingGauge.arrayFrom(fieldOr( ...
+        configuration,'TimingGauges',{})),configuration);
 elseif ~any(strcmp(artifact.artifactType, ...
         {'section-transfer-run','stride-plan-completion-run', ...
         'n-stride-simulation-run'}))
@@ -75,7 +111,7 @@ if ~isempty(problem)&&~strcmp(problem.Version, artifact.problemVersion)
         problem.Version, artifact.problemVersion);
 end
 
-hashChecks = verifyHashes(artifact.sourceDataHashes);
+hashChecks = verifyHashes(artifact.sourceDataHashes,artifact);
 if isfield(options, 'Context') && ~isempty(options.Context)
     context = options.Context;
 else
@@ -119,6 +155,34 @@ switch artifact.artifactType
         seed=restoreSeed(artifact.sourceSeed);
         result=lmz.services.SolveService().solve( ...
             problem,seed,runOptions,context);
+    case 'multiple-shooting-run'
+        requireField(artifact,'sourceSeed');
+        seed=restoreSeed(artifact.sourceSeed);
+        result=lmz.services.MultipleShootingService().solve( ...
+            problem,seed,runOptions,context);
+    case 'horizon-feasibility-run'
+        requireField(artifact,'sourceSeed');
+        seed=restoreSeed(artifact.sourceSeed);
+        parameters=artifact.parameterValues;
+        if isa(seed,'lmz.data.Solution')
+            parameters=seed.ParameterValues;
+            seed=seed.DecisionValues;
+        end
+        result=lmz.services.FeasibilityAnalysisService().analyze( ...
+            problem,seed,parameters, ...
+            runOptions,context);
+    case 'horizon-continuation-run'
+        requireField(artifact,'horizonContinuation');
+        protocol=artifact.horizonContinuation;
+        result=lmz.services.HorizonContinuationService().run( ...
+            model,artifact.problemId,protocol.Configurations, ...
+            protocol.InitialSeed,protocol.Options,context);
+        if ~strcmp(lmz.io.ArtifactStore.dataHash( ...
+                result.Horizon.toStruct()),artifact.shootingHorizonHash)
+            error('lmz:Reproduce:HorizonContinuationResult', ...
+                ['Reproduced continuation ended on a different ' ...
+                'hash-bound horizon.']);
+        end
     otherwise
         error('lmz:Reproduce:ArtifactType', ...
             'Artifact type %s is not a reproducible run.', artifact.artifactType);
@@ -177,7 +241,7 @@ for index = 1:numel(names)
 end
 end
 
-function checks = verifyHashes(values)
+function checks = verifyHashes(values,artifact)
 checks = struct('Name', {}, 'RelativePath', {}, 'Expected', {}, ...
     'Actual', {}, 'Verified', {}, 'Status', {});
 names = fieldnames(values);
@@ -194,6 +258,21 @@ for index = 1:numel(names)
             {'sha256', 'SHA256', 'hash', 'Hash'}, '');
     elseif ischar(item)
         record.Expected = item;
+    end
+    if strcmp(names{index},'ProblemConfiguration')
+        record.Actual=configurationPayloadHash(artifact);
+        if ~isempty(record.Actual)
+            if ~strcmpi(record.Actual,record.Expected)|| ...
+                    ~isfield(artifact,'problemConfigurationHash')|| ...
+                    ~strcmpi(record.Actual, ...
+                    artifact.problemConfigurationHash)
+                error('lmz:Reproduce:SourceHashMismatch', ...
+                    ['Recorded problem-configuration hash does not match ' ...
+                    'its stored payload.']);
+            end
+            record.Verified=true;
+            record.Status='verified-payload';
+        end
     end
     if ~isempty(record.RelativePath)
         if isAbsolute(record.RelativePath) || ...
@@ -216,6 +295,22 @@ for index = 1:numel(names)
         record.Status = 'verified';
     end
     checks(end + 1) = record; %#ok<AGROW>
+end
+end
+
+function value=configurationPayloadHash(artifact)
+value='';configuration=[];
+if isfield(artifact,'shootingProblemContract')&& ...
+        isstruct(artifact.shootingProblemContract)&& ...
+        isfield(artifact.shootingProblemContract,'Configuration')
+    configuration=artifact.shootingProblemContract.Configuration;
+elseif isfield(artifact,'problemMetadata')&& ...
+        isstruct(artifact.problemMetadata)&& ...
+        isfield(artifact.problemMetadata,'configuration')
+    configuration=artifact.problemMetadata.configuration;
+end
+if ~isempty(configuration)
+    value=lmz.io.ArtifactStore.dataHash(configuration);
 end
 end
 
@@ -242,9 +337,45 @@ end
 end
 
 function value = fieldOr(source, name, fallback)
-if isfield(source, name)
+if isstruct(source)&&isfield(source, name)
     value = source.(name);
 else
     value = fallback;
+end
+end
+
+function base=reconstructTimingFamilyBase(model,problemId,configuration,contract)
+base=[];
+required={'ProviderClass','FixedInitialState', ...
+    'FixedPhysicalParameters','InputSchedule','BaseConfiguration'};
+if isstruct(contract)&&isscalar(contract)&&all(isfield(contract,required))
+    providerClass=contract.ProviderClass;
+    trusted= ischar(providerClass)&&~isempty(regexp(providerClass, ...
+        '^(lmzmodels|lmzexamples)(\.[A-Za-z][A-Za-z0-9_]*)+$','once'));
+    if ~trusted
+        error('lmz:Reproduce:TimingProviderClass', ...
+            'Recorded timing provider is outside trusted namespaces.');
+    end
+    try
+        provider=feval(providerClass);
+        if ~isa(provider,'lmz.schedule.ContactConstraintProvider')
+            error('lmz:Reproduce:TimingProviderType', ...
+                'Recorded timing provider does not implement the contract.');
+        end
+        schedule=lmz.schedule.EventSchedule.fromStruct( ...
+            contract.InputSchedule);
+        base=lmz.schedule.SectionReturnTimingProblem(model,problemId, ...
+            provider,contract.FixedInitialState, ...
+            contract.FixedPhysicalParameters,schedule, ...
+            contract.BaseConfiguration);
+    catch exception
+        if strcmp(providerClass,'lmzexamples.AffineTimingFamilyProvider')
+            rethrow(exception);
+        end
+        base=[];
+    end
+end
+if isempty(base)
+    base=model.createProblem(problemId,configuration);
 end
 end

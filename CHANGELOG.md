@@ -1,6 +1,70 @@
 # Changelog
 
-## Unreleased — Round 9 configurable sections and N-stride workflows
+## 1.0.0-rc.2 — Round 10 rank-aware timing and multiple shooting
+
+- Advanced the framework prerelease version to `1.0.0-rc.2` while retaining
+  artifact and catalog schema `1.0.0`; Round 5/6 and rc.1 artifacts remain on
+  the same additive compatibility line.
+- Added rank-aware nonlinear solving for square and overdetermined systems,
+  including `fsolve`, `lsqnonlin`, and explicitly requested constrained
+  feasibility modes. Diagnostics retain residual/decision dimensions,
+  Jacobian rank/nullity, singular values, conditioning, active bounds,
+  optimality, scaling, and the selected solver.
+- Extended fixed-data contact timing with explicit fixed-row policies.
+  Overdetermined problems retain every configured row; underdetermined point
+  solves require a gauge, while a declared nullity-one timing family can be
+  traced through `TimingContinuationService`.
+- Added the generic `lmz.shooting` horizon, node, segment, decision-schema,
+  interface-defect, evaluation, result, initialization, and dimension-growth
+  contracts plus public multiple-shooting, feasibility-analysis, and horizon-
+  continuation services. Segment simulations are shared within one residual
+  evaluation rather than repeated across residual blocks.
+- Added model-owned section-local codecs/adapters for supported non-apex
+  scientific shooting combinations. These direct section formulations are
+  kept separate from the unchanged apex source-compatibility oracles and reject
+  unsupported section/side/occurrence requests explicitly. Focused section
+  tests passed 12/12; the quadruped touchdown timing root is explicitly
+  qualified as rank deficient/non-unique rather than rejected as a physical
+  failure.
+- Added quad-load template, shooting-codec, multiple-shooting, feasibility,
+  checkpoint, and horizon-growth infrastructure. A vector length, local search,
+  or least-squares termination is not relabeled as a physically validated
+  multi-stride return; exact load-horizon outcomes retain their classifications
+  and qualifications. Frozen focused evidence contains an N=2 transition
+  `root_found` result (`7.978e-13`). The N=3 fixed/energy-neutral searches are
+  `physical_validation_failure` at `0.713604`/`0.721789`, so requested physical
+  N=4/N=5 continuation was not reached. The distinct N=2 periodic search and a
+  separate stride-boundary N=5 bounded-work search are `numerical_failure` at
+  `2.817276` and `0.308691`; the latter tested all four single-control families,
+  retained physical candidates, and publishes no root or simulation. The N=5
+  search is not continuation from validated N=3/N=4 roots, and no global-
+  infeasibility claim is made.
+- Classified the four quad-load facades used directly by public Round 10
+  examples (`StrideTemplateLibrary`, `QuadLoadFeasibilityEvidence`,
+  `QuadLoadMultipleShootingProblem`, and `QuadLoadHorizonContinuation`) as
+  provisional public; their supporting model implementation remains internal.
+- Added heterogeneous per-stride schedules, controls, physical parameters, and
+  energy policies to the native plan path, including a two-stride analytic
+  tutorial with two distinct, physically checked apex returns.
+- Extended artifacts and `reproduceRun` for rectangular timing, timing-family
+  continuation, multiple-shooting solves, horizon feasibility, and horizon
+  continuation without serializing callbacks. Added GUI shooting/horizon
+  controls and classified residual/rank/physical diagnostics.
+- Added detailed multiple-shooting and horizon-feasibility guides, expanded the
+  README usage path, and added public examples for rectangular timing, timing
+  families, analytic multiple shooting, heterogeneous plans, scientific
+  sections, and quad-load horizon workflows.
+- `ROUND10_LOCAL_AUTOMATION_PASSED`: the final R2025b suite passed 544/544,
+  all 54 public examples and clean-copy isolation passed, coverage reached
+  19,973/25,363 statements (78.74857075267121%) with every stable floor green,
+  quality/architecture/R2019b static checks reported zero violations, and the
+  29-workflow × 3 performance matrix had zero overruns. The 932-file inventory
+  retains 917 blockers; temporary core/scientific ZIP and toolbox clean installs
+  passed but remained unauthorized, unretained, and `NOT_FOR_REDISTRIBUTION`.
+  Remote CI, human desktop QA, R2019b runtime, and redistribution authority
+  remain open external gates.
+
+## 1.0.0-rc.1 — Round 9 configurable sections and N-stride workflows
 
 - Added catalog-driven Poincaré section descriptors, named-event/state-plane/
   composite implementations, pre/post reset semantics, transversality and

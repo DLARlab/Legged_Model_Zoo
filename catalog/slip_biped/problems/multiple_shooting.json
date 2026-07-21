@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "multiple_shooting",
+  "kind": "nonlinear_equation",
+  "implementationId": "slip_biped.multiple_shooting.section_local.v1",
+  "implemented": true,
+  "maturity": "experimental",
+  "validationStatus": "tested",
+  "workflowKind": "multiple_shooting",
+  "provenance": {
+    "sourceProblem": "periodic_orbit",
+    "sourceCommit": "4595146c5881a5313bc8fe92de85099193ef9be9",
+    "formulation": "direct touchdown-section segments with explicit interface defects"
+  },
+  "capabilities": {
+    "simulate": false,
+    "solve": true,
+    "continue": true,
+    "optimize": false,
+    "visualize": false,
+    "animate": false,
+    "parameterHomotopy": false,
+    "branchFamilyScan": false
+  }
+}

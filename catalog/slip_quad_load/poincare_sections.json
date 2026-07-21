@@ -5,7 +5,8 @@
     "multi_stride_fit": "apex",
     "section_return_timing": "apex",
     "n_stride_simulation": "apex",
-    "n_stride_periodic": "apex"
+    "n_stride_periodic": "apex",
+    "multiple_shooting_horizon": "apex"
   },
   "sections": [
     {

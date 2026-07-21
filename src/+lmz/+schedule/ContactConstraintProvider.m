@@ -1,5 +1,9 @@
 classdef (Abstract) ContactConstraintProvider < handle
     %CONTACTCONSTRAINTPROVIDER Model boundary for timing-only residuals.
+    % Providers may return ContactRowBindings alongside ContactResidual.
+    % Each row binds declaratively to an interior event, return time, or an
+    % always-active physical condition.  Omitting bindings preserves the
+    % legacy one-contact-row-per-scheduled-event contract.
     methods (Abstract)
         value=eventNames(obj)
         value=evaluate(obj,initialState,physicalParameters,schedule,context,includeSimulation)

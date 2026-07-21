@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "multiple_shooting_horizon",
+  "kind": "nonlinear_equation",
+  "implementationId": "slip_quad_load.multiple_shooting_horizon.v1",
+  "implemented": true,
+  "maturity": "experimental",
+  "validationStatus": "tested",
+  "provenance": {
+    "sourceProblem": "multi_stride_fit",
+    "sourceCommit": "19f3133073c988cc0c3424a647b4adbb60a90b99",
+    "formulation": "explicit per-segment contact rows, apex-node defects, and energy/work constraints"
+  },
+  "capabilities": {
+    "simulate": false,
+    "solve": true,
+    "continue": true,
+    "optimize": false,
+    "visualize": false,
+    "animate": false,
+    "parameterHomotopy": false,
+    "branchFamilyScan": false
+  }
+}

@@ -38,6 +38,25 @@ adapter calls `fsolve`. The service returns `SolveResult` containing the solved
 solution, final evaluation, exit flag/output, exact options, seed, seed value,
 and provenance.
 
+For rectangular residuals and explicit feasibility modes, use a workflow
+service that delegates to `RankAwareNonlinearSolver`. Its public low-level
+entry points are:
+
+```matlab
+[result,diagnostics] = lmz.solvers.RankAwareNonlinearSolver().solve( ...
+    problem,seed,parameters,options,context);
+diagnostics = lmz.solvers.RankAwareNonlinearSolver().analyze( ...
+    problem,decision,parameters,options,context);
+```
+
+With `Solver='auto'`, unbounded square systems select `fsolve`, square systems
+with finite schema bounds select bounded `lsqnonlin`, overdetermined systems
+select `lsqnonlin`, and underdetermined point solves raise
+`lmz:Timing:GaugeRequired`. `fmincon_feasibility` must be requested explicitly.
+Diagnostics report residual/decision dimensions, rank/nullity, singular values,
+condition estimates, scaled norm, unscaled blocks, active bounds, first-order
+optimality, solver/algorithm selection, and Jacobian source.
+
 ## ContactTimingService
 
 ```matlab
@@ -46,12 +65,34 @@ result = lmz.services.ContactTimingService().solve( ...
     problem,problem.InputSchedule,options,context);
 ```
 
-The service accepts only `SectionReturnTimingProblem`. It solves explicit free
-schedule coordinates while keeping `FixedInitialState` and
-`FixedPhysicalParameters` bitwise unchanged. Residuals contain model-provided
-contact constraints and stop-section return only; diagnostics explicitly state
-`NoPeriodicityResidual=true`. Seeded multistart uses
-`RunContext.RandomSeed`. The result is `ContactTimingResult`.
+The service accepts `SectionReturnTimingProblem` and `TimingFamilyProblem`. It
+solves explicit free schedule coordinates while keeping `FixedInitialState`
+and `FixedPhysicalParameters` bitwise unchanged. Residuals contain
+model-provided contact constraints, stop-section return, and declared timing
+gauges only; diagnostics explicitly state `NoPeriodicityResidual=true`.
+Seeded multistart uses `RunContext.RandomSeed`. The result is
+`ContactTimingResult`.
+
+`FixedRowPolicy` is `validate_fixed_rows` by default. Fixed-event and
+fixed-return equations remain physical validation rows even when their
+coordinates are absent from the decision. A low active residual cannot produce
+`SolverDiagnostics.Success=true` when fixed rows, crossing acceptance, event
+order, finite data, energy/work, expected nullity, or gauge independence fails.
+
+For a regular ungauged family, use:
+
+```matlab
+family = lmz.schedule.TimingFamilyProblem(baseProblem, ...
+    lmz.schedule.TimingGauge.empty(0,1), ...
+    struct('ExpectedLocalDimension',1));
+trace = lmz.services.TimingContinuationService().run( ...
+    family,seed,options,context);
+```
+
+The service measures Jacobian nullity and requires exactly one before tracing
+with pseudo-arclength continuation. Point problems may instead add declarative
+`fixed_event`, `fixed_return_time`, or `linear_phase` gauges and must report
+gauge independence.
 
 Timing-only solve is not a periodic-orbit solve. Use `SolveService` on a
 periodic problem when symmetry-aligned state/section-coordinate closure is
@@ -113,6 +154,69 @@ Continuation records accepted/rejected snapshots, checkpoints, step/curvature
 diagnostics, controlled-stop state, and a normalized termination reason.
 Parameter homotopy accepts active schema parameters only.
 
+## Multiple shooting and horizon evidence
+
+Create a registered `MultipleShootingProblem` through its model and solve it
+with:
+
+```matlab
+result = lmz.services.MultipleShootingService().solve( ...
+    shootingProblem,seed,solverOptions,context);
+report = result.FeasibilityReport;
+```
+
+`ShootingResult` retains the ordinary `SolveResult`, hashable horizon, cached
+per-segment results, `FeasibilityReport`, initializer/continuation/checkpoint
+history, and rank/problem-contract diagnostics. `report.Success` requires
+acceptable solver termination, active residual tolerance, and every configured
+physical condition. Its classifications are `root_found`,
+`least_squares_feasible`, `best_known_residual`,
+`local_infeasibility_evidence`, `numerical_failure`, and
+`physical_validation_failure`.
+
+Analyze a supplied candidate or an explicit seed list without overstating the
+evidence:
+
+```matlab
+report = lmz.services.FeasibilityAnalysisService().analyze( ...
+    shootingProblem,decision,parameters,options,context);
+evidence = lmz.services.FeasibilityAnalysisService().multistart( ...
+    shootingProblem,seeds,parameters,options,context);
+assert(~evidence.GlobalInfeasibilityProven);
+```
+
+Every attempt retains its exact inert input seed and hash, derivation label,
+random seed, exit/termination data, score, final decision when available, and
+feasibility report when evaluation is reached. The aggregate retains the exact
+parameters and options, their hashes, and the problem-configuration hash, so
+the bounded local search
+can be replayed rather than reconstructed from scores alone.
+An attempt rejected before evaluation retains its exception identifier and
+message instead of inventing a numerical report.
+
+`best_known_residual` and failed multistart are local numerical evidence, not a
+global nonexistence certificate.
+
+For an explicit `N` to `N+1` protocol:
+
+```matlab
+result = lmz.services.HorizonContinuationService().run( ...
+    model,problemId,configurations,initialSeed, ...
+    struct('SolverOptions',solverOptions, ...
+    'ContinueOnQualifiedFailure',false),context);
+```
+
+The service maps decisions between changing schemas by variable name, records
+each embedding and feasibility report, and stops at the first failed step by
+default. `HorizonContinuation.checkpoint` and `resume` restore only a
+same-dimension problem with an exactly matching hash-bound problem contract and
+a compatible framework version; dimension growth always requires the explicit
+embedding map. An interrupted adaptive point-homotopy step can be continued
+with `HorizonContinuationService.resumeHomotopy`; its checkpoint additionally
+binds the exact anchor, lambda, next step, residual, and attempt history. See
+[multiple-shooting.md](multiple-shooting.md) and
+[horizon-feasibility.md](horizon-feasibility.md).
+
 ## OptimizationService
 
 ```matlab
@@ -148,6 +252,13 @@ result = lmz.services.MultiStrideSimulationService().simulate( ...
     model,request,context);
 ```
 
+`MultiStrideRequest` may instead carry a complete `StridePlan`. The tutorial
+hopper honors each supplied `StrideSpec.EventSchedule`, gravity, and impulse in
+sequence and initializes each segment from the previous terminal state. This
+is the public heterogeneous-plan path; it retains the homogeneous source-orbit
+fast path when no explicit plan is supplied. See
+`examples/demo_heterogeneous_stride_plan.m`.
+
 Callers must branch on `CompletionStatus` and `Partial` before accessing
 `Simulation`. For the bundled two-stride quad-load seed, this five-stride
 predictor-corrector request currently preserves two completed strides and
@@ -175,10 +286,12 @@ projection as `HiddenTimingSolve=true`.
 
 `DataService` reads bounded built-in JSON examples. `BranchService` owns native
 and legacy branch boundaries. `ArtifactStore` owns versioned atomic MAT
-persistence. `lmz.services.reproduceRun` reconstructs solve, continuation,
-optimization, contact-timing, section-transfer, N-stride simulation/plan
-completion, and N-stride periodic runs from compatible artifacts after version
-and source-hash checks.
+persistence. `lmz.services.reproduceRun` reconstructs solve, continuation
+(including declarative timing-family continuation), optimization, rectangular
+contact-timing, section-transfer, N-stride simulation/plan completion,
+N-stride periodic, multiple-shooting, horizon feasibility, and
+horizon-continuation runs from compatible artifacts after version,
+problem-contract, horizon, and source-hash checks where applicable.
 
 ## Errors and toolbox availability
 

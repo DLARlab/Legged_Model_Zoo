@@ -23,7 +23,7 @@ classdef Model < lmz.api.LeggedModel
         function value = listProblems(~)
             value = {'periodic_hop','demo_hop','section_return_timing', ...
                 'periodic_orbit','n_stride_simulation', ...
-                'contact_timing_sequence'};
+                'contact_timing_sequence','multiple_shooting'};
         end
 
         function value = createProblem(obj, id, configuration)
@@ -50,6 +50,9 @@ classdef Model < lmz.api.LeggedModel
                 case 'contact_timing_sequence'
                     value=lmz.multistride.ContactTimingSequenceFactory. ...
                         create(obj,configuration);
+                case 'multiple_shooting'
+                    value=lmzmodels.tutorial_hopper. ...
+                        MultipleShootingFactory.create(obj,configuration);
                 otherwise
                     error('lmz:tutorial_hopper:Problem', ...
                         'Unknown problem %s.', id);

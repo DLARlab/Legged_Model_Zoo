@@ -18,6 +18,7 @@ classdef AppState < handle
         WorkingEvaluation = []
         SolvedSolution = []
         SolveResult = []
+        ShootingResult = []
         TimingResult = []
         SectionTransferResult = []
         SeedPair = []

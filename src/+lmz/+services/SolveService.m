@@ -8,7 +8,8 @@ classdef SolveService
             if isa(seed,'lmz.data.Solution')
                 tolerance=1e-7;if isfield(options,'AcceptExistingTolerance'),tolerance=options.AcceptExistingTolerance;end
                 initial=problem.evaluate(seed.DecisionValues,parameters,context,false);
-                if initial.ScaledResidualNorm<=tolerance
+                if initial.ScaledResidualNorm<=tolerance&& ...
+                        physicallyValid(initial)
                     evaluation=problem.evaluate(seed.DecisionValues,parameters,context,true);
                     solution=problem.makeSolution(seed.DecisionValues,parameters,evaluation);
                     output=struct('algorithm','accepted-existing-seed','iterations',0, ...
@@ -24,4 +25,12 @@ classdef SolveService
             result=lmz.solvers.FsolveSolver().solve(problem,seed,parameters,options,context); context.progress(1,'Solve complete');
         end
     end
+end
+
+function value=physicallyValid(evaluation)
+value=logical(evaluation.PhysicalValidity);
+if isstruct(evaluation.Feasibility)&& ...
+        isfield(evaluation.Feasibility,'Valid')
+    value=value&&logical(evaluation.Feasibility.Valid);
+end
 end

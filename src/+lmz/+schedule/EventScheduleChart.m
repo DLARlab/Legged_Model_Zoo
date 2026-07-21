@@ -161,6 +161,10 @@ classdef EventScheduleChart
             current=lower; remaining=available;
             for index=1:count
                 fraction=1/(1+exp(-q(cursor)));
+                % Keep trial schedules strictly inside the ordered-gap
+                % chart even when a nonlinear solver proposes a coordinate
+                % large enough to saturate the logistic map numerically.
+                fraction=min(1-eps,max(eps,fraction));
                 extra=remaining*fraction;
                 current=current+gap+extra;
                 values(index)=current;

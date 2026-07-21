@@ -167,6 +167,42 @@ equal the initial coordinates. A periodic-orbit problem adds that closure
 residual and may solve initial-state variables. See
 [contact-timing-solve.md](contact-timing-solve.md).
 
+## Round 10 scientific support matrix
+
+The complete usage and qualification guide is
+[scientific section-local shooting](scientific-section-shooting.md). The
+validated built-in matrix is summarized here so a catalog entry is not
+mistaken for a solver guarantee.
+
+| Model | Validated same-section periodic/adapter returns | Validated timing return | Important qualification |
+| --- | --- | --- | --- |
+| `slip_quadruped` | apex oracle; back-left and front-left touchdown pre/post; descending `y=0.9`; back-left touchdown plus descending condition | back-left touchdown → same | Physical timing root is rank deficient and is not a unique parameterization |
+| `slip_biped` | apex oracle; left and right touchdown pre/post; descending `y=0.95`; left touchdown plus descending condition | left touchdown → same | Timing root has rank 4 and nullity 0 |
+| `slip_quad_load` | apex adapter; stride boundary adapter; back-left touchdown post → same | apex → stride boundary with fixed return time | Touchdown adapter is direct, but its repeated-template seed is not claimed contact feasible |
+
+For unloaded quadruped and biped non-apex returns, the local decision owns the
+section state, ordered event gaps, and return time. Residual evaluation uses
+the model's section adapter directly and records
+`DirectSectionIntegration=true` and
+`SourceApexPhaseGaugePreserved=false`. The exact apex preset remains the
+source-compatible oracle.
+
+The load touchdown initializer inspects its repository-contained source
+template once to obtain a post-event state. Residual evaluations after that
+initialization integrate touchdown-to-touchdown without an apex lookup. This
+is adapter validation, not a claim that the roughly `0.149` contact residual
+of the repeated-template seed is a root.
+
+Unsupported mixed periodic endpoints raise
+`lmz:Shooting:TransitionProblemRequired` for quadruped and biped. Their mixed
+timing endpoints raise `lmz:Timing:UnsupportedSection`. The validated load
+codec rejects unsupported pairs, pre-touchdown sides, and other touchdown IDs
+with `lmz:QuadLoad:UnsupportedSectionPair`,
+`lmz:QuadLoad:UnsupportedSectionSide`, or
+`lmz:QuadLoad:UnsupportedSection`. Use an explicit transition formulation for
+mixed coordinate charts; never remove residual rows merely to force a square
+periodic system.
+
 ## Rephasing an existing orbit
 
 Changing from apex to another section is a problem-configuration change. The

@@ -16,6 +16,14 @@ classdef Optimization
             options = lmz.compat.Optimization.make( ...
                 'fmincon', values, forceFallback);
         end
+
+        function options = lsqnonlin(values, forceFallback)
+            if nargin < 2
+                forceFallback = false;
+            end
+            options = lmz.compat.Optimization.make( ...
+                'lsqnonlin', values, forceFallback);
+        end
     end
 
     methods (Static, Access = private)

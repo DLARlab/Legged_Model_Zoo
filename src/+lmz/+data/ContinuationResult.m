@@ -14,6 +14,20 @@ classdef ContinuationResult
                 snapshots{index}=obj.Snapshots(index).toStruct();
             end
             artifact=obj.Branch.toArtifact();artifact.artifactType='continuation-run';artifact.diagnostics=obj.Diagnostics;elapsed=lmz.data.ContinuationResult.numericField(obj.Provenance,'elapsedTime',NaN);evaluations=lmz.data.ContinuationResult.functionEvaluations(obj.Snapshots);details=struct('Options',obj.Options,'SourcePair',obj.SourcePair,'RandomSeed',obj.RandomSeed,'Provenance',obj.Provenance,'ElapsedTime',elapsed,'FunctionEvaluations',evaluations,'TerminationReason',obj.TerminationReason,'Warnings',{{}});artifact=lmz.io.ArtifactStore.withRunMetadata(artifact,details);artifact.continuationResult=struct('Branch',obj.Branch.toStruct(),'Snapshots',{snapshots},'TerminationReason',obj.TerminationReason,'Options',obj.Options,'SourcePair',obj.SourcePair,'Provenance',obj.Provenance,'Diagnostics',obj.Diagnostics);
+            if isstruct(obj.Provenance)&& ...
+                    isfield(obj.Provenance,'ProblemConfiguration')
+                artifact.problemMetadata.configuration= ...
+                    obj.Provenance.ProblemConfiguration;
+                artifact.problemConfigurationHash= ...
+                    lmz.io.ArtifactStore.dataHash( ...
+                    artifact.problemMetadata.configuration);
+                artifact.sourceDataHashes.ProblemConfiguration= ...
+                    artifact.problemConfigurationHash;
+                artifact.workflow=struct('Id',fieldOr( ...
+                    obj.Provenance,'Workflow','continuation'), ...
+                    'TimingFamily',logical(fieldOr( ...
+                    obj.Provenance,'TimingFamily',false)));
+            end
         end
     end
     methods (Static, Access=private)
@@ -38,4 +52,12 @@ classdef ContinuationResult
             if ~known,value=NaN;end
         end
     end
+end
+
+function value=fieldOr(source,name,fallback)
+if isstruct(source)&&isfield(source,name)
+    value=source.(name);
+else
+    value=fallback;
+end
 end

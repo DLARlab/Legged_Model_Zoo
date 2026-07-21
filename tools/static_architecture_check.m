@@ -3,7 +3,10 @@ function violations=static_architecture_check(root)
 files=[dir(fullfile(root,'src','+lmz','**','*.m')); ...
     dir(fullfile(root,'models','+lmzmodels','**','*.m'))]; violations={};
 getframeOwner=fullfile(root,'src','+lmz','+compat','Graphics.m');
-patterns={'\<global\>','restoredefaultpath','addpath\s*\(\s*genpath','\<eval(in)?\s*\(','\<assignin\s*\('};
+% Match GLOBAL only at a MATLAB statement boundary so required user-facing
+% phrases such as "not a proof of global infeasibility" are not violations.
+patterns={'(?m)(?:^|[;,])\s*global(?:\s|$)','restoredefaultpath', ...
+    'addpath\s*\(\s*genpath','\<eval(in)?\s*\(','\<assignin\s*\('};
 for k=1:numel(files)
     path=fullfile(files(k).folder,files(k).name); text=fileread(path);
     for j=1:numel(patterns)

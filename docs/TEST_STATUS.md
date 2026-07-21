@@ -2,7 +2,8 @@
 
 ## Environment
 
-- Date: 2026-07-20 Round 9 closing verification
+- Latest locally closed run: 2026-07-21 Round 10 worktree verification
+- Latest committed closing baseline: 2026-07-20 Round 9 closing verification
 - MATLAB: `25.2.0.3177638 (R2025b) Update 5`, Apple silicon
 - License: Student License
 - Operating system: macOS 26.5.2 (build 25F84), arm64
@@ -14,9 +15,71 @@ MATLAB R2019b is the compatibility target, but no R2019b installation is
 available. Runtime verification is therefore R2025b-only; the R2019b result
 below is a static audit and is not described as execution evidence.
 
-## Round 9 closing verification
+## Round 10 verification status
+
+- Round 8 closing HEAD:
+  `c2616735354a354fa432bac549f81861f8ddd9a5` (committed)
+- Round 9 closing HEAD:
+  `c0d87860b59cfbdffe96e165cd01c68e2de7d948` (committed)
+- Round 10 worktree base/current committed HEAD:
+  `c0d87860b59cfbdffe96e165cd01c68e2de7d948`
+- Framework version: `1.0.0-rc.2`; artifact/catalog schemas: `1.0.0`
+
+Round 10 implementation and its local validation gates are complete in the
+current uncommitted worktree. The committed HEAD remains the Round 9 closing
+commit above; the Round 10 changes and the evidence below are not a commit or
+a public release.
+
+Local automation marker: `ROUND10_LOCAL_AUTOMATION_PASSED`.
+
+| Gate | Round 10 status |
+|---|---|
+| Complete non-instrumented MATLAB suite | **PASS** — 544/544, 0 failed, 0 incomplete, `1153.233186` seconds |
+| Every top-level public example | **PASS** — 54/54 with exact markers in `424.166055` seconds |
+| Clean-copy standalone isolation | **PASS** — 1/1 in `52.852335` seconds |
+| Instrumented coverage/stable floors | **PASS** — 544/544; 19,973/25,363 statements (`78.74857075267121%`) across 317 runtime files and 29 packages; all five tracked stable-package floors passed |
+| Code quality, architecture, static R2019b audit | **PASS** — 319 files with 0 unallowlisted quality violations; 0 architecture violations; 699 MATLAB files with 0 static R2019b violations |
+| Round 10 performance matrix | **PASS** — 29 workflows x 3 warm repetitions, 0 budget overruns, `113.18738520833334` seconds |
+| README and generated catalog contract | **PASS** — detailed usage contract passed; generated tables contain 4 model rows and 30 problem rows |
+| Redistribution inventory and technical ZIP/toolbox install | **TECHNICALLY PASS / AUTHORITY OPEN** — manifest covers 932 files with 917 blockers and an unresolved project decision; core and scientific ZIP/toolbox technical-validation clean installs passed, with artifacts unauthorized, unretained, and 0 installed afterward |
+
+Focused development runs completed before the aggregate close are retained as
+the scientific detail supporting the locally closed gates:
+
+| Focused workflow | Observed result / scope |
+|---|---|
+| Rectangular contact timing | Two active rows, one unknown, rank 1, residual `2.07e-15`; classified only after the fixed physical row met tolerance |
+| Timing-family continuation | Five points, rank 1/nullity 1, return-time span `0.0212`, zero observed residual; saved artifact reproduced the same point count/span |
+| Analytic multiple shooting | Two segments, `root_found`, maximum residual `1.78e-15`; interface defects and physical checks passed |
+| Heterogeneous analytic plan | Two different return durations and impulses `10/12`; both terminal apex states checked, maximum error `5.63e-15` |
+| Scientific section-local matrix | Exact focused test set passed 12/12. Quadruped touchdown periodic residual `1.29e-10`; biped touchdown timing `1.48e-13`; quadruped/biped transverse state planes `2.59e-13`/`2.65e-13`; all reported direct section integration and accepted physical crossings |
+| Rank-deficient quadruped touchdown timing | Physical 8-by-8 root residual `4.66e-12`, FD rank 2/nullity 6, `Success=true`, `UniquenessValidated=false`, qualification `rank_deficient_root_not_a_unique_parameterization` |
+| Quad-load N=2 transition/contact feasibility | Stored `root_found` residual `7.978014164613411e-13` (replay approximately `7.983e-13`) with contact/interface/crossing/event/finite-state checks passing |
+| Quad-load N=2/N=3 apex evidence | N=2 transition/contact is `root_found` at `7.978014164613411e-13` (46/46, rank 46/nullity 0). Fixed-control Case A is `physical_validation_failure` at `0.7136044533002278` (69/69, rank 69/nullity 0); energy-neutral-control Case B is `physical_validation_failure` at `0.7217887917287552` (70/73, rank 70/nullity 3). The distinct N=2 periodic search is `numerical_failure` at `2.8172762892858283` after exit 0/evaluation limit. No physical N=3 apex root was found, so requested physical N=4/N=5 continuation was not reached; no global-infeasibility claim |
+| Separate quad-load N=5 relaxation | The stride-boundary bounded-work-100 search tested all four single-control families. All four final candidates passed recorded finite-state/crossing/event-order checks, but none met residual tolerance or acceptable termination. Best: `numerical_failure`, norm `0.3086908931991573`, maximum `0.11470808666193932`, 119/119, rank 112/nullity 7, exit 0/evaluation limit; no root or simulation. This is a structural warm-start search, not continuation from validated N=3/N=4 roots |
+| Generic documentation contracts | Three contracts passed; the four generic Round 10 public examples ran with exact markers |
+
+The aggregate totals above close the available local R2025b suite, examples,
+coverage, quality, performance, isolation, documentation, and technical
+packaging gates. Scientific section and quad-load horizon evidence must still
+be reported under its exact local classification; no local failure proves
+global nonexistence. Remote CI, human desktop QA, R2019b runtime execution, and
+redistribution authority remain open external qualifications. The unresolved
+redistribution decision keeps every technical package unauthorized and keeps
+Round 10 from being described as a public release.
+
+Timing rank is reported separately from physical/root acceptance. Ordinary
+square timing problems set `RankConditionRequired=false`; a residual- and
+physics-valid rank-deficient root may succeed while recording
+`UniquenessValidated=false` and
+`RankQualification='rank_deficient_root_not_a_unique_parameterization'`.
+Timing-family configurations continue to require their declared nullity and
+gauge independence.
+
+## Round 9 closing verification (committed historical baseline)
 
 - Base HEAD: `f65abf2f9dee17b3b5be363f8d6e508631a7435c`
+- Closing HEAD: `c0d87860b59cfbdffe96e165cd01c68e2de7d948`
 - Framework version: `1.0.0-rc.1`
 - Final non-instrumented suite: `396 run, 0 failed, 0 incomplete` in
   `549.278033` seconds
@@ -49,9 +112,12 @@ below is a static audit and is not described as execution evidence.
 | Biped apex timing | Residual norm `1.16315967992e-13`; state/physics bitwise unchanged |
 | Quad-load apex timing | Residual norm `7.16498253998e-14`; state/physics bitwise unchanged |
 
-Every timing result reported `NoPeriodicityResidual=true`. The three migrated
-scientific timing providers deliberately remain apex-only and reject non-apex
-requests before solve; they are not mislabeled as source-equivalent. Tutorial
+Every timing result reported `NoPeriodicityResidual=true`. At the Round 9
+close, the three migrated scientific timing providers deliberately remained
+apex-only and rejected non-apex requests before solve; they were not mislabeled
+as source-equivalent. Round 10 adds separate model-owned section-local adapters
+for declared combinations without changing those apex compatibility oracles.
+Tutorial
 named-event endpoints are unsupported, and an ambiguous apex-to-descending
 occurrence is rejected explicitly. Solver exit flags are retained rather than
 converted into claims: quadruped and load returned small residuals with exit

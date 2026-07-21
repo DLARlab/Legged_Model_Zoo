@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "multiple_shooting",
+  "kind": "nonlinear_equation",
+  "implementationId": "tutorial_hopper.multiple_shooting.analytic.v1",
+  "implemented": true,
+  "maturity": "tutorial",
+  "validationStatus": "tested",
+  "workflowKind": "multiple_shooting",
+  "provenance": {
+    "source": "built-in analytic hopper with explicit interface defects"
+  },
+  "capabilities": {
+    "simulate": false,
+    "solve": true,
+    "continue": true,
+    "optimize": false,
+    "visualize": false,
+    "animate": false,
+    "parameterHomotopy": false,
+    "branchFamilyScan": false
+  }
+}

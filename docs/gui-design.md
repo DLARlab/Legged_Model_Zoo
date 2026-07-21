@@ -101,6 +101,41 @@ explicit data to the controller/services.
 `missing_stride_specification`; the GUI may then focus the editor. Unknown
 energy effects require an explicit policy choice and cannot pass silently.
 
+## Shooting and horizon interaction contract
+
+Round 10 extends `SolveTab` with capability-driven **Multiple shooting** and
+**Horizon feasibility** modes. The editor exposes formulation, solver (`auto`,
+`fsolve`, `lsqnonlin`, or constrained feasibility), horizon length, interface/
+event/control free masks, energy/work mode, residual tolerance, and template
+initializer. Every edit is validated by `AppController.setShootingSettings`,
+rebuilds the registered problem, and invalidates incompatible solved,
+continuation, simulation, and artifact state.
+
+The diagnostics panel shows segment/node and unknown/residual counts, exact
+classification, rank/nullity, condition estimate, scaled residual, termination
+reason, smallest singular values, and per-segment contact, interface,
+selected-section, and energy/work norms. The visible classification vocabulary
+is `root_found`, `least_squares_feasible`, `best_known_residual`,
+`local_infeasibility_evidence`, `numerical_failure`, and
+`physical_validation_failure`. Color is supplementary; text remains the
+authority.
+
+The horizon plot expands those summaries into per-coordinate section defects,
+named event and return-time schedules, individual control sequences, the
+energy/work sequence, and solver residual history. Each series is normalized
+only for the shared overview axes; the table retains the exact numerical norms
+and classifications.
+
+The GUI dispatches registered problems to `MultipleShootingService`; it does
+not assemble model equations or infer success from an exit flag. Partial or
+physically invalid horizons remain diagnostic-only, and no simulation/animation
+control presents them as a completed physical trajectory. Changing section,
+side, horizon dimension, free mask, energy mode, or initializer invalidates
+old results. Detailed numerical and authoring contracts live in
+[multiple-shooting.md](multiple-shooting.md),
+[horizon-feasibility.md](horizon-feasibility.md), and
+[service-api.md](service-api.md).
+
 ## Simulation and extensibility
 
 Each visualizable catalog may own `graphics.lmz.json`. On model/problem change,

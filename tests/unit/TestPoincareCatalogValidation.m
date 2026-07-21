@@ -8,7 +8,9 @@ classdef TestPoincareCatalogValidation < matlab.unittest.TestCase
                 lmzmodels.slip_biped.PhysicalStateSchema.create(), ...
                 lmzmodels.slip_quad_load.PhysicalStateSchema.create(), ...
                 lmzmodels.tutorial_hopper.PhysicalStateSchema.create()};
-            expectedCounts = [9 5 10 4];
+            % Round 10 adds validated pre-reset, state-plane, and composite
+            % charts to the unloaded scientific models.
+            expectedCounts = [13 9 10 4];
             for index = 1:numel(modelIds)
                 path = fullfile(lmz.util.ProjectPaths.catalog(), ...
                     modelIds{index}, 'poincare_sections.json');

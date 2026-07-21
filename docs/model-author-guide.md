@@ -144,6 +144,33 @@ A periodic problem separately compares returned and initial section
 coordinates under the declared symmetry. Do not reuse a timing-only result as
 a periodicity claim. See [contact-timing-solve.md](contact-timing-solve.md).
 
+## Multiple-shooting adapter boundary
+
+A model that advertises multiple shooting owns the direct one-segment physics;
+the generic framework owns horizon assembly and solver orchestration. Define
+named section coordinates with `lmz.shooting.SectionStateSchema`, encode nodes,
+segments, and their free variables with `ShootingNode`, `ShootingSegment`,
+`ShootingHorizon`, and `ShootingDecisionSchema`, then implement
+`lmz.shooting.SectionSimulationAdapter.simulateSegment` in the model package.
+
+The adapter receives decoded start-node, schedule, control, and physical data.
+It must perform exactly one direct section-to-section propagation and return
+terminal physical/section states, contact and selected-section rows,
+energy/work rows, accepted crossing/event records, physical validity, and
+diagnostics. Apply declared symmetry before forming terminal section
+coordinates. Do not reuse an apex-only oracle for a non-apex label, hide a
+timing solve, or delete a residual row to force a square system.
+
+`MultipleShootingProblem` combines per-segment contact/section/energy rows,
+explicit interface defects, and exactly one final periodic closure, transition
+target, or feasibility target. Registered adapters must have an inert
+`toStruct` identity so artifacts and `reproduceRun` can verify the problem and
+horizon hashes. Runtime callbacks remain non-serializable experiments. The new
+shooting, timing-family, and horizon APIs are provisional in rc.2; see
+[API_STABILITY.md](API_STABILITY.md),
+[multiple-shooting.md](multiple-shooting.md), and
+[horizon-feasibility.md](horizon-feasibility.md).
+
 ## Multi-stride and energy contracts
 
 Represent each stride with `StrideSpec` and the sequence with `StridePlan`.
@@ -187,8 +214,10 @@ capabilities and `getVisualizationPlugin`; no model-ID branch is required.
 At minimum test discovery, descriptor validation, schema ordering and role
 metadata, default simulation, section crossing/transversality, timing-only fixed
 data, residual/objective, solve where advertised, Jacobian rank for continuation,
-short continuation where advertised, stride completion/energy policies, scene
-construction, artifact round trip, malformed inputs, absence of core prompts,
-and clean removal of an external registration. Follow
+short continuation where advertised, shooting decision round trip, one
+integration per segment evaluation, interface defects, rank/feasibility
+classification, horizon checkpoint/dimension embedding where advertised,
+stride completion/energy policies, scene construction, artifact round trip,
+malformed inputs, absence of core prompts, and clean removal of an external registration. Follow
 [testing-a-model.md](testing-a-model.md) and the executable sequence in
 [getting-started-build-a-model.md](getting-started-build-a-model.md).

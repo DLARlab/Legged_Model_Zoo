@@ -5,11 +5,11 @@
   "name": "SLIP Quadruped with Load",
   "implementationClass": "lmzmodels.slip_quad_load.Model",
   "poincareSections": "poincare_sections.json",
-  "problems": ["single_stride", "multi_stride_fit", "n_stride_fit", "demo_stride", "section_return_timing", "n_stride_simulation", "n_stride_periodic"],
+  "problems": ["single_stride", "multi_stride_fit", "n_stride_fit", "demo_stride", "section_return_timing", "n_stride_simulation", "n_stride_periodic", "multiple_shooting_horizon"],
   "capabilities": {
     "simulate": true,
     "solve": true,
-    "continue": false,
+    "continue": true,
     "optimize": true,
     "visualize": true,
     "animate": true,

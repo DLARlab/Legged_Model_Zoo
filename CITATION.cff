@@ -4,7 +4,7 @@ message: >-
   scientific source below when using its model, code, or data.
 type: software
 title: Legged Model Zoo
-version: 1.0.0-rc.1
+version: 1.0.0-rc.2
 authors:
   - alias: JY-Din
 repository-code: https://github.com/DLARlab/Legged_Model_Zoo

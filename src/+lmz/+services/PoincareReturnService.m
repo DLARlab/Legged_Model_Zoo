@@ -12,6 +12,7 @@ classdef PoincareReturnService
                 error('lmz:Poincare:ReturnServiceInput', ...
                     'Poincare return requires a model and configuration.');
             end
+            configuration=mergedConfiguration(source,configuration);
             [problemId,decision,parameters,simulation]= ...
                 obj.simulationFor(model,source,configuration,context);
             registry=lmz.registry.ModelRegistry.discover();
@@ -76,6 +77,8 @@ classdef PoincareReturnService
             if isa(source,'lmz.data.Solution')
                 problemId=source.ProblemId;decision=source.DecisionValues;
                 parameters=source.ParameterValues;
+                problemConfiguration=solutionConfiguration( ...
+                    source,configuration);
             else
                 problemId=fieldOr(configuration,'ProblemId','');
                 if isempty(problemId),problemId=model.listProblems();problemId=problemId{1};end
@@ -89,8 +92,9 @@ classdef PoincareReturnService
                 if isfield(configuration,'ParameterValues')
                     parameters=configuration.ParameterValues(:);
                 end
+                problemConfiguration=configuration;
             end
-            problem=model.createProblem(problemId,configuration);
+            problem=model.createProblem(problemId,problemConfiguration);
             if isa(problem,'lmz.api.NonlinearEquationProblem')
                 evaluation=problem.evaluate(decision,parameters,context,true);
                 simulation=evaluation.Simulation;
@@ -132,6 +136,31 @@ classdef PoincareReturnService
             end
         end
     end
+end
+
+function value=mergedConfiguration(source,requested)
+value=requested;
+if ~isa(source,'lmz.data.Solution')||~isstruct(source.Lineage)|| ...
+        ~isscalar(source.Lineage)||~isfield(source.Lineage,'Configuration')|| ...
+        ~isstruct(source.Lineage.Configuration)|| ...
+        ~isscalar(source.Lineage.Configuration)
+    return
+end
+value=source.Lineage.Configuration;
+names=fieldnames(requested);
+for index=1:numel(names)
+    value.(names{index})=requested.(names{index});
+end
+end
+
+function value=solutionConfiguration(source,fallback)
+value=fallback;
+if isstruct(source.Lineage)&&isscalar(source.Lineage)&& ...
+        isfield(source.Lineage,'Configuration')&& ...
+        isstruct(source.Lineage.Configuration)&& ...
+        isscalar(source.Lineage.Configuration)
+    value=source.Lineage.Configuration;
+end
 end
 
 function value=fieldOr(source,name,fallback)

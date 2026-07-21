@@ -147,6 +147,172 @@ simulation returns a structured partial `2/5` failure at stride 3 with
 [`demo_quad_load_n_stride_fit.m`](../../../examples/demo_quad_load_n_stride_fit.m),
 and [`docs/multi-stride-planning.md`](../../../docs/multi-stride-planning.md).
 
+## Round 10 multiple shooting and horizon feasibility
+
+Use `multiple_shooting_horizon` when schedules and intermediate section states
+must be corrected jointly. Unlike the legacy requested-N path, this problem
+simulates each stride separately and retains named contact, interface-defect,
+section, and energy/work residual blocks.
+
+Inspect the repository-contained, hash-bound template library first:
+
+```matlab
+library = lmzmodels.slip_quad_load.StrideTemplateLibrary();
+records = library.records();
+assert(numel(records) == 4);
+assert(all(arrayfun(@(item)library.validateHash(item.id), records)));
+
+template = library.load('individual_1_tr_to_rl', context);
+assert(template.StrideCount == 2);
+```
+
+The inventory contains one 44-entry single-stride template and three 57-entry
+two-stride transition templates. `template_manifest.json` stores each SHA-256,
+source path, byte count, gait label, pinned source commit, and the unresolved
+redistribution qualification.
+
+Construct and inspect a three-stride shooting problem through the public model
+route:
+
+```matlab
+configuration = struct( ...
+    'NumberOfStrides', 3, ...
+    'Formulation', 'feasibility', ...
+    'EnergyMode', {{'diagnostic_only','diagnostic_only','diagnostic_only'}}, ...
+    'FreeControlMask', false(3,4));
+problem = model.createProblem('multiple_shooting_horizon', configuration);
+decision = problem.getDecisionSchema().defaults();
+report = problem.analyze(decision, context, struct('ComputeJacobian', false));
+```
+
+For a new numerical study, call `problem.solveFeasibility(options,context)` and
+archive the seed, bounds, solver options, residual blocks, rank diagnostics,
+and termination reason. A solver exit by itself is not a physical-root claim;
+`report.RootFound` also requires every configured residual tolerance, accepted
+crossings, event ordering, and finite physical states.
+
+The frozen Round 10 searches can be replayed without rerunning the expensive
+multistarts:
+
+```matlab
+evidence = lmzmodels.slip_quad_load.QuadLoadFeasibilityEvidence();
+n2 = evidence.replay('n2_transition_feasibility_root', context, false);
+fixed = evidence.replay('case_a_fixed_controls_best_known', context, false);
+neutral = evidence.replay( ...
+    'case_b_energy_neutral_controls_best_known', context, false);
+periodic = evidence.replay('n2_periodic_best_known', context, false);
+relaxedFive = evidence.replay( ...
+    'n5_stride_boundary_bounded_work_best_known', context, false);
+
+assert(n2.RootFound);
+assert(~fixed.RootFound && ~neutral.RootFound && ...
+    ~periodic.RootFound && ~relaxedFive.RootFound);
+```
+
+The recorded scaled norms are:
+
+| Search | Scaled residual norm | Qualification |
+| --- | ---: | --- |
+| N=2 transition/contact-interface solve | `7.978014164613411e-13` | `root_found`; 46 rows/46 unknowns, rank 46/nullity 0; periodic closure is not present |
+| Case A, N=3 fixed controls | `0.7136044533002278` | `physical_validation_failure`; 69/69, rank 69/nullity 0; third-segment minimum quadruped height is `-0.1445449620598354` |
+| Case B, N=3 four free post-swing controls with energy-neutral row | `0.7217887917287552` | `physical_validation_failure`; 70/73, rank 70/nullity 3; third-segment minimum quadruped height is `-0.1457310619145955` |
+| Distinct N=2 periodic solve | `2.8172762892858283` | `numerical_failure`; exit 0/evaluation limit; 60/46, rank 46/nullity 0; not a periodic root |
+| Separate N=5 stride-boundary bounded-work search | `0.3086908931991573` (maximum `0.11470808666193932`) | `numerical_failure`; exit 0/evaluation limit; 119/119, rank 112/nullity 7; physical candidate, no root or simulation |
+
+These searches do not prove global nonexistence. Because neither N=3 apex
+search found a physically valid root, the requested physical 2 -> 3 -> 4 -> 5
+continuation stopped at N=3; its N=4/N=5 layouts remain structural
+initializations only. No failed case publishes a synthetic simulation. The
+Case B nullity is a diagnostic at one unresolved candidate, not evidence of a
+regular three-dimensional solution family; no gauge, family chart, or
+continuation was run for it.
+
+The separate N=5 relaxation changed the stop section to `stride_boundary`,
+used bounded work with an absolute bound of 100, and tested exactly one freed
+post-swing control column per transition. All four final candidates passed the
+recorded finite-state, crossing, and event-order checks, with norms
+`[0.5020299292493873, 0.5264091136970379, 0.3086908931991573,
+0.39091176213603607]`; none met residual tolerance or acceptable solver
+termination. “Minimal” here means the smallest tested control-cardinality,
+not a proven globally minimal relaxation. This search is not physical
+continuation from validated N=3/N=4 roots and publishes no simulation.
+
+Continue a known decision across explicit dimension changes with the
+model-owned continuation helper:
+
+```matlab
+[~, n2Decision] = evidence.problemFor('n2_transition_feasibility_root');
+continuation = lmzmodels.slip_quad_load.QuadLoadHorizonContinuation();
+configuration = struct( ...
+    'StartStrideCount', 2, ...
+    'TargetStrideCount', 5, ...
+    'InitialCompletedPhysicalStrideCount', 2, ...
+    'EnergyMode', 'diagnostic_only', ...
+    'InitialDecisionForContinuation', n2Decision);
+structural = continuation.continueTo(configuration, ...
+    struct('SolveEachHorizon', false), context);
+
+assert(structural.CompletedStrideCount == 5);
+assert(structural.CompletedPhysicalStrideCount == 2); % replayed valid N=2 seed
+checkpoint = structural.Checkpoints{1};
+resumed = continuation.resume(checkpoint, ...
+    struct('SolveEachHorizon', false), context);
+```
+
+Set `SolveEachHorizon=true` for anchored adaptive homotopy and supply solver
+limits through `FeasibilityOptions`. The continuation records accepted and
+rejected lambda attempts, backtracking, rank/condition diagnostics, embedding
+maps, checkpoints, and the last physically validated horizon. Stopping or
+resuming never silently changes the decision dimension.
+
+For a fixed-dimension local family, start from the same physical N=2 transition
+root, explicitly embed its 46 decisions into a problem that frees only
+`segment_2_post_swing_1`, and declare `ExpectedLocalDimension=1`. The measured
+Jacobian rank is 46, and the corrected three-point branch stays on one
+47-variable multiple-shooting chart. The executed stiffness values are
+`[25.881221830170297, 25.880923234958146, 25.88062464009689]`, with maximum
+scaled residuals no larger than `5.657696533489798e-12`. Run
+[`demo_quad_load_horizon_continuation.m`](../../../examples/demo_quad_load_horizon_continuation.m)
+for the recorded configuration, embedding, chart hash, physical checks,
+history, and reproducible artifact.
+
+This is a nearby local family of the N=2 transition root under
+`EnergyMode='diagnostic_only'`. It is not an N=2 periodic result, an
+energy-neutral family, or evidence that a physical N=3 or N=5 horizon exists.
+
+## Direct load section timing
+
+The load model supports direct apex, stride-boundary, and post-event back-left
+touchdown-to-touchdown propagation. The residual evaluator starts at the
+selected section state; it does not simulate apex-to-apex and relabel an
+interior sample. Mixed touchdown/apex pairs, pre-touchdown states, and other
+touchdown identities reject explicitly.
+
+```matlab
+timingProblem = model.createProblem('section_return_timing', struct( ...
+    'StartSectionId', 'apex', ...
+    'StopSectionId', 'stride_boundary', ...
+    'FixReturnTime', true, ...
+    'FixedRowPolicy', 'validate_fixed_rows'));
+timing = lmz.services.ContactTimingService().solve( ...
+    timingProblem, timingProblem.InputSchedule, ...
+    struct('Display','off','ResidualTolerance',1e-8), context);
+assert(timing.SolverDiagnostics.Success);
+assert(timing.SolverDiagnostics.RankDiagnostics.Rank == 8);
+```
+
+The preserved 44-entry source decision accepts initial `load_x` and `load_dx`
+but not initial `load_y` or `load_dy`. The section codec therefore keeps all
+four values in the full physical state and catalog while exposing only the two
+source-supported load coordinates as decision/terminal chart entries. The
+omitted names and their initial/terminal values are explicit in adapter
+diagnostics under `SourceFixedCoordinateNames`,
+`SourceFixedInitialCoordinates`, and `SourceFixedTerminalCoordinates`.
+
+Complete equations, classifications, evidence, and continuation usage are in
+[`docs/quad-load-horizon-continuation.md`](../../../docs/quad-load-horizon-continuation.md)
+and [`docs/horizon-feasibility.md`](../../../docs/horizon-feasibility.md).
+
 ## GUI and visualization
 
 Select **SLIP Quadruped with Load** in `legged_model_zoo`. The scientific
@@ -156,6 +322,34 @@ events/post-swing values. **Simulate candidate** dispatches through
 `RendererFactory` and `QuadLoadPlotProvider` for animation, footfalls,
 body/legs, load, GRFs, and tugline views. **Run fit** uses a bounded responsive
 configuration; **Cancel fit** requests a controlled stop.
+
+For the separate Round 10 shooting workflow, choose
+`multiple_shooting_horizon` in the header and open **Solve / Seeds**. Use
+**Multiple shooting** or **Horizon feasibility**, then set the horizon,
+residual tolerance, solver, event/return rows, interface/control masks, energy
+mode, and initializer. The shooting section must be homogeneous:
+apex-to-apex uses a 14-coordinate interface mask, while
+stride-boundary-to-stride-boundary uses 15 coordinates because `quad_dy` is
+present. **Interfaces** and **Controls** accept `all`, `none`, or comma-/space-
+separated `0/1` values; load controls have four post-swing stiffness entries
+per stride. Apex-to-stride-boundary belongs to **Contact timings only** and is
+explicitly unsupported as a relabeled homogeneous shooting horizon.
+
+The initializer menu exposes the source-backed IDs
+`individual_1_tr_to_rl`, `individual_1_identical_tr_to_rl`,
+`individual_1_tr_to_tl`, and `individual_1_tr_single`, plus the derived
+`phase_compatible_repeat` strategy. Source files are SHA-256 checked before
+use, and saved shooting artifacts bind the selected template path/hash, any
+evidence path/hash declared by a replay configuration, initializer lineage,
+and the full problem configuration. Inspect the
+classification, rank/nullity, physical checks, residual table, and horizon
+profiles after **Solve/refine**; a positive exit flag is insufficient.
+**Simulate solved** remains disabled because this experimental problem declares
+`simulate=false` and never fabricates a complete trajectory from a failed or
+partial horizon. The main [Round 10 GUI and programmatic usage
+guide](../../../README.md#use-multiple-shooting-in-the-gui) includes exact
+mask coordinates, energy-mode semantics, artifact reproduction, checkpoint
+resume, and error interpretation.
 
 The manifest visualization contract declares the semantic frames `world`,
 `quadruped_center_of_mass`, `load_center`, and `ground_contact`. Its required
@@ -301,6 +495,11 @@ demo_slip_quad_load_scientific.m
 demo_quad_load_research_graphics.m
 demo_quad_load_extend_to_five_strides.m
 demo_quad_load_n_stride_fit.m
+demo_quad_load_template_library.m
+demo_quad_load_three_stride_feasibility.m
+demo_quad_load_five_stride_horizon.m
+demo_quad_load_horizon_continuation.m
+demo_quad_load_n2_periodic_solve.m
 demo_n_stride_periodic_orbit.m
 demo_visual_profile_switching.m
 demo_research_graphics_recording.m

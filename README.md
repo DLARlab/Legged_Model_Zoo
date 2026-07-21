@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Legged Model Zoo is a standalone MATLAB framework and non-technical GUI for exploring legged-model simulation, solving, continuation, fitting, and visualization through common registry, service, schema, and artifact boundaries. Version `1.0.0-rc.1` contains three validated scientific workflows: the nine-branch SLIP quadruped RoadMap, the six-branch jerboa biped GaitMap and trajectory fit, and single-/multi-stride quadruped-with-load simulation and fitting. It also contains `tutorial_hopper`, a small analytic hybrid model that demonstrates solving, continuation, event/reset records, generic scenes, and model-zoo extensibility without making a scientific reproduction claim.
+Legged Model Zoo is a standalone MATLAB framework and non-technical GUI for exploring legged-model simulation, solving, continuation, fitting, and visualization through common registry, service, schema, and artifact boundaries. Version `1.0.0-rc.2` contains three validated scientific workflows: the nine-branch SLIP quadruped RoadMap, the six-branch jerboa biped GaitMap and trajectory fit, and single-/multi-stride quadruped-with-load simulation and fitting. It also contains `tutorial_hopper`, a small analytic hybrid model that demonstrates solving, continuation, event/reset records, generic scenes, multiple shooting, and model-zoo extensibility without making a scientific reproduction claim.
 
 This is an internally testable release candidate, not a public binary release. The source tree is the supported way to evaluate it while redistribution authority remains unresolved. Problem badges and catalog metadata distinguish `validated • source-equivalent` scientific problems from `tutorial • tested` examples.
 
@@ -22,6 +22,11 @@ This is an internally testable release candidate, not a public binary release. T
 - Deprecated import aliases for older model identifiers
 - Native schema-based solutions and multi-point branches
 - Generic `fsolve`, adaptive pseudo-arclength continuation, file-backed checkpoints, homotopy, branch-family scans, and `fmincon`
+- Rank-aware square/rectangular timing and multiple-shooting solves with explicit residual, Jacobian-rank, and physical-feasibility classifications
+- Section-state nodes, independently integrated shooting segments, interface defects, and dimension-aware horizon continuation
+- Registered quadruped/biped mixed-section transitions with model-owned codecs, direct integration, crossing checks, and explicit nonperiodic terminal targets
+- Declared timing gauges/families, fixed-contact-row policies, and model-owned section-local scientific shooting adapters
+- Heterogeneous stride plans with per-stride schedules, controls, physical parameters, and explicit energy/work policy
 - Exact legacy Results29, Results14, and `X_accum` import/export with manifest hashes and native artifact caching
 - Source-equivalent biped 12-decision/15-residual solving, continuation, gait classification, and 16-variable trajectory fitting
 - Source-equivalent load-pulling `44 + 13*(N-1)` simulation, event/GRF/tugline outputs, objective terms, guarded R-squared metrics, and reduced-variable optimization
@@ -240,7 +245,7 @@ See [examples/demo_slip_quad_load_single_stride.m](examples/demo_slip_quad_load_
 | Model ID | Label | Simulation | Visualization | Solve | Continuation | Optimization |
 |---|---|---:|---:|---:|---:|---:|
 | `slip_biped` | SLIP Biped | Yes | Yes | Yes | Yes | Yes |
-| `slip_quad_load` | SLIP Quadruped with Load | Yes | Yes | Yes | No | Yes |
+| `slip_quad_load` | SLIP Quadruped with Load | Yes | Yes | Yes | Yes | Yes |
 | `slip_quadruped` | SLIP Quadruped | Yes | Yes | Yes | Yes | No |
 | `tutorial_hopper` | Analytic Hybrid Hopper Tutorial | Yes | Yes | Yes | Yes | No |
 <!-- LMZ:MODEL_TABLE:END -->
@@ -255,18 +260,23 @@ Model-level availability is the union of implemented problem capabilities. Scien
 | `slip_biped/trajectory_fit` | optimization | validated | source-equivalent | simulate, visualize, animate, optimize |
 | `slip_biped/demo_stride` | simulation | tutorial | tested | simulate, visualize, animate |
 | `slip_biped/section_return_timing` | nonlinear_equation | experimental | tested | simulate, visualize, animate, solve |
+| `slip_biped/multiple_shooting` | nonlinear_equation | experimental | tested | solve, continue |
+| `slip_biped/section_transition` | nonlinear_equation | experimental | tested | solve |
 | `slip_biped/n_stride_simulation` | simulation | validated | tested | simulate, visualize, animate |
 | `slip_quad_load/demo_stride` | simulation | tutorial | tested | simulate, visualize, animate |
 | `slip_quad_load/single_stride` | simulation | validated | source-equivalent | simulate, visualize, animate |
 | `slip_quad_load/multi_stride_fit` | optimization | validated | source-equivalent | simulate, visualize, animate, optimize |
-| `slip_quad_load/n_stride_fit` | optimization | experimental | tested | simulate, visualize, animate, optimize |
 | `slip_quad_load/section_return_timing` | nonlinear_equation | experimental | tested | simulate, visualize, animate, solve |
 | `slip_quad_load/n_stride_simulation` | simulation | validated | tested | simulate, visualize, animate |
+| `slip_quad_load/n_stride_fit` | optimization | experimental | tested | simulate, visualize, animate, optimize |
 | `slip_quad_load/n_stride_periodic` | nonlinear_equation | experimental | tested | simulate, visualize, animate, solve |
+| `slip_quad_load/multiple_shooting_horizon` | nonlinear_equation | experimental | tested | solve, continue |
 | `slip_quadruped/periodic_apex` | nonlinear_equation | validated | source-equivalent | simulate, visualize, animate, solve, continue, homotopy, family scan |
 | `slip_quadruped/periodic_orbit` | nonlinear_equation | experimental | tested | simulate, visualize, animate, solve, continue, homotopy, family scan |
 | `slip_quadruped/demo_stride` | simulation | tutorial | tested | simulate, visualize, animate |
 | `slip_quadruped/section_return_timing` | nonlinear_equation | experimental | tested | simulate, visualize, animate, solve |
+| `slip_quadruped/multiple_shooting` | nonlinear_equation | experimental | tested | solve, continue |
+| `slip_quadruped/section_transition` | nonlinear_equation | experimental | tested | solve |
 | `slip_quadruped/n_stride_simulation` | simulation | validated | tested | simulate, visualize, animate |
 | `tutorial_hopper/periodic_hop` | nonlinear_equation | tutorial | tested | simulate, visualize, animate, solve, continue |
 | `tutorial_hopper/demo_hop` | simulation | tutorial | tested | simulate, visualize, animate |
@@ -274,6 +284,7 @@ Model-level availability is the union of implemented problem capabilities. Scien
 | `tutorial_hopper/periodic_orbit` | nonlinear_equation | tutorial | tested | simulate, visualize, animate, solve, continue |
 | `tutorial_hopper/n_stride_simulation` | simulation | validated | tested | simulate, visualize, animate |
 | `tutorial_hopper/contact_timing_sequence` | nonlinear_equation | tutorial | tested | solve |
+| `tutorial_hopper/multiple_shooting` | nonlinear_equation | tutorial | tested | solve, continue |
 <!-- LMZ:PROBLEM_TABLE:END -->
 
 `validated` means a problem has numerical regression evidence; `source-equivalent` means that evidence is tied to an immutable captured source baseline. `tutorial • tested` means the analytic demonstration works as designed, not that it reproduces a publication model.
@@ -290,6 +301,9 @@ Recommended end-to-end examples are:
 - `demo_tutorial_hopper.m` for the complete built-in analytic hybrid/scene workflow
 - the eleven Round 9 section, timing, periodic, N-stride, and model-building
   examples listed in the next section
+- the Round 10 rectangular timing, timing-family, analytic multiple-shooting,
+  heterogeneous-plan, scientific-section, and quad-load horizon examples
+  introduced below and in the linked guides
 
 Each is safe to rerun, uses public APIs and repository-contained data, leaves a structured `output`, and prints an exact success marker.
 
@@ -363,14 +377,14 @@ assert(descending.FixedInitialState(4) < 0);
 assert(norm([descending.ContactResiduals;descending.SectionResidual]) < 1e-9);
 ```
 
-That state-plane path is intentionally narrow. The three migrated scientific
-providers currently support apex-to-apex timing only and reject non-apex
-requests instead of mislabeling them as source-equivalent. Tutorial named-event
-timing endpoints are likewise unsupported, and an apex-to-descending-height
-request is rejected because the requested occurrence is ambiguous relative to
-impact. The registered tutorial `contact_timing_sequence` problem provides the
-explicit N-stride timing-sequence formulation when more than one return is
-needed.
+That Round 9 state-plane path is intentionally narrow. Round 10 adds direct,
+model-owned section-local codecs/adapters for the scientific combinations each
+catalog declares. It does not reinterpret the preserved apex compatibility
+oracle as a non-apex solver. Unsupported section sides, occurrences, or
+combinations still fail explicitly. Tutorial named-event timing endpoints and
+an ambiguous apex-to-descending-height request likewise remain rejected. The
+registered tutorial `contact_timing_sequence` problem provides the explicit
+N-stride timing-sequence formulation when more than one return is needed.
 
 The load adapter can demonstrate the exact five-stride
 `44 + 13*(N-1)` layout by explicitly copying schedules. That is a synthetic
@@ -479,6 +493,378 @@ covered in [poincare-sections.md](docs/poincare-sections.md),
 [contact-timing-solve.md](docs/contact-timing-solve.md),
 [multi-stride-planning.md](docs/multi-stride-planning.md), and
 [periodic-orbit-and-continuation-tutorial.md](docs/periodic-orbit-and-continuation-tutorial.md).
+
+## Rank-aware timing and multiple shooting
+
+Round 10 removes the old assumption that every timing or shooting problem must
+have the same number of residual rows and free variables. It also separates a
+long horizon into independently simulated section-to-section segments joined
+by explicit interface defects. Start MATLAB in the repository root and run
+`startup` before using these workflows.
+
+### Use multiple shooting in the GUI
+
+The GUI is the simplest way to inspect a shooting layout before committing to
+a numerical solve. Launch it from the repository root and retain the returned
+application object so that a result can later be saved:
+
+```matlab
+startup;
+app = legged_model_zoo;
+```
+
+Use this sequence for a first run:
+
+1. In the header, choose a model and then a registered shooting problem. Start
+   with `tutorial_hopper/multiple_shooting`; the scientific choices are
+   `slip_quadruped/multiple_shooting`, `slip_biped/multiple_shooting`, and
+   `slip_quad_load/multiple_shooting_horizon`. The badge `experimental •
+   tested` means that the implementation and its stated evidence are tested;
+   it is not a claim that every configuration has a physical root.
+2. Open **Solve / Seeds**. Choose **Multiple shooting** for the registered
+   homogeneous shooting route, or **Horizon feasibility** when every active
+   row is a feasibility condition rather than a periodic-closure claim. Changing
+   the mode, section, horizon, mask, or initializer rebuilds the shooting
+   problem and clears results that belonged to the previous contract.
+3. Set **Start**, **Stop**, **Start side**, **Stop side**, **Direction**, and
+   **Min time**. Read the full **Section combination** line before solving:
+   `validated` means that this direct adapter/combination has focused test
+   evidence, `experimental` means that the route exists without exact-pair
+   numerical validation, and `unsupported` means that the requested problem
+   must reject it. A validated line may still say `accepted-crossing candidate;
+   no root`; pair support and root convergence are different claims. For a
+   quadruped or biped mixed pair, select the registered `section_transition`
+   problem in the header. For the load model, apex-to-stride-boundary is a
+   validated **Contact timings only** route; `multiple_shooting_horizon` is
+   homogeneous and requires apex-to-apex or stride-boundary-to-stride-boundary.
+4. Set **Formulation**, **Solver**, **Horizon**, and **Tolerance**. **Auto**
+   retains `fsolve` for an unbounded square system, selects bounded
+   `lsqnonlin` for a square system with finite schema bounds, and selects
+   `lsqnonlin` for an overdetermined one. Use explicit **fsolve** only for an
+   unbounded square point problem, **lsqnonlin** for least-squares residuals,
+   and **Constrained feasibility** when declared nonlinear constraints require
+   `fmincon`. The horizon is the
+   number of independently evaluated segments; the node count is normally
+   `N+1`.
+5. In **Event / return**, tick only the event times and final return time that
+   may move. In **Interfaces** and **Controls**, enter `all`, `none`, or a
+   comma- or space-separated binary mask such as `1,0,0,1`. A one-row mask is
+   repeated across the applicable nodes or segments. For the load model, the
+   apex section has exactly 14 interface coordinates:
+   `quad_dx`, `quad_y`, `quad_phi`, `quad_dphi`, the eight leg angle/rate
+   coordinates, `load_x`, and `load_dx`. The stride-boundary section has 15
+   because `quad_dy` is also present. Therefore use 14 values for apex and 15
+   for stride boundary; a flattened `(N+1)`-node mask is also accepted. Load
+   controls have four post-swing stiffness entries per stride. A mask-length
+   error is a configuration error, not numerical evidence about the model.
+6. Choose an **Initializer**. Non-load models expose **Schema defaults**. The
+   load choices map to real template/strategy IDs: **TR to RL source** =
+   `individual_1_tr_to_rl`, **Identical TR to RL source** =
+   `individual_1_identical_tr_to_rl`, **TR to TL source** =
+   `individual_1_tr_to_tl`, **Single TR source** =
+   `individual_1_tr_single`, and **Repeat previous compatible stride** =
+   `phase_compatible_repeat`. A source template is loaded only after its
+   repository manifest SHA-256 passes. The shooting artifact records the
+   selected repository-relative template path/hash, any evidence path/hash
+   declared by a replay configuration, the initializer lineage, and the
+   problem-configuration hash; reproduction verifies them again. These hashes
+   establish identity, not redistribution permission.
+7. Choose **Energy** deliberately. **Diagnostic only** records the measured
+   energy/work mismatch without adding an active row. **Energy neutral** adds
+   a zero-change row. **Prescribed work** adds `delta-energy - declared-work`,
+   while **Bounded work** adds only excess beyond the declared absolute bound.
+   The GUI uses the problem's current declared-work value; set a nonzero value
+   through the programmatic configuration when a study requires one.
+8. Press **Evaluate** to inspect the current seed without correction, then
+   **Solve/refine** to create a `ShootingResult`. The diagnostics table reports
+   segments, nodes, unknown/residual dimensions, rank/nullity, condition,
+   scaled residual, termination, smallest singular values, and contact,
+   interface, section, and energy/work norms. The plot overlays contact,
+   interface-defect, section, energy/work, named section-coordinate-defect,
+   schedule, control, and solver-residual-history profiles; exact values remain
+   in the table. A green `root_found` or `least_squares_feasible` requires the
+   full residual and physical contract. A positive solver exit flag alone
+   never establishes success.
+
+**Simulate solved** is intentionally disabled in **Multiple shooting** and
+**Horizon feasibility**. Their catalog capability is `simulate=false`: a run
+may retain independently evaluated segment data, but it does not promise one
+assembled public `SimulationResult`, and a failed or partial horizon is never
+filled with a synthetic trajectory. Use a separate simulation-capable problem
+only when its own input contract has been satisfied.
+
+After a GUI solve, save and verify the exact hash-bound run programmatically:
+
+```matlab
+shooting = app.Controller.State.ShootingResult;
+assert(~isempty(shooting));
+
+artifactPath = [tempname '.lmz.mat'];
+lmz.io.ArtifactStore.save(artifactPath, shooting.toArtifact());
+[reproduced, verification] = lmz.services.reproduceRun(artifactPath);
+
+assert(isa(reproduced, 'lmz.shooting.ShootingResult'));
+assert(strcmp(verification.ArtifactType, 'multiple-shooting-run'));
+```
+
+Horizon growth is a separate programmatic operation because it changes the
+decision schema. This complete tutorial creates a deliberately interrupted
+adaptive step, then resumes its exact problem-and-anchor-bound checkpoint:
+
+```matlab
+registry = lmz.registry.ModelRegistry.discover();
+model = registry.createModel('tutorial_hopper');
+problemId = 'multiple_shooting';
+targetConfiguration = struct('HorizonLength', 3);
+problem = model.createProblem(problemId, targetConfiguration);
+anchor = problem.getDecisionSchema().defaults();
+names = problem.getDecisionSchema().names();
+anchor(strcmp(names, 'node_2_y')) = 1.1;
+context = lmz.api.RunContext.synchronous(2104);
+
+homotopyOptions = struct( ...
+    'ResidualTolerance', 1e-8, ...
+    'HomotopyInitialStep', 0.4, ...
+    'HomotopyMaximumStep', 0.5, ...
+    'HomotopyMinimumStep', 0.01, ...
+    'HomotopyMaximumAttempts', 1, ...
+    'Display', 'off');
+partial = lmz.shooting.HorizonContinuation().traceHomotopy( ...
+    problem, anchor, homotopyOptions, context);
+assert(~partial.Completed);
+checkpoint = partial.Checkpoints{end};
+
+homotopyOptions.HomotopyMaximumAttempts = 50;
+resumed = lmz.services.HorizonContinuationService().resumeHomotopy( ...
+    model, problemId, targetConfiguration, anchor, checkpoint, ...
+    homotopyOptions, context);
+assert(resumed.Completed && resumed.Lambda == 1);
+```
+
+Do not edit a checkpoint to make it fit a new run. `resumeHomotopy` rejects a
+changed problem contract, anchor, decision dimension, incompatible framework,
+or stale hash. Resume the original step first, then use the named
+`embedDecision`/`HorizonContinuationService.run` path for a new horizon.
+
+When a run does not succeed, interpret the classification before changing the
+solver: `best_known_residual` is an evaluated local candidate above tolerance;
+`local_infeasibility_evidence` summarizes a bounded local search and is not a
+global certificate; `physical_validation_failure` failed a crossing, event,
+finite-state, or energy/work check; and `numerical_failure` means solver
+termination was not acceptable even when the retained candidate is finite or
+passes separate physical checks. `unsupported`, invalid mask, and checkpoint-
+hash errors instead describe an invalid or stale configuration and should be
+corrected, not counted as failed root searches.
+
+### Solve an overdetermined timing problem
+
+This tutorial keeps one timing variable and includes both its free and fixed
+contact rows, producing a two-row/one-unknown least-squares problem:
+
+```matlab
+registry = lmz.registry.ModelRegistry.discover();
+model = registry.createModel('tutorial_hopper');
+configuration = struct( ...
+    'FixedEventMask',true, ...
+    'FreeReturnTime',true, ...
+    'FixedRowPolicy','include_fixed_rows_in_least_squares', ...
+    'FixedRowTolerance',1e-9, ...
+    'StartSectionId','apex','StopSectionId','apex');
+problem = model.createProblem('section_return_timing',configuration);
+context = lmz.api.RunContext.synchronous(1016);
+timing = lmz.services.ContactTimingService().solve( ...
+    problem,problem.InputSchedule,struct( ...
+    'Solver','lsqnonlin','Display','off', ...
+    'ResidualTolerance',1e-9),context);
+
+rank = timing.SolverDiagnostics.RankDiagnostics;
+assert(rank.M == 2 && rank.N == 1 && rank.Rank == 1);
+assert(timing.SolverDiagnostics.Feasibility.FixedRowsValid);
+```
+
+`Solver='auto'` selects `fsolve` when `m == n` and the decision schema is
+unbounded, bounded `lsqnonlin` when a square schema has finite bounds, and
+`lsqnonlin` when `m > n`. An `m < n` point solve is rejected until independent gauges make it
+well posed. If the intended object is a regular one-dimensional family, use a
+`TimingFamilyProblem`, verify `n-rank(J)=1`, and trace it with
+`TimingContinuationService`; do not add a hidden arbitrary equation merely to
+make the system square. Fixed rows remain physical checks under
+`validate_fixed_rows`, become active least-squares rows under
+`include_fixed_rows_in_least_squares`, and are retained as explicitly
+qualified diagnostics only under `diagnostic_only`.
+
+For an ordinary square timing problem, rank is a uniqueness diagnostic rather
+than an automatic existence veto. A physically valid, tolerance-satisfying
+root may report `RankConditionRequired=false`, `UniquenessValidated=false`,
+and `RankQualification='rank_deficient_root_not_a_unique_parameterization'`;
+describe it as a root, not as a locally unique timing parameterization. A
+declared timing family still must satisfy its expected nullity and gauge-
+independence contract.
+
+### Solve a two-segment periodic orbit
+
+The built-in analytic hopper registers a complete multiple-shooting problem:
+
+```matlab
+problem = model.createProblem('multiple_shooting',struct( ...
+    'HorizonLength',2,'Formulation','periodic', ...
+    'ResidualTolerance',1e-8));
+seed = problem.ShootingSchema.defaults();
+shooting = lmz.services.MultipleShootingService().solve( ...
+    problem,seed,struct('Solver','auto','Display','off', ...
+    'ResidualTolerance',1e-8),context);
+
+report = shooting.FeasibilityReport;
+assert(report.Success);
+assert(strcmp(report.Classification,'root_found'));
+assert(shooting.Horizon.segmentCount() == 2);
+assert(max(shooting.SolveResult.Evaluation.Diagnostics. ...
+    InterfaceDefectNorms) <= 1e-8);
+```
+
+Each segment is simulated once per residual evaluation. Contact, selected-
+section, interface-defect, energy/work, and final closure/target rows stay
+separate in the diagnostics. Periodic closure appears only at the final
+section; intermediate nodes are connected by interface defects rather than
+independent periodicity equations.
+
+The scientific quadruped and biped expose the same registered problem ID using
+their direct touchdown-section adapters:
+
+```matlab
+scientific = registry.createModel('slip_quadruped');
+problem = scientific.createProblem('multiple_shooting',struct( ...
+    'HorizonLength',2,'InterfaceStateMask',false, ...
+    'EventFreeMask',[false true], ...
+    'ControlFreeMask',false,'EnergyWorkMode','diagnostic_only'));
+```
+
+For the default evidence configuration (fixed endpoint nodes and schedules,
+free interior node), executed N=2 solves are rectangular
+`least_squares_feasible`: quadruped `m=55`, `n=13`, rank 13, nullity 0,
+maximum scaled residual `1.318856135412716e-11`; biped `m=29`, `n=7`, rank 7,
+nullity 0, maximum scaled residual `3.979039320256561e-13`. Both evaluate two
+direct segments with `ApexOracleUsed=false`; neither result is a repeated
+one-stride simulation or a square-system `root_found` claim. A true
+`ControlFreeMask` is rejected because these section adapters expose fixed
+controls, not control decision coordinates. See
+[docs/multiple-shooting.md](docs/multiple-shooting.md) for mask shapes,
+classification, and reproduction details.
+
+For different start and stop section IDs, use the separate registered
+`section_transition` problem. It performs one direct section-aware segment and
+compares the terminal node with an explicit target; it never labels the mixed
+endpoints as periodic closure:
+
+```matlab
+transition = scientific.createProblem('section_transition',struct( ...
+    'StartSectionId','back_left_touchdown', ...
+    'StopSectionId','descending_y_0_9', ...
+    'StartStateFreeMask',true, ...
+    'TargetStateFreeMask',true, ...
+    'EventFreeMask',false));
+u0 = transition.getDecisionSchema().defaults();
+p = transition.getParameterSchema().defaults();
+evaluation = transition.evaluate(u0,p,context,false);
+direct = transition.evaluateShooting(u0,p,context,false);
+
+assert(strcmp(transition.Formulation,'transition'));
+assert(~transition.Horizon.Target.PeriodicClosure);
+assert(evaluation.PhysicalValidity);
+assert(direct.SegmentResults{1}.Crossing.Accepted);
+assert(~direct.SegmentResults{1}.Diagnostics.ApexOracleUsed);
+```
+
+The quadruped and biped catalogs cover named-event → named-event, named-event
+→ descending state-plane, descending state-plane → named-event, and safe
+composite targets. Some tested default seeds are accepted physical crossings
+but retain nonzero contact residuals; those are reported as candidates, not
+roots. See
+[scientific-section-shooting.md](docs/scientific-section-shooting.md) for the
+exact dimensions, residuals, target blocks, and supported pairs.
+
+Always branch on `FeasibilityReport.Success`, not only on a solver exit flag.
+The exact result vocabulary is `root_found`, `least_squares_feasible`,
+`best_known_residual`, `local_infeasibility_evidence`, `numerical_failure`, and
+`physical_validation_failure`. A bounded or multistart search with no accepted
+candidate is local evidence; it does not prove global nonexistence. Report the
+sections/sides, bounds, seeds, tolerances, residual blocks, event/crossing and
+energy checks, rank/nullity, singular values, termination reason, and whether
+any rigorous certificate exists.
+
+### Continue horizons and run heterogeneous plans
+
+`HorizonContinuationService` accepts an explicit configuration sequence and
+maps retained decision values by name when growing from `N` to `N+1`. It
+records added/removed variables, initializer history, every feasibility report,
+and a resumable checkpoint; by default it stops at the first qualified failure
+and preserves the strongest completed result. It never fills a failed physical
+horizon with a synthetic trajectory. The existing quad-load continuation
+example also uses `ContinuationService` on a fixed N=2 multiple-shooting chart:
+an explicit 46-to-47 embedding frees only
+`segment_2_post_swing_1`, then a rank-46/nullity-one seed pair traces three
+physical points while all branch decisions remain 47-dimensional. The output
+and artifact record the selected stiffness, configuration, parameter values,
+chart hash, physical checks, and history. This diagnostic-only local N=2
+transition family is not an N=2 periodic, energy-neutral, N=3, or N=5 claim.
+
+Native `StridePlan` execution can also use different schedules and allowed
+controls on each stride. The hopper accepts distinct impact/return schedules and
+impulses. The quadruped and biped directly integrate explicit non-apex,
+same-section returns, consume `StrideSpec.InitialSectionState` (or the previous
+terminal state), and report applied schedules/controls, interface defects,
+contact and section residuals, accepted crossings, and per-stride energy
+diagnostics. Their physical parameters remain invariant; quadruped controls are
+limited to `k_leg`, `k_swing`, and `k_r_leg`, while biped controls are limited
+to `k_leg` and `omega_swing`. Mixed endpoints require transition multiple
+shooting. Choose an energy policy explicitly: the biped measures its source
+`total_energy`; changed quadruped controls require `allow_non_neutral` because
+that source exposes no total-energy channel. The homogeneous
+`Provenance.PeriodicDecision` fast path remains source-equivalent. See
+[docs/multi-stride-planning.md](docs/multi-stride-planning.md) for the complete
+two-stride construction and diagnostics contract.
+
+Run the four generic Round 10 examples directly:
+
+```matlab
+examplesRoot = fullfile(lmz.util.ProjectPaths.root(),'examples');
+run(fullfile(examplesRoot,'demo_rectangular_contact_timing.m'));
+run(fullfile(examplesRoot,'demo_timing_family_continuation.m'));
+run(fullfile(examplesRoot,'demo_multiple_shooting_tutorial.m'));
+run(fullfile(examplesRoot,'demo_heterogeneous_stride_plan.m'));
+```
+
+Run the section-local and quad-load evidence examples separately:
+
+```matlab
+run(fullfile(examplesRoot,'demo_quadruped_touchdown_periodic_orbit.m'));
+run(fullfile(examplesRoot,'demo_biped_touchdown_timing.m'));
+run(fullfile(examplesRoot,'demo_scientific_state_plane_shooting.m'));
+run(fullfile(examplesRoot,'demo_quad_load_template_library.m'));
+run(fullfile(examplesRoot,'demo_quad_load_three_stride_feasibility.m'));
+run(fullfile(examplesRoot,'demo_quad_load_five_stride_horizon.m'));
+run(fullfile(examplesRoot,'demo_quad_load_horizon_continuation.m'));
+run(fullfile(examplesRoot,'demo_quad_load_n2_periodic_solve.m'));
+```
+
+Each Round 10 example writes only beneath a temporary output directory, leaves
+a structured `output`, and prints an exact script-success marker. For a
+qualified horizon example, that marker means the expected evidence and
+classification were reproduced; it does not turn `physical_validation_failure`
+or `numerical_failure` into a root or a physical five-stride simulation.
+
+The mathematical layout, service contracts, artifact/reproduction routes,
+classification rules, and reporting checklist are in
+[multiple-shooting.md](docs/multiple-shooting.md),
+[horizon-feasibility.md](docs/horizon-feasibility.md),
+[contact-timing-solve.md](docs/contact-timing-solve.md), and
+[multi-stride-planning.md](docs/multi-stride-planning.md). The supported direct
+scientific combinations, rank-deficient/non-unique quadruped timing
+qualification, and unchanged apex oracles are in
+[scientific-section-shooting.md](docs/scientific-section-shooting.md). The
+template inventory, actual N=2/N=3 searches, failed N=3-to-N=5 growth, and exact
+local qualifications are in
+[quad-load-horizon-continuation.md](docs/quad-load-horizon-continuation.md).
 
 ## Command-line quick start
 
@@ -1028,15 +1414,52 @@ performance workflows completed three warm repetitions with no budget
 overruns. Full evidence is recorded in
 [docs/TEST_STATUS.md](docs/TEST_STATUS.md).
 
-For quad-load specifically, five-stride carry-forward currently establishes
-only the exact 96-entry layout. Timing correction stops safely at stride 3 and
-returns a partial `2/5` result with no simulation; the repository does not
-claim a validated five-stride physical return from that seed.
+Round 8 closes at committed HEAD
+`c2616735354a354fa432bac549f81861f8ddd9a5`, and Round 9 closes at committed
+HEAD `c0d87860b59cfbdffe96e165cd01c68e2de7d948`. Round 10 is the current
+`1.0.0-rc.2` worktree: it adds rank-aware rectangular timing, timing families,
+generic multiple shooting/horizon feasibility, section-local scientific
+adapters, heterogeneous plans, quad-load horizon infrastructure, artifacts,
+GUI controls, guides, and examples. `ROUND10_LOCAL_AUTOMATION_PASSED`: the final
+R2025b suite passed `544/544` in `1153.233186` seconds; all 54 public examples
+passed in `424.166055` seconds; and clean-copy isolation passed 1/1 in
+`52.852335` seconds. Instrumented coverage passed all five stable-package
+floors at `19,973/25,363` statements (78.74857075267121%) across 317 runtime
+files and 29 packages. Code quality checked 319 files with zero violations,
+architecture checks were clean, and the R2019b static audit found zero known
+violations across 699 MATLAB files. The 29-workflow, three-repetition
+performance matrix completed in `113.18738520833334` seconds with no budget
+overrun.
 
-The refreshed redistribution scan inventories 775 candidate files and retains
-760 scientific-profile blockers while the project decision is unresolved.
-Technical-validation ZIP and toolbox clean-install checks pass and label their
-temporary output `NOT_FOR_REDISTRIBUTION`; they do not authorize publication.
+Focused section-local evidence passes its 12/12 exact tests; the quadruped
+touchdown timing root is deliberately labeled rank deficient and non-unique.
+The frozen load-horizon evidence contains a valid N=2 transition/contact root,
+but the N=3 fixed-control and energy-neutral searches both ended in
+`physical_validation_failure`, so physical N=4/N=5 continuation was not
+reached. A separate stride-boundary N=5 search tested all four single-control
+bounded-work-100 families. Its best physical candidate retained a scaled norm
+of `0.3086908931991573` (maximum `0.11470808666193932`) at 119 residuals and
+119 unknowns, rank 112/nullity 7, but ended at the evaluation limit and is
+therefore `numerical_failure`; it publishes no simulation. These are local
+numerical outcomes, not proof of global infeasibility, and the N=5 search is
+not represented as continuation from validated N=3/N=4 roots. Exact residuals
+and physical checks are recorded in the linked section and quad-load guides.
+
+For the historical Round 9 quad-load path, five-stride carry-forward
+establishes only the exact 96-entry layout. Its timing correction stops safely
+at stride 3 and returns a partial `2/5` result with no simulation. Round 10
+horizon analyses retain their own exact local numerical and physical
+classifications; no vector length or solver exit flag is treated as a
+validated five-stride physical return.
+
+The Round 10 redistribution scan inventories 932 candidate files and retains
+917 blockers while the project decision is unresolved. Temporary core and
+scientific ZIP/toolbox technical-validation builds passed clean installation,
+registry discovery, permitted workflow, invisible GUI construction, artifact
+round trip, unload, and path-removal checks. Every selector remained
+`Authorized=false`, every build remained `Retained=false`, and the final
+installed LMZ toolbox count was zero. These checks did not authorize
+publication.
 Release qualifications remain explicit: the human MATLAB desktop walkthrough
 is not executed; R2019b runtime is not executed; GitHub Actions workflows have
 not run remotely; and public core/scientific packaging is blocked by the

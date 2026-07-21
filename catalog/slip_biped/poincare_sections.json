@@ -4,6 +4,8 @@
     "periodic_apex": "apex",
     "periodic_orbit": "apex",
     "section_return_timing": "apex",
+    "multiple_shooting": "left_touchdown",
+    "section_transition": "left_touchdown",
     "n_stride_simulation": "apex"
   },
   "sections": [
@@ -30,6 +32,22 @@
       "eventId": "L_TD",
       "crossingDirection": -1,
       "stateSide": "post",
+      "minimumReturnTime": 1e-8,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["dx", "y", "dy", "alphaL", "dalphaL", "alphaR", "dalphaR"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["experimental"],
+      "validationStatus": "tested"
+    },
+    {
+      "id": "left_touchdown_pre",
+      "label": "Left touchdown (pre-reset)",
+      "kind": "named_event",
+      "eventId": "L_TD",
+      "crossingDirection": -1,
+      "stateSide": "pre",
       "minimumReturnTime": 1e-8,
       "requiredEventSequence": [],
       "returnOccurrence": 1,
@@ -69,7 +87,23 @@
       "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
       "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
       "maturities": ["experimental"],
-      "validationStatus": "untested"
+      "validationStatus": "tested"
+    },
+    {
+      "id": "right_touchdown_pre",
+      "label": "Right touchdown (pre-reset)",
+      "kind": "named_event",
+      "eventId": "R_TD",
+      "crossingDirection": -1,
+      "stateSide": "pre",
+      "minimumReturnTime": 1e-8,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["dx", "y", "dy", "alphaL", "dalphaL", "alphaR", "dalphaR"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["experimental"],
+      "validationStatus": "tested"
     },
     {
       "id": "right_liftoff",
@@ -86,6 +120,44 @@
       "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
       "maturities": ["experimental"],
       "validationStatus": "untested"
+    },
+    {
+      "id": "descending_y_0_95",
+      "label": "Descending body height 0.95 m",
+      "kind": "state_plane",
+      "stateName": "y",
+      "threshold": 0.95,
+      "crossingDirection": -1,
+      "stateSide": "post",
+      "minimumReturnTime": 1e-8,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["dx", "dy", "alphaL", "dalphaL", "alphaR", "dalphaR"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["experimental"],
+      "validationStatus": "tested"
+    },
+    {
+      "id": "left_touchdown_descending",
+      "label": "Left touchdown while descending",
+      "kind": "composite",
+      "crossingDirection": -1,
+      "stateSide": "post",
+      "minimumReturnTime": 1e-8,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["dx", "y", "dy", "alphaL", "dalphaL", "alphaR", "dalphaR"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["experimental"],
+      "validationStatus": "tested",
+      "parameters": {
+        "primarySectionId": "left_touchdown",
+        "conditions": [
+          {"kind": "state_comparison", "stateName": "dy", "comparator": "lt", "threshold": 0, "stateSide": "selected"}
+        ]
+      }
     }
   ]
 }

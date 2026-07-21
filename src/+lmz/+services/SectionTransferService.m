@@ -25,10 +25,17 @@ classdef SectionTransferService
             [simulation,crossing,orbitError,observablesPreserved, ...
                 displacement]=lmz.services.SectionTransferService. ...
                 rephaseSimulationToSection(source,target,symmetry);
-            configuration=targetConfiguration(target,symmetry);
+            configuration=targetConfiguration( ...
+                target,symmetry,sourceSolution,simulation);
             [solutionTemplate,codecRephased,reEvaluationError, ...
-                verificationTolerance,codecStatus]=configuredSolution( ...
+                verificationTolerance,codecStatus,targetSimulation]= ...
+                configuredSolution( ...
                 model,sourceSolution,configuration,simulation,context);
+            deliveredSimulation=simulation;
+            if codecRephased&&isa(targetSimulation, ...
+                    'lmz.api.SimulationResult')
+                deliveredSimulation=targetSimulation;
+            end
             lineage=struct('Operation','section_transfer', ...
                 'SourceSolutionId',sourceSolution.Id, ...
                 'SourceProblemId',sourceSolution.ProblemId, ...
@@ -66,7 +73,7 @@ classdef SectionTransferService
             data.Diagnostics=diagnostics;
             solution=lmz.data.Solution(data);
             value=struct('Solution',solution,'SourceSolution',sourceSolution, ...
-                'Simulation',simulation,'Crossing',crossing, ...
+                'Simulation',deliveredSimulation,'Crossing',crossing, ...
                 'SourceReturn',returned, ...
                 'Lineage',lineage,'PhysicalOrbitMaxError',orbitError, ...
                 'PhaseInvariantObservablesPreserved',observablesPreserved, ...
@@ -104,46 +111,189 @@ classdef SectionTransferService
     end
 end
 
-function value=targetConfiguration(target,symmetry)
+function value=targetConfiguration(target,symmetry,source,simulation)
 value=struct('StartSectionId',target.Id, ...
     'StopSectionId',target.Id, ...
     'StartStateSide',target.StateSide, ...
     'StopStateSide',target.StateSide, ...
     'StrideCount',1,'SymmetryId',symmetry.Id);
+names=canonicalEventNames(source.ModelId);
+if isempty(names),return,end
+value.InitialSectionState=simulation.States(1,:).';
+value.InitialEventNames=names;
+value.InitialEventTimes=eventTimes(simulation.EventRecords,names);
+value.InitialReturnTime=simulation.Time(end);
+value.SourceParameterValues=source.ParameterValues(:);
+sourceDecision=sourceApexDecision(source);
+if ~isempty(sourceDecision)
+    value.SourceDecisionValues=sourceDecision(:);
+end
 end
 
-function [solution,verified,errorValue,tolerance,status]=configuredSolution( ...
+function [solution,verified,errorValue,tolerance,status,actualSimulation]= ...
+        configuredSolution( ...
         model,source,configuration,expected,context)
 solution=source;verified=false;errorValue=NaN;tolerance=NaN;
-status='unsupported-model-codec';
+status='unsupported-model-codec';actualSimulation=[];
 if ~supportsBuiltinCodec(model,source),return,end
 problem=model.createProblem('periodic_orbit',configuration);
-if ~compatibleSchema(source.DecisionSchema,problem.getDecisionSchema(), ...
-        source.DecisionValues)|| ...
-        ~compatibleSchema(source.ParameterSchema,problem.getParameterSchema(), ...
+if ~compatibleSchema(source.ParameterSchema,problem.getParameterSchema(), ...
         source.ParameterValues)
     status='incompatible-decision-codec';
     return
 end
-evaluation=problem.evaluate(source.DecisionValues, ...
-    source.ParameterValues,context,true);
+sectionLocal=isprop(problem,'SectionCodec')&&~isempty(problem.SectionCodec);
+scientificApex=isScientificApexTarget(model,configuration);
+if sectionLocal
+    decision=problem.getDecisionSchema().defaults();
+elseif scientificApex
+    decision=apexSeedDecision(source,configuration,expected);
+else
+    if ~compatibleSchema(source.DecisionSchema,problem.getDecisionSchema(), ...
+            source.DecisionValues)
+        status='incompatible-decision-codec';
+        return
+    end
+    decision=source.DecisionValues;
+end
+evaluation=problem.evaluate(decision,source.ParameterValues,context,true);
 if ~isa(evaluation.Simulation,'lmz.api.SimulationResult')
     status='target-evaluation-has-no-simulation';
     return
 end
-[verified,errorValue,tolerance]=sameTrajectory( ...
-    expected,evaluation.Simulation);
+actualSimulation=evaluation.Simulation;
+if sectionLocal
+    [verified,errorValue,tolerance]=sameSectionSeed( ...
+        expected,evaluation.Simulation,evaluation);
+elseif scientificApex
+    [verified,errorValue,tolerance]=sameApexSeed( ...
+        expected,evaluation.Simulation);
+else
+    [verified,errorValue,tolerance]=sameTrajectory( ...
+        expected,evaluation.Simulation);
+end
 if ~verified
     status='target-evaluation-mismatch';
     return
 end
-solution=problem.makeSolution(source.DecisionValues, ...
+solution=problem.makeSolution(decision, ...
     source.ParameterValues,evaluation);
 if ~strcmp(solution.ProblemId,'periodic_orbit')
     error('lmz:Poincare:TransferCodecProblem', ...
         'A verified built-in transfer did not create periodic_orbit.');
 end
-status='verified';
+if sectionLocal&&~evaluation.PhysicalValidity
+    status='verified-section-local-seed-requires-correction';
+elseif sectionLocal
+    status='verified-section-local-seed';
+elseif scientificApex&&~evaluation.PhysicalValidity
+    status='verified-apex-seed-requires-correction';
+elseif scientificApex
+    status='verified-apex-seed';
+else
+    status='verified';
+end
+end
+
+function valid=isScientificApexTarget(model,configuration)
+valid=any(strcmp(model.getManifest().id, ...
+    {'slip_quadruped','slip_biped'}))&& ...
+    strcmp(configuration.StartSectionId,'apex')&& ...
+    strcmp(configuration.StopSectionId,'apex');
+end
+
+function value=apexDecisionFromSimulation(modelId,simulation)
+names=canonicalEventNames(modelId);
+times=eventTimes(simulation.EventRecords,names);
+value=[simulation.States(1,2:end).';times;simulation.Time(end)];
+end
+
+function value=apexSeedDecision(source,configuration,simulation)
+expectedCount=12;
+if strcmp(source.ModelId,'slip_quadruped'),expectedCount=22;end
+if isfield(configuration,'SourceDecisionValues')&& ...
+        isnumeric(configuration.SourceDecisionValues)&& ...
+        numel(configuration.SourceDecisionValues)==expectedCount&& ...
+        all(isfinite(configuration.SourceDecisionValues(:)))
+    value=configuration.SourceDecisionValues(:);
+else
+    value=apexDecisionFromSimulation(source.ModelId,simulation);
+end
+end
+
+function [valid,errorValue,tolerance]=sameApexSeed(expected,actual)
+valid=false;errorValue=Inf;
+scale=max([1;abs(expected.Time(:)); ...
+    abs(expected.States(1,2:end).');abs(actual.Time(:)); ...
+    abs(actual.States(1,2:end).')]);
+tolerance=1e-5*scale;
+if ~isequal(expected.StateSchema.names(),actual.StateSchema.names())|| ...
+        isempty(expected.Time)||isempty(actual.Time)
+    return
+end
+errorValue=max([0;abs(expected.Time(1)-actual.Time(1)); ...
+    abs(expected.Time(end)-actual.Time(end)); ...
+    abs(expected.States(1,2:end).'-actual.States(1,2:end).')]);
+valid=isfinite(errorValue)&&errorValue<=tolerance;
+end
+
+function [valid,errorValue,tolerance]=sameSectionSeed(expected,actual,evaluation)
+valid=false;errorValue=Inf;
+scale=max([1;abs(expected.Time(:));abs(expected.States(1,:).'); ...
+    abs(actual.Time(:));abs(actual.States(1,:).')]);
+tolerance=1e-10*scale;
+if ~isequal(expected.StateSchema.names(),actual.StateSchema.names())|| ...
+        isempty(expected.Time)||isempty(actual.Time)|| ...
+        ~isfield(evaluation.Diagnostics,'DirectSectionIntegration')|| ...
+        ~evaluation.Diagnostics.DirectSectionIntegration
+    return
+end
+errorValue=max([0;abs(expected.Time(1)-actual.Time(1)); ...
+    abs(expected.Time(end)-actual.Time(end)); ...
+    abs(expected.States(1,:).'-actual.States(1,:).')]);
+valid=isfinite(errorValue)&&errorValue<=tolerance;
+end
+
+function names=canonicalEventNames(modelId)
+switch modelId
+    case 'slip_quadruped'
+        names={'BL_TD','BL_LO','FL_TD','FL_LO', ...
+            'BR_TD','BR_LO','FR_TD','FR_LO'};
+    case 'slip_biped'
+        names={'L_TD','L_LO','R_TD','R_LO'};
+    otherwise
+        names={};
+end
+end
+
+function values=eventTimes(records,names)
+values=zeros(numel(names),1);available={records.Name};
+for index=1:numel(names)
+    source=find(strcmp(names{index},available),1);
+    if isempty(source)
+        error('lmz:Poincare:TransferSeedEvent', ...
+            'Transferred simulation is missing event %s.',names{index});
+    end
+    values(index)=records(source).Time;
+end
+end
+
+function value=sourceApexDecision(source)
+value=[];
+lineage=source.Lineage;
+if isstruct(lineage)&&isscalar(lineage)&& ...
+        isfield(lineage,'Configuration')&& ...
+        isstruct(lineage.Configuration)&& ...
+        isscalar(lineage.Configuration)&& ...
+        isfield(lineage.Configuration,'SourceDecisionValues')
+    value=lineage.Configuration.SourceDecisionValues;
+    return
+end
+counts=struct('slip_quadruped',22,'slip_biped',12);
+if isfield(counts,source.ModelId)&& ...
+        numel(source.DecisionValues)==counts.(source.ModelId)
+    value=source.DecisionValues;
+end
 end
 
 function valid=supportsBuiltinCodec(model,source)

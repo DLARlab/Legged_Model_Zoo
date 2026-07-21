@@ -207,7 +207,42 @@ trajectories:
 Different coordinate values at different phase origins are expected. A new
 section does not inherit the apex formulation's validation status.
 
-## 12. Troubleshooting
+## 12. Choose same-dimension or horizon continuation
+
+Round 10 exposes two additional continuation routes; they solve different
+objects and are not aliases for the branch above:
+
+- `TimingContinuationService` traces a declared nullity-one
+  `TimingFamilyProblem`. It verifies the measured nullity and gauge
+  independence before delegating to pseudo-arclength continuation.
+- `HorizonContinuationService` grows a registered
+  `MultipleShootingProblem` through an explicit configuration sequence, such as
+  two, three, then five segments. Each step maps retained decision values by
+  name, initializes newly added variables, and records the embedding and exact
+  feasibility report.
+
+For a fixed two-segment analytic horizon:
+
+```matlab
+shootingProblem = model.createProblem('multiple_shooting',struct( ...
+    'HorizonLength',2,'Formulation','periodic'));
+shootingSeed = shootingProblem.ShootingSchema.defaults();
+shooting = lmz.services.MultipleShootingService().solve( ...
+    shootingProblem,shootingSeed,struct('Solver','auto', ...
+    'ResidualTolerance',1e-8),context);
+assert(shooting.FeasibilityReport.Success);
+```
+
+Use ordinary `ContinuationService` when the problem dimension stays fixed and
+the target is a regular solution family. Use `HorizonContinuationService` only
+when the registered problem is deliberately rebuilt at each horizon length.
+The latter stops at qualified failure by default and retains partial evidence;
+it does not synthesize missing segments. See
+[multiple-shooting.md](multiple-shooting.md) and
+[horizon-feasibility.md](horizon-feasibility.md) for residual layout,
+classification, checkpoint, and artifact details.
+
+## 13. Troubleshooting
 
 - `lmz:Seed:*`: the solved seed is not sufficiently regular, separated, or
   residual-small for pair construction.
@@ -222,4 +257,7 @@ section does not inherit the apex formulation's validation status.
 
 See [poincare-sections.md](poincare-sections.md),
 [contact-timing-solve.md](contact-timing-solve.md), and
-[continuation.md](continuation.md) for the detailed contracts.
+[continuation.md](continuation.md) for the detailed contracts. Timing-family
+and changing-dimension horizon continuation are covered by
+[multiple-shooting.md](multiple-shooting.md) and
+[horizon-feasibility.md](horizon-feasibility.md).

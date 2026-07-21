@@ -15,3 +15,32 @@
 - Canonical IDs are `slip_biped`, `slip_quadruped`, and `slip_quad_load`; deprecated IDs are import aliases only.
 - The upstream quadruped repository has no stated license. The biped readme states CC BY-NC 4.0 without a standalone scope-defining license, and the load readme claims BSD-3 while the linked license file is absent at the audited commit. Local authorization does not infer broader redistribution rights; public packaging remains blocked pending the owner decision record.
 - Batch graphics, callbacks, recording services, and GUI construction are verified, but the model-specific human-desktop walkthrough and screenshots for all three scientific models, plus MATLAB R2019b execution, remain outstanding. The five retained Round 5 images are automated captures rather than human-desktop evidence.
+- Round 10 rectangular timing keeps every configured active row. For `m > n`,
+  `least_squares_feasible` means each scaled row and physical check met its
+  configured tolerance; it is not a claim of an exact algebraic root or a
+  globally optimal least-squares point. For `m < n`, a point solve requires a
+  gauge, while a declared nullity-one timing family is traced separately and
+  is not mislabeled as a unique solution.
+- A fixed-event contact row is still a physical condition. Depending on the
+  declared timing policy it is validated diagnostically or included in the
+  least-squares residual; finite fixed-row output alone never establishes
+  physical feasibility.
+- Finite-difference rank deficiency does not by itself turn an otherwise valid
+  ordinary square timing root into a physical failure. Such a result records
+  `RankConditionRequired=false`, `UniquenessValidated=false`, and an explicit
+  rank-deficient/non-unique qualification. Declared timing families still
+  enforce expected nullity and independent gauges.
+- Multiple-shooting reports distinguish `root_found`,
+  `least_squares_feasible`, `best_known_residual`,
+  `local_infeasibility_evidence`, `numerical_failure`, and
+  `physical_validation_failure`. A failed bounded or multistart search is
+  local numerical evidence, not proof that no physical trajectory exists.
+- Supported non-apex scientific problems use model-owned section-local codecs
+  and direct segment adapters. The apex source-equivalence oracles remain
+  unchanged, and unsupported section/side/occurrence combinations are rejected
+  instead of being approximated through post-processing.
+- A quad-load horizon layout, copied schedule, local residual reduction, or
+  accepted solver exit flag is not by itself a validated three-, four-, or
+  five-stride physical return. Horizon reports preserve event ordering,
+  crossing, interface, contact, energy/work, and tolerance failures, and do
+  not synthesize a completed simulation after failure.

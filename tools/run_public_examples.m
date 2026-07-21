@@ -4,9 +4,9 @@ root=lmz.util.ProjectPaths.root();folder=fullfile(root,'examples');
 entries=dir(fullfile(folder,'*.m'));names=sort({entries.name});
 durations=zeros(numel(names),1);failures={};
 for index=1:numel(names)
-    path=fullfile(folder,names{index});started=tic;
+    examplePath=fullfile(folder,names{index});started=tic;
     try
-        executeExample(path);
+        executeExample(examplePath);
         durations(index)=toc(started);
         fprintf('LMZ_EXAMPLE_PASS name=%s elapsed=%.6f\n', ...
             names{index},durations(index));
@@ -26,7 +26,7 @@ end
 fprintf('%s files=%d\n',report.SuccessMarker,numel(names));
 end
 
-function executeExample(path)
+function executeExample(examplePath)
 exampleOutputDirectory019f=tempname;
 [created,message]=mkdir(exampleOutputDirectory019f);
 if ~created
@@ -43,8 +43,10 @@ desktopOutputDirectory=fullfile( ...
     exampleOutputDirectory019f,'desktop'); %#ok<NASGU>
 round9OutputDirectory=fullfile( ...
     exampleOutputDirectory019f,'round9'); %#ok<NASGU>
+round10OutputDirectory=fullfile( ...
+    exampleOutputDirectory019f,'round10'); %#ok<NASGU>
 exampleRunnerCleanup019f=onCleanup(@()closeAllFigures());
-run(path);clear exampleRunnerCleanup019f
+run(examplePath);clear exampleRunnerCleanup019f
 clear exampleOutputCleanup019f
 end
 

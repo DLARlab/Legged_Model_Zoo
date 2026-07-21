@@ -133,7 +133,7 @@ def strip_matlab_comments(text: str) -> str:
 def check_architecture() -> list[str]:
     failures: list[str] = []
     generic_patterns = {
-        r"\bglobal\b": "global state",
+        r"(?:^|[;,\n])\s*global(?:\s|$)": "global state",
         r"\brestoredefaultpath\b": "restoredefaultpath",
         r"addpath\s*\(\s*genpath": "recursive path mutation",
         r"\beval(?:in)?\s*\(": "eval/evalin",

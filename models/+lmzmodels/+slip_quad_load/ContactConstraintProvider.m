@@ -58,6 +58,53 @@ classdef ContactConstraintProvider < lmz.schedule.ContactConstraintProvider
             end
             lmzmodels.slip_quad_load.FirstStrideLayout.validate(vector);
             indices=lmzmodels.slip_quad_load.FirstStrideLayout.indices();
+            startId=fieldOr(configuration,'StartSectionId','apex');
+            stopId=fieldOr(configuration,'StopSectionId',startId);
+            if ~strcmp(startId,'apex')||~strcmp(stopId,'apex')
+                models=lmz.registry.ModelRegistry.discover();
+                sections=models.getPoincareSectionRegistry('slip_quad_load');
+                startSection=sections.section(startId);
+                stopSection=sections.section(stopId);
+                startEvent=startSection.Descriptor.EventId;
+                stopEvent=stopSection.Descriptor.EventId;
+                if (strcmp(startEvent,'BL_TD')||strcmp(stopEvent,'BL_TD'))&& ...
+                        ~strcmp(startEvent,stopEvent)
+                    error('lmz:Timing:UnsupportedSection', ...
+                        ['The validated load touchdown timing path requires ' ...
+                        'identical BL-touchdown endpoints.']);
+                end
+                plan=lmzmodels.slip_quad_load.XAccumPlanAdapter.toPlan(vector);
+                seed=plan.InitialState;times=vector(indices.EventTiming);
+                if strcmp(startSection.Descriptor.EventId,'BL_TD')
+                    raw=lmzmodels.slip_quad_load.LegacyQuadLoadEvaluator(). ...
+                        evaluateStride(vector, ...
+                        lmz.api.RunContext.synchronous(0),false);
+                    record=raw.EventRecords(strcmp( ...
+                        {raw.EventRecords.Name},'BL_TD'));
+                    seed=record.PostState(:);
+                    times(1:8)=mod(times(1:8)-record.Time,times(9));
+                end
+                if isfield(configuration,'InitialState')
+                    seed=configuration.InitialState(:);
+                end
+                codec=lmzmodels.slip_quad_load. ...
+                    QuadLoadSectionDecisionCodec(startSection,stopSection, ...
+                    times(1:8),times(9),seed,vector, ...
+                    'SourceLineage',struct('Method', ...
+                    'section_return_timing_configuration'));
+                sectionProvider=lmzmodels.slip_quad_load. ...
+                    SectionContactConstraintProvider(codec, ...
+                    lmzmodels.slip_quad_load. ...
+                    QuadLoadSectionSimulationAdapter(codec));
+                template=codec.ScheduleAdapter.Chart.Template;
+                schedule=lmz.schedule.ContactConstraintProvider. ...
+                    scheduleFromConfiguration(sectionProvider.eventNames(), ...
+                    template.times(),template.ReturnTime,configuration);
+                problem=lmz.schedule.SectionReturnTimingProblem(model, ...
+                    'section_return_timing',sectionProvider,seed,vector, ...
+                    schedule,configuration);
+                return
+            end
             initial=[vector(indices.QuadrupedState);vector(indices.LoadState)];
             parameters=[vector(indices.QuadrupedParameters); ...
                 vector(indices.LoadParameters)];
@@ -72,4 +119,8 @@ classdef ContactConstraintProvider < lmz.schedule.ContactConstraintProvider
                 'section_return_timing',provider,initial,parameters,schedule,configuration);
         end
     end
+end
+
+function value=fieldOr(source,name,fallback)
+if isstruct(source)&&isfield(source,name),value=source.(name);else,value=fallback;end
 end

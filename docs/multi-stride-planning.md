@@ -10,7 +10,7 @@ prompts.
 
 | Object | Purpose |
 | --- | --- |
-| `StrideSpec` | One stride's sections/sides, schedule, physical/control parameters, overrides, completion status, diagnostics, and lineage |
+| `StrideSpec` | One stride's sections/sides, schedule, physical/control parameters, overrides, optional initial section state, declared work, completion status, diagnostics, and lineage |
 | `StridePlan` | Appendable authoritative plan with requested/completed counts and policies |
 | `MultiStrideRequest` | Validated user request, safety limit, input plan/vector, overrides, declared work, and runtime provider callback |
 | `StridePlanBuilder` | Model-specific initial-plan and one-step completion contract |
@@ -69,9 +69,12 @@ energy-neutral contract is
 | `declared_work` | A nonzero change is allowed only when it matches explicit declared work within tolerance |
 | `allow_non_neutral` | Explicit opt-out; incompatible with `EnergyNeutralOnly=true` |
 
-All policies still reject an unknown energy effect. Diagnostics record policy,
-energy delta, declared work, mismatch, tolerance, known-effect flag, and
-acceptance.
+`EnergyConsistencyPolicy.assess` rejects an unknown energy effect. A workflow
+that lacks a source energy channel may retain such a stride only under the
+explicit `allow_non_neutral` opt-out, and must label the energy delta as
+unavailable rather than zero. Diagnostics record policy, energy delta (when
+available), declared work, mismatch, tolerance, known-effect flag, acceptance,
+and any qualification.
 
 ```matlab
 startup;
@@ -163,6 +166,183 @@ provided; it is not reported as five-stride simulation support.
 - `NStridePeriodicProblem` exposes every contact row and applies section
   closure only after the final stride.
 - `NStrideTransitionProblem` replaces closure with one explicit final target.
+
+These explicit long-horizon forms must not be confused with a homogeneous
+source-orbit repetition. A `StridePlan` may contain different section IDs,
+sides, schedules, control values, interface-state sources, and energy/work
+diagnostics for consecutive strides. Whether a particular model can execute a
+given heterogeneous plan is a model capability; the generic plan container
+does not fabricate a simulation for an unsupported combination.
+
+The tutorial hopper executes an explicit heterogeneous plan directly. Each
+`StrideSpec` supplies its own impact/return schedule and impulse, and the next
+stride begins from the previous terminal state:
+
+```matlab
+schedule = struct('Names',{{'impact','apex'}}, ...
+    'Times',[impactTime;returnTime],'ReturnTime',returnTime, ...
+    'OccurrenceOrder',{{'impact','apex'}},'MinimumGap',1e-9);
+spec = lmz.multistride.StrideSpec('Index',stride, ...
+    'StartSectionId','apex','StopSectionId','apex', ...
+    'StartStateSide','post','StopStateSide','post', ...
+    'EventSchedule',schedule, ...
+    'PhysicalParameters',struct('gravity',9.81), ...
+    'ControlParameters',struct('impulse',impulse), ...
+    'InitialStateSource','previous_terminal_state', ...
+    'CompletionStatus','completed');
+```
+
+Wrap two or more nonidentical specs in a `StridePlan`, pass that plan through a
+`MultiStrideRequest`, and call `MultiStrideSimulationService`. The executed
+`examples/demo_heterogeneous_stride_plan.m` uses two analytically constructed
+apex returns with different durations and impulses. It verifies both terminal
+apex states, strictly increasing public time, and
+`Diagnostics.HeterogeneousStridePlan=true`. Because the example intentionally
+changes impulse, it explicitly selects `allow_non_neutral`; it does not call
+the transition energy-neutral.
+
+### Scientific quadruped and biped heterogeneous plans
+
+`slip_quadruped` and `slip_biped` also execute an explicitly supplied
+`StridePlan` directly. This path is selected only when the plan does not carry
+the source-periodic `Provenance.PeriodicDecision` fast-path marker. Each stride
+is integrated through its model-owned section adapter; the service does not
+repeat a previously simulated closed stride and does not solve or alter event
+times behind the caller's back.
+
+The currently supported direct contract is deliberately narrow:
+
+- each `StrideSpec` must use the same non-apex start and stop section and state
+  side;
+- consecutive stop/start section identifiers and sides must match;
+- the first interface comes from `InitialSectionState`, then
+  `StridePlan.InitialState`, then the registered section seed, in that order;
+- later interfaces default to the previous terminal state; an explicitly
+  supplied `InitialSectionState` must agree in section coordinates within
+  `1e-8` (world `x` is a translation gauge);
+- the named schedule must supply every canonical contact except the endpoint
+  event, which is represented by `ReturnTime`; and
+- physical parameters remain invariant. Quadruped stride-local control
+  overrides are limited to `k_leg`, `k_swing`, and `k_r_leg`; biped overrides
+  are limited to `k_leg` and `omega_swing`. Unknown fields are rejected.
+
+Mixed section endpoints are transition segments, not periodic single-stride
+problems, and therefore require a transition multiple-shooting formulation.
+
+This two-stride quadruped pattern shows the complete call boundary:
+
+```matlab
+model = lmzmodels.slip_quadruped.Model();
+local = model.createProblem('periodic_orbit',struct( ...
+    'StartSectionId','back_left_touchdown', ...
+    'StopSectionId','back_left_touchdown'));
+seed = local.SectionCodec.decode(local.getDecisionSchema().defaults());
+
+schedule1 = seed.EventSchedule;
+schedule2 = schedule1.withTimes( ...
+    1.0001*schedule1.times(),1.0001*schedule1.ReturnTime);
+parameters = local.getParameterSchema().defaults();
+specs(1,1) = lmz.multistride.StrideSpec('Index',1, ...
+    'StartSectionId','back_left_touchdown', ...
+    'StopSectionId','back_left_touchdown', ...
+    'StartStateSide','post','StopStateSide','post', ...
+    'EventSchedule',schedule1,'PhysicalParameters',parameters, ...
+    'InitialSectionState',seed.InitialState, ...
+    'InitialStateSource','specified','CompletionStatus','completed');
+specs(2,1) = lmz.multistride.StrideSpec('Index',2, ...
+    'StartSectionId','back_left_touchdown', ...
+    'StopSectionId','back_left_touchdown', ...
+    'StartStateSide','post','StopStateSide','post', ...
+    'EventSchedule',schedule2,'PhysicalParameters',parameters, ...
+    'ControlParameters',struct('k_swing',20.02), ...
+    'InitialStateSource','previous_terminal_state', ...
+    'DeclaredWork',0,'CompletionStatus','completed');
+policy = lmz.multistride.EnergyConsistencyPolicy( ...
+    'Id','allow_non_neutral');
+plan = lmz.multistride.StridePlan('ModelId','slip_quadruped', ...
+    'ProblemId','n_stride_simulation','RequestedStrideCount',2, ...
+    'InitialState',seed.InitialState, ...
+    'DefaultPhysicalParameters',parameters,'StrideSpecs',specs, ...
+    'EnergyPolicy',policy);
+request = lmz.multistride.MultiStrideRequest('NumberOfStrides',2, ...
+    'StridePlan',plan,'EnergyPolicy',policy,'EnergyNeutralOnly',false);
+result = lmz.services.MultiStrideSimulationService().simulate( ...
+    model,request,lmz.api.RunContext.synchronous(7101));
+assert(result.Diagnostics.DirectSectionIntegration);
+assert(~result.Diagnostics.HomogeneousClosedStrideRepetition);
+```
+
+The result records the applied section/schedule/control for each stride,
+interface defects, contact and periodic-section residual norms, accepted
+crossings, the `1e-6` contact residual tolerance, continuous-world boundaries,
+and one energy diagnostic per stride. `AllContactTimingsFeasible` requires both
+an accepted crossing and a contact norm within tolerance; a deliberately
+perturbed schedule may execute while correctly reporting this flag as false.
+The biped source exposes `total_energy`, so its diagnostic measures end-minus-
+start energy and applies `DeclaredWork`. The quadruped source has no total-energy
+channel; a changed control therefore requires `allow_non_neutral` and is
+qualified as `source_total_energy_not_exposed`.
+
+## Stride plans and shooting horizons
+
+`StridePlan` and `ShootingHorizon` describe related but different boundaries:
+
+| Contract | Purpose |
+| --- | --- |
+| `StridePlan` | Authoritative supplied/completed per-stride data for simulation, fitting, persistence, and partial-failure recovery |
+| `ShootingHorizon` | `N+1` section nodes and `N` directly propagated segments whose free values are solved jointly |
+| `ShootingDecisionSchema` | Named free/fixed bindings over interface coordinates, schedules, controls, selected physics, targets, and gauges |
+
+Use a plan when every executed stride specification is already explicit. Use
+multiple shooting when interface states, timings, or allowed controls must be
+corrected jointly rather than appended sequentially. The latter exposes
+contact, section, interface-defect, energy/work, and final closure/target rows
+without imposing periodicity at intermediate nodes.
+
+```matlab
+shooting = model.createProblem('multiple_shooting',struct( ...
+    'HorizonLength',2,'Formulation','periodic'));
+seed = shooting.ShootingSchema.defaults();
+solved = lmz.services.MultipleShootingService().solve( ...
+    shooting,seed,struct('Solver','auto'),context);
+assert(solved.FeasibilityReport.Success);
+```
+
+See [multiple-shooting.md](multiple-shooting.md) for the formulation and
+[horizon-feasibility.md](horizon-feasibility.md) for interpretation.
+
+## Horizon continuation
+
+`HorizonContinuationService` applies an explicit sequence of registered
+multiple-shooting configurations. Between `N` and `N+1`,
+`HorizonContinuation.embedDecision` maps retained variables by name and uses
+the new schema defaults only for added names. History records the embedding,
+source decision, solved decision, segment count, and exact feasibility report.
+The default stops on the first qualified failure and preserves the strongest
+completed horizon.
+
+Low-level checkpoints are dimension-bound. Resume validates the stored problem
+contract and restores the same horizon; changing dimension requires a separate
+explicit embedding. No continuation failure is replaced by a carry-forward
+simulation.
+
+## Feasibility terminology
+
+Use the classification stored in `FeasibilityReport`:
+
+- `root_found` means a square configured residual and all physical checks
+  passed; inspect rank/nullity before claiming an isolated root;
+- `least_squares_feasible` means a rectangular residual met every configured
+  tolerance and physical condition;
+- `best_known_residual` is only the best recorded candidate;
+- `local_infeasibility_evidence` is bounded local evidence, not global proof;
+- `numerical_failure` means the algorithm did not terminate acceptably; and
+- `physical_validation_failure` means a numerical candidate failed a crossing,
+  event-order, finite-state, residual, or energy/work condition.
+
+Never shorten `best_known_residual`, `numerical_failure`, or
+`physical_validation_failure` to an unqualified claim that the physical model
+is globally infeasible.
 
 An objective must receive a complete plan and either include timing variables
 explicitly or hold verified precompleted timings fixed. The bundled load data

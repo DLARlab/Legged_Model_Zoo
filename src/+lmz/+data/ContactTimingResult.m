@@ -74,12 +74,19 @@ classdef ContactTimingResult
                 obj.InputSchedule.StopSectionId};
             artifact.poincareMetadata=lmz.io.ArtifactStore.sectionMetadata( ...
                 obj.ModelId,sectionIds);
-            configuration=struct('InitialState',obj.FixedInitialState, ...
-                'PhysicalParameters',obj.FixedPhysicalParameters, ...
-                'EventSchedule',obj.InputSchedule.toStruct(), ...
-                'StartSectionId',obj.InputSchedule.StartSectionId, ...
-                'StopSectionId',obj.InputSchedule.StopSectionId);
+            configuration=struct();
+            if isfield(obj.SolverDiagnostics,'ProblemConfiguration')&& ...
+                    isstruct(obj.SolverDiagnostics.ProblemConfiguration)
+                configuration=obj.SolverDiagnostics.ProblemConfiguration;
+            end
+            configuration.InitialState=obj.FixedInitialState;
+            configuration.PhysicalParameters=obj.FixedPhysicalParameters;
+            configuration.EventSchedule=obj.InputSchedule.toStruct();
+            configuration.StartSectionId=obj.InputSchedule.StartSectionId;
+            configuration.StopSectionId=obj.InputSchedule.StopSectionId;
             artifact.problemMetadata.configuration=configuration;
+            artifact.problemConfigurationHash= ...
+                lmz.io.ArtifactStore.dataHash(configuration);
             sourceHashes=struct();
             relative=artifact.poincareMetadata.CatalogRelativePath;
             if ~isempty(relative)
@@ -87,12 +94,18 @@ classdef ContactTimingResult
                     'relativePath',relative,'sha256', ...
                     artifact.poincareMetadata.CatalogHash);
             end
+            sourceHashes.ProblemConfiguration= ...
+                artifact.problemConfigurationHash;
             options=struct();
             if isfield(obj.SolverDiagnostics,'Options')
                 options=obj.SolverDiagnostics.Options;
             end
             exitFlag=fieldOr(obj.SolverDiagnostics,'ExitFlag',0);
-            reason='solver-stopped';if exitFlag>0,reason='converged';end
+            reason=fieldOr(obj.SolverDiagnostics, ...
+                'TerminationReason','solver-stopped');
+            if ~ischar(reason)||isempty(reason)
+                reason='solver-stopped';if exitFlag>0,reason='converged';end
+            end
             output=fieldOr(obj.SolverDiagnostics,'Output',struct());
             evaluations=fieldOr(output,'funcCount',NaN);
             details=struct('Options',options, ...

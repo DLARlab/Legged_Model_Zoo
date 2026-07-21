@@ -25,8 +25,19 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
         RequiredSequenceLabel
         TransferButton
         TransversalityLabel
+        SectionSupportLabel
         EventMaskTable
         FixedDataLabel
+        FormulationDropDown
+        SolverDropDown
+        HorizonLengthSpinner
+        InterfaceMaskField
+        ControlMaskField
+        EnergyModeDropDown
+        ResidualToleranceField
+        TemplateInitializerDropDown
+        ResidualClassificationLabel
+        ShootingDiagnosticsTable
         LastSectionPreferenceKey = ''
     end
 
@@ -49,15 +60,16 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
         end
 
         function build(obj)
-            grid=uigridlayout(obj.Root,[5 1]);
-            grid.RowHeight={68,108,80,42,'1x'};
+            grid=uigridlayout(obj.Root,[6 1]);
+            grid.RowHeight={68,108,116,80,42,'1x'};
             sectionControls=uigridlayout(grid,[2 12]);
             sectionControls.ColumnWidth={72,145,42,130,42,130,52,72, ...
                 58,78,105,'1x'};
             label=uilabel(sectionControls,'Text','Solve mode');place(label,1,1);
             obj.SolveModeDropDown=uidropdown(sectionControls, ...
                 'Items',{'Periodic orbit','Contact timings only', ...
-                'N-stride periodic orbit','Timing sequence'}, ...
+                'N-stride periodic orbit','Timing sequence', ...
+                'Multiple shooting','Horizon feasibility'}, ...
                 'Tag','lmz-solve-mode', ...
                 'Tooltip','Choose the explicit numerical formulation.', ...
                 'ValueChangedFcn',@(~,~)obj.solveModeChanged());
@@ -108,7 +120,11 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
             obj.RequiredSequenceLabel=uilabel(sectionControls, ...
                 'Text','Required events: none','WordWrap','on', ...
                 'Tag','lmz-solve-required-sequence');
-            place(obj.RequiredSequenceLabel,2,[5 12]);
+            place(obj.RequiredSequenceLabel,2,[5 8]);
+            obj.SectionSupportLabel=uilabel(sectionControls, ...
+                'Text','Section combination: not classified', ...
+                'WordWrap','on','Tag','lmz-solve-section-support');
+            place(obj.SectionSupportLabel,2,[9 12]);
 
             timingGrid=uigridlayout(grid,[1 2]);
             timingGrid.ColumnWidth={'1x','1x'};
@@ -121,7 +137,85 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 'Text','Periodic mode: state and parameters are decision data.', ...
                 'WordWrap','on','Tag','lmz-solve-fixed-data');
 
-            controls=uigridlayout(grid,[2 10]);place(controls,3,1);
+            shootingGrid=uigridlayout(grid,[3 12]);
+            shootingGrid.ColumnWidth={72,120,52,112,58,72,62,105, ...
+                62,105,'1x','1x'};
+            label=uilabel(shootingGrid,'Text','Formulation');place(label,1,1);
+            obj.FormulationDropDown=uidropdown(shootingGrid, ...
+                'Items',{'Single shooting','Multiple shooting', ...
+                'Timing only','Horizon feasibility'}, ...
+                'ItemsData',{'single_shooting','multiple_shooting', ...
+                'timing_only','horizon_feasibility'}, ...
+                'Value','multiple_shooting','Tag','lmz-shooting-formulation', ...
+                'ValueChangedFcn',@(~,~)obj.shootingChanged());
+            place(obj.FormulationDropDown,1,2);
+            label=uilabel(shootingGrid,'Text','Solver');place(label,1,3);
+            obj.SolverDropDown=uidropdown(shootingGrid, ...
+                'Items',{'Auto','fsolve','lsqnonlin', ...
+                'Constrained feasibility'}, ...
+                'ItemsData',{'auto','fsolve','lsqnonlin', ...
+                'fmincon_feasibility'},'Value','auto', ...
+                'Tag','lmz-shooting-solver', ...
+                'ValueChangedFcn',@(~,~)obj.shootingChanged());
+            place(obj.SolverDropDown,1,4);
+            label=uilabel(shootingGrid,'Text','Horizon');place(label,1,5);
+            obj.HorizonLengthSpinner=uispinner(shootingGrid, ...
+                'Limits',[1 100],'Value',2,'Step',1, ...
+                'RoundFractionalValues','on','Tag','lmz-shooting-horizon', ...
+                'ValueChangedFcn',@(~,~)obj.shootingChanged());
+            place(obj.HorizonLengthSpinner,1,6);
+            label=uilabel(shootingGrid,'Text','Energy');place(label,1,7);
+            obj.EnergyModeDropDown=uidropdown(shootingGrid, ...
+                'Items',{'Diagnostic only','Energy neutral', ...
+                'Bounded work','Prescribed work'}, ...
+                'ItemsData',{'diagnostic_only','energy_neutral', ...
+                'bounded_work','prescribed_work'}, ...
+                'Value','diagnostic_only','Tag','lmz-shooting-energy-mode', ...
+                'ValueChangedFcn',@(~,~)obj.shootingChanged());
+            place(obj.EnergyModeDropDown,1,8);
+            label=uilabel(shootingGrid,'Text','Tolerance');place(label,1,9);
+            obj.ResidualToleranceField=uieditfield(shootingGrid,'numeric', ...
+                'Limits',[eps Inf],'Value',1e-7, ...
+                'Tag','lmz-shooting-residual-tolerance', ...
+                'ValueChangedFcn',@(~,~)obj.shootingChanged());
+            place(obj.ResidualToleranceField,1,10);
+            obj.ResidualClassificationLabel=uilabel(shootingGrid, ...
+                'Text','Residual: not run','WordWrap','on', ...
+                'Tag','lmz-shooting-residual-classification');
+            place(obj.ResidualClassificationLabel,1,[11 12]);
+            label=uilabel(shootingGrid,'Text','Interfaces');place(label,2,1);
+            obj.InterfaceMaskField=uieditfield(shootingGrid,'text', ...
+                'Value','all','Tag','lmz-shooting-interface-mask', ...
+                'Tooltip','all, none, or a comma-separated 0/1 mask', ...
+                'ValueChangedFcn',@(~,~)obj.shootingChanged());
+            place(obj.InterfaceMaskField,2,2);
+            label=uilabel(shootingGrid,'Text','Controls');place(label,2,3);
+            obj.ControlMaskField=uieditfield(shootingGrid,'text', ...
+                'Value','none','Tag','lmz-shooting-control-mask', ...
+                'Tooltip','all, none, or a comma-separated 0/1 mask', ...
+                'ValueChangedFcn',@(~,~)obj.shootingChanged());
+            place(obj.ControlMaskField,2,4);
+            label=uilabel(shootingGrid,'Text','Initializer');place(label,2,5);
+            obj.TemplateInitializerDropDown=uidropdown(shootingGrid, ...
+                'Items',{'Schema defaults','Exact source horizon', ...
+                'Nearest compatible','Phase-compatible repeat'}, ...
+                'ItemsData',{'schema_defaults','exact_source_horizon', ...
+                'nearest_compatible_template','phase_compatible_repeat'}, ...
+                'Value','schema_defaults','Tag','lmz-shooting-initializer', ...
+                'ValueChangedFcn',@(~,~)obj.shootingChanged());
+            place(obj.TemplateInitializerDropDown,2,[6 8]);
+            obj.ShootingDiagnosticsTable=uitable(shootingGrid, ...
+                'ColumnName',{'Horizon diagnostic','Value'}, ...
+                'ColumnEditable',[false false], ...
+                'Tag','lmz-shooting-diagnostics');
+            place(obj.ShootingDiagnosticsTable,[2 3],[9 12]);
+            note=uilabel(shootingGrid,'Text', ...
+                ['Event free/fixed rows are edited above. Partial or ' ...
+                'physically invalid horizons remain diagnostic-only.'], ...
+                'WordWrap','on','Tag','lmz-shooting-partial-warning');
+            place(note,3,[1 8]);
+
+            controls=uigridlayout(grid,[2 10]);place(controls,4,1);
             controls.ColumnWidth={72,88,105,54,70,54,70,90,72,'1x'};
             label=uilabel(controls,'Text','Direction');place(label,1,1);
             obj.DirectionDropDown=uidropdown(controls,'Items',{'next','previous'}, ...
@@ -167,9 +261,9 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 obj.DirectionDropDown obj.FirstIndexSpinner obj.SecondIndexSpinner ...
                 obj.SecondSeedRadiusField obj.NoiseMagnitudeField obj.NoiseSeedSpinner};
             obj.StatusLabel=uilabel(grid,'Text','Ready','WordWrap','on', ...
-                'Tag','lmz-solve-status');place(obj.StatusLabel,4,1);
+                'Tag','lmz-solve-status');place(obj.StatusLabel,5,1);
             obj.SeedAxes=uiaxes(grid,'Tag','lmz-solve-seed-axes');
-            place(obj.SeedAxes,5,1);
+            place(obj.SeedAxes,6,1);
             title(obj.SeedAxes,'Branch seed-pair overlay');
             obj.SeedAxes.XGrid='on';obj.SeedAxes.YGrid='on';
         end
@@ -177,6 +271,7 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
         function refresh(obj,varargin)
             refresh@lmz.gui.tabs.BaseTab(obj);
             obj.refreshSectionControls();
+            obj.refreshShootingControls();
             if isempty(obj.Controller.State.Datasets)
                 obj.FirstIndexSpinner.Limits=[1 Inf];obj.SecondIndexSpinner.Limits=[1 Inf];
             else
@@ -190,7 +285,15 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 obj.SecondIndexSpinner.Value=min(n,selected+1);
             end
             pair=obj.Controller.State.SeedPair;
-            if isempty(pair),cla(obj.SeedAxes);else,obj.describeSeedPair(pair);end
+            shootingResult=obj.Controller.State.ShootingResult;
+            if ~isempty(shootingResult)
+                plotHorizonDiagnostics(obj.SeedAxes,shootingResult);
+            elseif isempty(pair)
+                cla(obj.SeedAxes);title(obj.SeedAxes, ...
+                    'Branch seed-pair overlay');
+            else
+                obj.describeSeedPair(pair);
+            end
             result=obj.Controller.State.SolveResult;
             if ~isempty(result)
                 obj.StatusLabel.Text=sprintf('%s • exit %d • residual %.3g', ...
@@ -238,9 +341,11 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 obj.SecondSeedRadiusField};
             timingOnly=strcmp(obj.Controller.State.SolveMode, ...
                 'Contact timings only');
+            shooting=any(strcmp(obj.Controller.State.SolveMode, ...
+                {'Multiple shooting','Horizon feasibility'}));
             enableControls(continuationControls, ...
                 continueCapability&&~timingOnly&&~obj.IsBusy);
-            setEnable(obj.SimulateButton,simulate&&~obj.IsBusy);
+            setEnable(obj.SimulateButton,simulate&&~shooting&&~obj.IsBusy);
             evaluate=findobj(obj.Root,'Tag','lmz-solve-evaluate');
             setEnable(evaluate,~obj.IsBusy&&~isempty(obj.Controller.State.WorkingSolution));
             sectionControls={obj.StartSectionDropDown,obj.StopSectionDropDown, ...
@@ -250,7 +355,12 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 ~isempty(obj.Controller.sectionIds()));
             setEnable(obj.TransferButton,~obj.IsBusy&& ...
                 ~isempty(obj.Controller.State.WorkingSolution));
-            setEnable(obj.EventMaskTable,~obj.IsBusy&&timingOnly);
+            setEnable(obj.EventMaskTable,~obj.IsBusy&&(timingOnly||shooting));
+            shootingControls={obj.FormulationDropDown,obj.SolverDropDown, ...
+                obj.HorizonLengthSpinner,obj.InterfaceMaskField, ...
+                obj.ControlMaskField,obj.EnergyModeDropDown, ...
+                obj.ResidualToleranceField,obj.TemplateInitializerDropDown};
+            enableControls(shootingControls,shooting&&~obj.IsBusy);
         end
 
         function controls=controlMap(obj)
@@ -273,6 +383,18 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
             controls.TransversalityLabel=obj.TransversalityLabel;
             controls.EventMaskTable=obj.EventMaskTable;
             controls.FixedDataLabel=obj.FixedDataLabel;
+            controls.FormulationDropDown=obj.FormulationDropDown;
+            controls.SolverDropDown=obj.SolverDropDown;
+            controls.HorizonLengthSpinner=obj.HorizonLengthSpinner;
+            controls.InterfaceMaskField=obj.InterfaceMaskField;
+            controls.ControlMaskField=obj.ControlMaskField;
+            controls.EnergyModeDropDown=obj.EnergyModeDropDown;
+            controls.ResidualToleranceField=obj.ResidualToleranceField;
+            controls.TemplateInitializerDropDown=obj.TemplateInitializerDropDown;
+            controls.ResidualClassificationLabel= ...
+                obj.ResidualClassificationLabel;
+            controls.ShootingDiagnosticsTable=obj.ShootingDiagnosticsTable;
+            controls.SectionSupportLabel=obj.SectionSupportLabel;
         end
     end
 
@@ -326,9 +448,21 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                     'residual is displayed.'],numel(timing.FixedInitialState), ...
                     numel(timing.FixedPhysicalParameters));
             else
-                obj.EventMaskTable.Data=cell(0,2);
-                obj.FixedDataLabel.Text= ...
-                    'Periodic mode: state and parameters are decision data.';
+                shooting=obj.Controller.shootingEditorData();
+                if shooting.Available&&~isempty(shooting.EventNames)
+                    rows=[shooting.EventNames(:), ...
+                        num2cell(shooting.EventFreeMask(:)); ...
+                        {'return_time',shooting.ReturnTimeFree}];
+                    obj.EventMaskTable.Data=rows;
+                    obj.FixedDataLabel.Text=sprintf([ ...
+                        '%d-segment shooting: event schedules are explicit; ' ...
+                        'interface/control masks are configured below.'], ...
+                        shooting.SegmentCount);
+                else
+                    obj.EventMaskTable.Data=cell(0,2);
+                    obj.FixedDataLabel.Text= ...
+                        'Periodic mode: state and parameters are decision data.';
+                end
             end
             crossing=[];
             if ~isempty(obj.Controller.State.TimingResult)
@@ -337,6 +471,80 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 crossing=obj.Controller.State.SectionTransferResult.Crossing;
             end
             obj.TransversalityLabel.Text=transversalityText(crossing);
+            obj.refreshSectionSupport(start,stop);
+        end
+
+        function refreshShootingControls(obj)
+            value=obj.Controller.shootingEditorData();
+            configuration=value.Configuration;
+            obj.configureInitializerItems();
+            obj.FormulationDropDown.Value=fieldOr(configuration, ...
+                'ShootingFormulation','multiple_shooting');
+            obj.SolverDropDown.Value=fieldOr(configuration,'Solver','auto');
+            obj.HorizonLengthSpinner.Value=fieldOr(configuration, ...
+                'HorizonLength',2);
+            obj.InterfaceMaskField.Value=maskText(fieldOr(configuration, ...
+                'InterfaceStateMask',true));
+            obj.ControlMaskField.Value=maskText(fieldOr(configuration, ...
+                'ControlFreeMask',false));
+            obj.EnergyModeDropDown.Value=fieldOr(configuration, ...
+                'EnergyWorkMode','diagnostic_only');
+            obj.ResidualToleranceField.Value=fieldOr(configuration, ...
+                'ResidualTolerance',1e-7);
+            initializer=fieldOr(configuration,'TemplateInitializer', ...
+                'schema_defaults');
+            if strcmp(obj.Controller.State.ModelId,'slip_quad_load')&& ...
+                    any(strcmp(initializer,{ ...
+                    'schema_defaults','exact_source_horizon', ...
+                    'nearest_compatible_template'}))
+                initializer='individual_1_tr_to_rl';
+            end
+            if ~any(strcmp(initializer,obj.TemplateInitializerDropDown.ItemsData))
+                initializer=obj.TemplateInitializerDropDown.ItemsData{1};
+            end
+            obj.TemplateInitializerDropDown.Value=initializer;
+            classification=value.ResidualClassification;
+            obj.ResidualClassificationLabel.Text= ...
+                ['Residual: ' strrep(classification,'_',' ')];
+            obj.ResidualClassificationLabel.FontColor= ...
+                classificationColor(classification);
+            obj.ShootingDiagnosticsTable.Data=shootingRows( ...
+                value,obj.Controller.State.ShootingResult);
+        end
+
+        function configureInitializerItems(obj)
+            if strcmp(obj.Controller.State.ModelId,'slip_quad_load')
+                obj.TemplateInitializerDropDown.Items={ ...
+                    'TR to RL source','Identical TR to RL source', ...
+                    'TR to TL source','Single TR source', ...
+                    'Repeat previous compatible stride'};
+                obj.TemplateInitializerDropDown.ItemsData={ ...
+                    'individual_1_tr_to_rl', ...
+                    'individual_1_identical_tr_to_rl', ...
+                    'individual_1_tr_to_tl','individual_1_tr_single', ...
+                    'phase_compatible_repeat'};
+            else
+                obj.TemplateInitializerDropDown.Items={'Schema defaults'};
+                obj.TemplateInitializerDropDown.ItemsData={'schema_defaults'};
+            end
+        end
+
+        function refreshSectionSupport(obj,startId,stopId)
+            rows=obj.Controller.sectionCombinationData();match=[];
+            for index=1:numel(rows)
+                if strcmp(rows(index).StartSectionId,startId)&& ...
+                        strcmp(rows(index).StopSectionId,stopId)
+                    match=rows(index);break
+                end
+            end
+            if isempty(match)
+                obj.SectionSupportLabel.Text= ...
+                    'Section combination: unavailable';
+            else
+                obj.SectionSupportLabel.Text=sprintf( ...
+                    'Section combination: %s — %s', ...
+                    match.Classification,match.Reason);
+            end
         end
 
         function solveModeChanged(obj)
@@ -373,7 +581,40 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 if isempty(data),return,end
                 mask=logical(cell2mat(data(1:end-1,2)));
                 returnFree=logical(data{end,2});
-                obj.Controller.setEventFreeMask(mask,returnFree);
+                if any(strcmp(obj.Controller.State.SolveMode, ...
+                        {'Multiple shooting','Horizon feasibility'}))
+                    obj.Controller.setShootingSettings(struct( ...
+                        'EventFreeMask',[mask(:).' returnFree]));
+                else
+                    obj.Controller.setEventFreeMask(mask,returnFree);
+                end
+            catch exception
+                obj.refresh();obj.reportError(exception);
+            end
+        end
+
+        function shootingChanged(obj)
+            try
+                formulation=obj.FormulationDropDown.Value;
+                horizonFormulation='periodic';
+                if strcmp(obj.Controller.State.ProblemId, ...
+                        'section_transition')
+                    horizonFormulation='transition';
+                elseif strcmp(formulation,'horizon_feasibility')
+                    horizonFormulation='feasibility';
+                end
+                changes=struct('ShootingFormulation',formulation, ...
+                    'Formulation',horizonFormulation, ...
+                    'Solver',obj.SolverDropDown.Value, ...
+                    'HorizonLength',obj.HorizonLengthSpinner.Value, ...
+                    'InterfaceStateMask',parseMask( ...
+                    obj.InterfaceMaskField.Value), ...
+                    'ControlFreeMask',parseMask(obj.ControlMaskField.Value), ...
+                    'EnergyWorkMode',obj.EnergyModeDropDown.Value, ...
+                    'ResidualTolerance',obj.ResidualToleranceField.Value, ...
+                    'TemplateInitializer', ...
+                    obj.TemplateInitializerDropDown.Value);
+                obj.Controller.setShootingSettings(changes);
             catch exception
                 obj.refresh();obj.reportError(exception);
             end
@@ -389,35 +630,59 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
         end
 
         function evaluate(obj)
-            try,obj.Controller.evaluateWorkingSolution(true);catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.evaluateWorkingSolution(true);
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function solve(obj)
-            try,obj.Controller.solveWorkingSolution(struct());catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.solveWorkingSolution(struct());
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function simulate(obj)
-            try,obj.Controller.simulateWorkingSolution();catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.simulateWorkingSolution();
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function applyNoise(obj)
             try
                 obj.Controller.perturbWorkingSolution(obj.NoiseMagnitudeField.Value, ...
                     'schema-scaled',obj.NoiseSeedSpinner.Value);
-            catch exception,obj.reportError(exception);end
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function makeAdjacentSeed(obj)
             try
-                direction=1;if strcmp(obj.DirectionDropDown.Value,'previous'),direction=-1;end
+                direction=1;
+                if strcmp(obj.DirectionDropDown.Value,'previous')
+                    direction=-1;
+                end
                 obj.Controller.makeAdjacentSeedPair(direction,struct());
-            catch exception,obj.reportError(exception);end
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function makeManualSeed(obj)
             try
                 obj.Controller.makeManualSeedPair(obj.FirstIndexSpinner.Value, ...
                     obj.SecondIndexSpinner.Value,struct());
-            catch exception,obj.reportError(exception);end
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function makeSecondSeed(obj)
-            try,obj.Controller.makeSecondSeed(obj.SecondSeedRadiusField.Value); ...
-            catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.makeSecondSeed(obj.SecondSeedRadiusField.Value);
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function describeSeedPair(obj,pair)
             indices=diagnosticField(pair.Diagnostics,'SourceIndices',[NaN NaN]);
@@ -494,9 +759,397 @@ end
 if grazing,status='grazing';else,status='transverse';end
 value=sprintf('Transversality: %s (D h f = %.4g)',status,derivative);
 end
+function value=maskText(mask)
+mask=logical(mask(:));
+if isempty(mask)||all(mask)
+    value='all';
+elseif ~any(mask)
+    value='none';
+else
+    value=strjoin(arrayfun(@(item)num2str(item),mask.', ...
+        'UniformOutput',false),',');
+end
+end
+function value=parseMask(source)
+source=lower(strtrim(char(source)));
+if strcmp(source,'all'),value=true;return,end
+if strcmp(source,'none'),value=false;return,end
+parts=regexp(source,'[,\s]+','split');parts=parts(~cellfun(@isempty,parts));
+numbers=cellfun(@str2double,parts);
+if isempty(numbers)||any(isnan(numbers))||any(~ismember(numbers,[0 1]))
+    error('lmz:GUI:ShootingMaskText', ...
+        'Masks must be all, none, or comma-separated 0/1 values.');
+end
+value=logical(numbers(:));
+end
+function value=classificationColor(classification)
+if any(strcmp(classification,{'root_found','least_squares_feasible'}))
+    value=[0.05 0.45 0.16];
+elseif strcmp(classification,'not-run')
+    value=[0.25 0.25 0.25];
+else
+    value=[0.75 0.2 0.1];
+end
+end
+function rows=shootingRows(editor,result)
+rows={'segments',num2str(editor.SegmentCount); ...
+    'nodes',num2str(editor.NodeCount); ...
+    'unknowns / residuals',sprintf('%d / %d', ...
+    editor.UnknownCount,editor.ResidualCount)};
+if isempty(result),return,end
+report=result.FeasibilityReport;
+rows(end+1,:)={'rank / nullity',sprintf('%d / %d', ...
+    report.JacobianRank,report.Nullity)};
+rows(end+1,:)={'condition',sprintf('%.4g',report.ConditionEstimate)};
+rows(end+1,:)={'scaled residual',sprintf('%.4g',report.ScaledResidualNorm)};
+rows(end+1,:)={'termination',report.TerminationReason};
+rows(end+1,:)={'initializer history', ...
+    initializerHistorySummary(result.InitializerHistory)};
+rows(end+1,:)={'recovery history', ...
+    recoveryHistorySummary(result.InitializerHistory)};
+if ~isempty(report.SingularValues)
+    singular=report.SingularValues;
+    first=max(1,numel(singular)-2);
+    rows(end+1,:)={'smallest singular values',mat2str( ...
+        singular(first:end).',4)};
+end
+diagnostics=result.SolveResult.Evaluation.Diagnostics;
+fields={'ContactNorms','InterfaceDefectNorms', ...
+    'SectionResidualNorms','EnergyWorkResidualNorms'};
+labels={'contact norms','interface defects','section residuals', ...
+    'energy/work residuals'};
+for index=1:numel(fields)
+    if isfield(diagnostics,fields{index})
+        rows(end+1,:)={labels{index}, ...
+            mat2str(diagnostics.(fields{index}).',4)}; %#ok<AGROW>
+    end
+end
+[energyDelta,declaredWork,deltaRecorded,workRecorded]= ...
+    energyAuditProfiles(result,editor.SegmentCount);
+rows(end+1,:)={'EnergyDelta by stride', ...
+    recordedProfileText(energyDelta,deltaRecorded)};
+rows(end+1,:)={'DeclaredWork by stride', ...
+    recordedProfileText(declaredWork,workRecorded)};
+end
+
+function plotHorizonDiagnostics(axesHandle,result)
+cla(axesHandle);hold(axesHandle,'on');
+diagnostics=result.SolveResult.Evaluation.Diagnostics;
+count=result.Horizon.segmentCount();
+decoded=decodedShootingResult(result);
+profiles={};labels={};
+fields={'ContactNorms','InterfaceDefectNorms', ...
+    'SectionResidualNorms','EnergyWorkResidualNorms'};
+names={'contact','interface defect','section','energy/work'};
+for index=1:numel(fields)
+    if isfield(diagnostics,fields{index})
+        profiles{end+1}=diagnostics.(fields{index})(:); %#ok<AGROW>
+        labels{end+1}=names{index}; %#ok<AGROW>
+    end
+end
+[extra,extraLabels]=sectionDefectProfiles(result,decoded,count);
+profiles=[profiles extra];labels=[labels extraLabels];
+[extra,extraLabels]=scheduleProfiles(decoded.Schedules,count);
+profiles=[profiles extra];labels=[labels extraLabels];
+[extra,extraLabels]=controlProfiles(decoded.Controls,count);
+profiles=[profiles extra];labels=[labels extraLabels];
+[energyDelta,declaredWork,deltaRecorded,workRecorded]= ...
+    energyAuditProfiles(result,count);
+profiles{end+1}=recordedProfile(energyDelta,deltaRecorded);
+profiles{end+1}=recordedProfile(declaredWork,workRecorded);
+if any(deltaRecorded)
+    labels{end+1}='EnergyDelta';
+else
+    labels{end+1}='EnergyDelta (not recorded)';
+end
+if any(workRecorded)
+    labels{end+1}='DeclaredWork';
+else
+    labels{end+1}='DeclaredWork (not recorded)';
+end
+for index=1:numel(profiles)
+    values=profiles{index};
+    plot(axesHandle,linspace(1,count,numel(values)), ...
+        normalizedProfile(values),'-o','DisplayName',labels{index});
+end
+if isfield(result.SolveResult.Output,'ResidualHistory')
+    values=result.SolveResult.Output.ResidualHistory(:);
+    plot(axesHandle,linspace(1,count,numel(values)), ...
+        normalizedProfile(values),'--','LineWidth',1.3, ...
+        'DisplayName','solver residual history');
+end
+hold(axesHandle,'off');grid(axesHandle,'on');
+xlabel(axesHandle,'Stride (solver history spans the horizon)');
+ylabel(axesHandle,'Normalized magnitude; exact values are in the table');
+title(axesHandle,'Horizon diagnostic profiles');
+legend(axesHandle,'Location','best');
+end
+
+function value=initializerHistorySummary(history)
+items=historyItems(history);entries={};
+for index=1:numel(items)
+    item=items{index};
+    if ~isstruct(item)||~isscalar(item),continue,end
+    entries{end+1}=historyEntryText(item,index); %#ok<AGROW>
+end
+value=limitedSummary(entries);
+end
+
+function value=recoveryHistorySummary(history)
+parents=historyItems(history);entries={};
+for parentIndex=1:numel(parents)
+    parent=parents{parentIndex};
+    if ~isstruct(parent)||~isscalar(parent),continue,end
+    candidates={};
+    if isfield(parent,'Attempts'),candidates=historyItems(parent.Attempts);end
+    if isfield(parent,'RecoveryAttempts')
+        candidates=[candidates;historyItems(parent.RecoveryAttempts)]; %#ok<AGROW>
+    end
+    for attemptIndex=1:numel(candidates)
+        attempt=candidates{attemptIndex};
+        if ~isstruct(attempt)||~isscalar(attempt),continue,end
+        prefix=sprintf('entry %d attempt %d: ',parentIndex,attemptIndex);
+        if isfield(parent,'StrideIndex')&&isnumeric(parent.StrideIndex)&& ...
+                isscalar(parent.StrideIndex)&&isfinite(parent.StrideIndex)
+            prefix=sprintf('stride %d attempt %d: ', ...
+                parent.StrideIndex,attemptIndex);
+        end
+        entries{end+1}=[prefix historyEntryText( ...
+            attempt,attemptIndex)]; %#ok<AGROW>
+    end
+end
+value=limitedSummary(entries);
+end
+
+function value=historyEntryText(item,index)
+name='record';
+if isfield(item,'Strategy')&&ischar(item.Strategy)&& ...
+        ~isempty(item.Strategy)
+    name=item.Strategy;
+elseif isfield(item,'Method')&&ischar(item.Method)&&~isempty(item.Method)
+    name=item.Method;
+end
+states={};
+if isfield(item,'Selected')&&isscalar(item.Selected)&&logical(item.Selected)
+    states{end+1}='selected';
+end
+if isfield(item,'Accepted')&&isscalar(item.Accepted)
+    if logical(item.Accepted)
+        states{end+1}='accepted';
+    else
+        states{end+1}='rejected';
+    end
+end
+if isfield(item,'SolverCompleted')&&isscalar(item.SolverCompleted)&& ...
+        ~logical(item.SolverCompleted)
+    states{end+1}='solver failed';
+end
+if isfield(item,'Classification')&&ischar(item.Classification)&& ...
+        ~isempty(item.Classification)
+    states{end+1}=strrep(item.Classification,'_',' ');
+end
+prefix=sprintf('%d: ',index);
+if isfield(item,'StrideIndex')&&isnumeric(item.StrideIndex)&& ...
+        isscalar(item.StrideIndex)&&isfinite(item.StrideIndex)
+    prefix=sprintf('stride %d: ',item.StrideIndex);
+end
+if isempty(states),value=[prefix name]; ...
+else,value=sprintf('%s%s [%s]',prefix,name,strjoin(states,', '));end
+end
+
+function value=limitedSummary(entries)
+if isempty(entries),value='not recorded';return,end
+limit=8;
+if numel(entries)>limit
+    omitted=numel(entries)-limit;entries=entries(1:limit);
+    entries{end+1}=sprintf('+%d more',omitted);
+end
+value=strjoin(entries,'; ');
+end
+
+function value=historyItems(source)
+if isempty(source)
+    value={};
+elseif iscell(source)
+    value=source(:);
+elseif isstruct(source)
+    value=num2cell(source(:));
+else
+    value={};
+end
+end
+
+function [delta,work,deltaRecorded,workRecorded]= ...
+        energyAuditProfiles(result,count)
+delta=nan(count,1);work=nan(count,1);
+deltaRecorded=false(count,1);workRecorded=false(count,1);
+for index=1:min(count,result.Horizon.segmentCount())
+    specification=result.Horizon.Segments{index}.EnergyWorkSpecification;
+    declared=fieldOr(specification,'DeclaredWork',[]);
+    if isnumeric(declared)&&isreal(declared)&&isscalar(declared)&& ...
+            isfinite(declared)
+        work(index)=declared;workRecorded(index)=true;
+    end
+    if index>numel(result.SegmentResults),continue,end
+    segment=result.SegmentResults{index};
+    if ~isstruct(segment)||~isscalar(segment)|| ...
+            ~isfield(segment,'Diagnostics')|| ...
+            ~isstruct(segment.Diagnostics)
+        continue
+    end
+    diagnostics=segment.Diagnostics;candidate=[];
+    if isfield(diagnostics,'Energy')&& ...
+            isstruct(diagnostics.Energy)&& ...
+            isfield(diagnostics.Energy,'EnergyDelta')
+        candidate=diagnostics.Energy.EnergyDelta;
+    elseif isfield(diagnostics,'EnergyDelta')
+        candidate=diagnostics.EnergyDelta;
+    end
+    if isnumeric(candidate)&&isreal(candidate)&&isscalar(candidate)&& ...
+            isfinite(candidate)
+        delta(index)=candidate;deltaRecorded(index)=true;
+    end
+end
+end
+
+function value=recordedProfile(source,recorded)
+value=source(:);value(~recorded(:))=NaN;
+end
+
+function value=recordedProfileText(source,recorded)
+source=source(:);recorded=logical(recorded(:));
+if isempty(source)||~any(recorded),value='not recorded';return,end
+if all(recorded),value=mat2str(source.',6);return,end
+entries=cell(numel(source),1);
+for index=1:numel(source)
+    if recorded(index),entries{index}=sprintf('%d: %.6g',index,source(index)); ...
+    else,entries{index}=sprintf('%d: not recorded',index);end
+end
+value=strjoin(entries,'; ');
+end
+
+function value=normalizedProfile(source)
+value=abs(source(:));finite=value(isfinite(value));
+if isempty(finite),scale=1;else,scale=max(finite);end
+if scale==0,scale=1;end
+value=value/scale;
+end
+
+function [profiles,labels]=sectionDefectProfiles(result,decoded,count)
+names={};matrix=nan(count,0);
+for index=1:min(count,numel(result.SegmentResults))
+    segmentResult=result.SegmentResults{index};
+    if ~isstruct(segmentResult)||~isfield(segmentResult, ...
+            'TerminalCoordinates')
+        continue
+    end
+    node=decoded.Nodes{index+1};
+    localNames=node.StateSchema.CoordinateNames;
+    values=segmentResult.TerminalCoordinates(:)- ...
+        node.SectionCoordinates(:);
+    [matrix,names]=assignNamedRow( ...
+        matrix,names,index,count,localNames,values);
+end
+[profiles,labels]=profilesFromMatrix( ...
+    matrix,names,'section defect ');
+end
+
+function [profiles,labels]=scheduleProfiles(schedules,count)
+names={};matrix=nan(count,0);
+for index=1:count
+    schedule=schedules{index};
+    if ~isa(schedule,'lmz.schedule.EventSchedule'),continue,end
+    localNames=[schedule.names() {'return_time'}];
+    values=[schedule.times();schedule.ReturnTime];
+    [matrix,names]=assignNamedRow( ...
+        matrix,names,index,count,localNames,values);
+end
+[profiles,labels]=profilesFromMatrix(matrix,names,'timing ');
+end
+
+function [profiles,labels]=controlProfiles(controls,count)
+names={};matrix=nan(count,0);
+for index=1:count
+    [localNames,values]=controlEntries(controls{index});
+    [matrix,names]=assignNamedRow( ...
+        matrix,names,index,count,localNames,values);
+end
+[profiles,labels]=profilesFromMatrix(matrix,names,'control ');
+end
+
+function [names,values]=controlEntries(source)
+names={};values=zeros(0,1);
+if isnumeric(source)
+    values=source(:);
+    names=arrayfun(@(index)sprintf('value_%d',index), ...
+        1:numel(values),'UniformOutput',false);
+    return
+end
+if ~isstruct(source)||~isscalar(source),return,end
+fields=fieldnames(source);
+for index=1:numel(fields)
+    item=source.(fields{index});
+    if ~isnumeric(item)||~isreal(item)||any(~isfinite(item(:))),continue,end
+    item=item(:);values=[values;item]; %#ok<AGROW>
+    if isscalar(item)
+        names{end+1}=fields{index}; %#ok<AGROW>
+    else
+        for subindex=1:numel(item)
+            names{end+1}=sprintf('%s_%d', ...
+                fields{index},subindex); %#ok<AGROW>
+        end
+    end
+end
+end
+
+function value=decodedShootingResult(result)
+count=result.Horizon.segmentCount();
+schedules=cell(count,1);controls=cell(count,1);
+for index=1:count
+    schedules{index}=result.Horizon.Segments{index}.EventSchedule;
+    controls{index}=result.Horizon.Segments{index}.ControlParameters;
+end
+value=struct('Nodes',{result.Horizon.Nodes}, ...
+    'Schedules',{schedules},'Controls',{controls});
+if ~isfield(result.Diagnostics,'ProblemContract')|| ...
+        ~isfield(result.Diagnostics.ProblemContract,'DecisionSchema')
+    return
+end
+schema=lmz.shooting.ShootingDecisionSchema.fromStruct( ...
+    result.Diagnostics.ProblemContract.DecisionSchema);
+value=schema.decode(result.SolveResult.Solution.DecisionValues, ...
+    result.Horizon);
+end
+
+function [matrix,names]=assignNamedRow( ...
+        matrix,names,row,count,localNames,values)
+if ischar(localNames),localNames={localNames};end
+for index=1:min(numel(localNames),numel(values))
+    column=find(strcmp(localNames{index},names),1);
+    if isempty(column)
+        names{end+1}=localNames{index}; %#ok<AGROW>
+        matrix(:,end+1)=nan(count,1); %#ok<AGROW>
+        column=size(matrix,2);
+    end
+    matrix(row,column)=values(index);
+end
+end
+
+function [profiles,labels]=profilesFromMatrix(matrix,names,prefix)
+profiles=cell(1,size(matrix,2));labels=cell(1,size(matrix,2));
+for index=1:size(matrix,2)
+    profiles{index}=matrix(:,index);
+    labels{index}=[prefix names{index}];
+end
+end
 function value=solutionCoordinate(solution,name)
-if any(strcmp(name,solution.DecisionSchema.names())),value=solution.decision(name); ...
-elseif any(strcmp(name,solution.ParameterSchema.names())),value=solution.parameter(name); ...
-elseif isfield(solution.Observables,name),value=solution.Observables.(name); ...
-else,value=NaN;end
+if any(strcmp(name,solution.DecisionSchema.names()))
+    value=solution.decision(name);
+elseif any(strcmp(name,solution.ParameterSchema.names()))
+    value=solution.parameter(name);
+elseif isfield(solution.Observables,name)
+    value=solution.Observables.(name);
+else
+    value=NaN;
+end
 end

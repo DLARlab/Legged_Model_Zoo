@@ -38,6 +38,54 @@ Simulation output uses named states, event records, contact modes, four feet,
 all available GRF channels, observables, and physical parameters. Visualization
 code consumes those names; it does not embed Results29 row indices.
 
+## Direct mixed-section shooting
+
+Use `section_transition` when the start and stop section IDs differ. The route
+accepts the catalog's named-event, descending state-plane, and safe composite
+endpoints. It builds a `TransitionMultipleShootingProblem` with one direct
+segment and an explicit terminal target; it does not reinterpret the request as
+a periodic orbit.
+
+```matlab
+configuration = struct( ...
+    'StartSectionId','back_left_touchdown', ...
+    'StopSectionId','descending_y_0_9', ...
+    'StartStateFreeMask',true, ...
+    'TargetStateFreeMask',true, ...
+    'EventFreeMask',false);
+transition = model.createProblem('section_transition',configuration);
+u0 = transition.getDecisionSchema().defaults();
+p = transition.getParameterSchema().defaults();
+context = lmz.api.RunContext.synchronous(41);
+evaluation = transition.evaluate(u0,p,context,false);
+direct = transition.evaluateShooting(u0,p,context,false);
+
+assert(strcmp(transition.Formulation,'transition'));
+assert(strcmp(transition.Horizon.Target.SectionId, ...
+    'descending_y_0_9'));
+assert(~transition.Horizon.Target.PeriodicClosure);
+assert(evaluation.PhysicalValidity);
+assert(direct.SegmentResults{1}.Crossing.Accepted);
+assert(direct.SegmentResults{1}.Crossing.CrossingDirection == -1);
+assert(~direct.SegmentResults{1}.Diagnostics.ApexOracleUsed);
+```
+
+`StartStateFreeMask` and `TargetStateFreeMask` may be scalar logical values or
+vectors matching their respective section-coordinate schemas.
+`EventFreeMask` may be scalar, `[interior_events return_time]`, or one logical
+entry per active schedule coordinate. With the default fixed schedule, the
+tested touchdown-to-descending-plane seed has scaled residual norm
+`4.194775535240182e-12`. The reverse plane-to-touchdown path reaches an
+accepted transverse crossing but retains residual `6.224672390864328e-7`, so
+it is an explicitly qualified candidate rather than a claimed root.
+
+Inspect `evaluation.ResidualBlocks` for
+`segment_1_contact_constraints`, `segment_1_section_residual`,
+`interface_1_defect`, and `final_transition_target`. A transition never emits
+`final_section_closure`. Same-section periodic work remains on
+`periodic_orbit` or `multiple_shooting`. The complete pair matrix and
+qualifications are in `docs/scientific-section-shooting.md`.
+
 ## Visualization profiles
 
 The model manifest declares the visualization contract frames `world`, `body`,

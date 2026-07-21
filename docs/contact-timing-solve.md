@@ -13,7 +13,7 @@ the return time. It is not a periodic-orbit solve.
 | Physical parameters are bitwise unchanged | Parameters change only when the problem explicitly includes them |
 | Residuals are contact consistency plus stop-section return | Residuals include symmetry-aligned state/section-coordinate closure |
 | Does not require `x(T)=x0` | Enforces periodic closure after the selected return |
-| Uses `ContactTimingService` | Uses `SolveService` on a periodic problem |
+| Uses `ContactTimingService` with rank-aware solver routing | Uses `SolveService` or `MultipleShootingService` on a periodic problem |
 
 The built-in source-compatible apex blocks are eight contact equations plus one
 section equation for quadruped and quad-load, and four contact equations plus
@@ -60,6 +60,8 @@ fields are:
 | `FixReturnTime` | Explicit return-time fixed status |
 | `MinimumGap` | Nonnegative strict-gap floor |
 | `StartSectionId`, `StopSectionId` | Section identity recorded with the schedule |
+| `FixedRowPolicy` | `validate_fixed_rows` (default), `include_fixed_rows_in_least_squares`, or `diagnostic_only` |
+| `FixedRowTolerance` | Physical validation tolerance for rows bound to fixed events or a fixed return |
 
 An explicit `EventSchedule` takes precedence over the mask fields.
 
@@ -91,18 +93,26 @@ assert(descending.FixedInitialState(4) < 0);
 assert(norm([descending.ContactResiduals;descending.SectionResidual]) < 1e-9);
 ```
 
-The quadruped, biped, and quad-load providers deliberately remain apex-only so
-their timing rows retain the migrated source formulation; they reject other
-section pairs before solving. Tutorial named-event endpoints are unsupported.
-An apex-to-`height_descending` timing request is also rejected with
+The quadruped and biped registered providers also expose direct section-local
+timing for validated same-touchdown returns, including
+`back_left_touchdown` and `left_touchdown`, respectively. Their endpoint
+contact row is bound to the return boundary through `ContactRowBindings`; it is
+not duplicated as a fictitious interior event. Supported combinations are
+model-declared. A catalog label alone does not imply that timing equations or a
+direct adapter exist for that pair.
+
+Tutorial named-event endpoints remain unsupported. An apex-to-
+`height_descending` tutorial request is rejected with
 `lmz:Timing:UnsupportedSectionOccurrence` because the first descending-height
 crossing occurs before impact and does not define the requested cycle endpoint.
-Use return/transfer services to inspect such crossings, or use the supported
+Use return/transfer services to inspect that crossing, or use the supported
 same-section timing formulation.
 
-The problem constructor checks that the number of free schedule coordinates
-matches the number of explicit contact/section residuals. A mismatch is a
-configuration error, not permission to add a hidden residual or solve.
+The problem no longer requires the number of active residual rows `m` to equal
+the number of free schedule coordinates `n`. It preserves every configured
+row and delegates an admissible square or overdetermined system to the
+rank-aware solver. An underdetermined point request is rejected until the user
+adds independent gauges/fixed variables or declares a one-dimensional family.
 
 ## Solve and inspect the result
 
@@ -126,6 +136,96 @@ contact residuals, section residual, terminal state, section crossing,
 simulation, solver attempts/options, random seed, and provenance. A small
 section residual says only that the selected section was reached; compare the
 terminal state with the initial state only in a separate periodic problem.
+
+`SolverDiagnostics.Success` is true only when solver termination, active
+residual tolerance, fixed-row tolerance, accepted nongrazing crossing, event
+order/minimum gaps, finite data, and energy/work validity pass. Expected
+nullity and gauge independence are additional required conditions for a
+`TimingFamilyProblem` or a configuration that explicitly sets
+`RequireRankCondition=true`. `Status` is `converged`, `infeasible`, `invalid`,
+or `numerical_failure`. Here `infeasible` means this returned candidate failed
+configured physical validation; it is not proof that no solution exists.
+
+## Rectangular timing systems
+
+`RankAwareNonlinearSolver` computes `m` and `n` from the actual scaled residual
+and decision vector. With `Solver='auto'` it selects:
+
+| Dimension | Solver |
+| --- | --- |
+| `m == n`, no finite decision bounds | `fsolve` |
+| `m == n`, finite decision bounds | bounded `lsqnonlin` (`trust-region-reflective`) |
+| `m > n` | `lsqnonlin` |
+| `m < n` | Error `lmz:Timing:GaugeRequired` for a point solve |
+
+`fmincon_feasibility` is an explicit alternative; it is never selected
+silently. The recorded rank diagnostics contain `M`, `N`, rank, nullity,
+singular values, rank tolerance, condition estimates, scaled norm, unscaled
+blocks, active bounds, first-order optimality, Jacobian, and Jacobian source.
+
+Rank is not silently promoted into an existence test. An ordinary square timing
+problem may satisfy its residual and physical contract even when the finite-
+difference Jacobian is rank deficient. In that case diagnostics record
+`RankConditionRequired=false`, `UniquenessValidated=false`, and
+`RankQualification='rank_deficient_root_not_a_unique_parameterization'`.
+The candidate can be reported as a root, but not as a locally unique timing
+parameterization. Timing-family configurations remain stricter: their declared
+expected nullity and gauge independence must pass before success.
+
+This built-in tutorial configuration includes one fixed contact row in the
+least-squares objective, producing two rows and one return-time unknown:
+
+```matlab
+rectangular = model.createProblem('section_return_timing',struct( ...
+    'FixedEventMask',true,'FreeReturnTime',true, ...
+    'FixedRowPolicy','include_fixed_rows_in_least_squares'));
+fit = lmz.services.ContactTimingService().solve( ...
+    rectangular,rectangular.InputSchedule, ...
+    struct('Solver','lsqnonlin','Display','off'),context);
+rank = fit.SolverDiagnostics.RankDiagnostics;
+assert(isequal([rank.M rank.N rank.Rank],[2 1 1]));
+assert(fit.SolverDiagnostics.Success);
+```
+
+See `examples/demo_rectangular_contact_timing.m` for the executed artifact.
+
+## Fixed-row semantics
+
+A fixed event removes its time from the decision vector; it does not make its
+physical equation optional. The three policies are:
+
+| Policy | Active objective rows | Physical validation |
+| --- | --- | --- |
+| `validate_fixed_rows` | Free-bound and always-active rows | Fixed-bound rows must meet `FixedRowTolerance` |
+| `include_fixed_rows_in_least_squares` | Free, fixed, and always-active rows | Fixed-bound rows must still meet `FixedRowTolerance` |
+| `diagnostic_only` | Free-bound and always-active rows | Inconsistent fixed rows still prevent `converged` |
+
+The default is `validate_fixed_rows`. `ContactRowBindings` may bind each
+provider contact row to an `event`, the `return` boundary, or `always`; without
+bindings there must be exactly one contact row per scheduled event.
+
+## Gauges and one-dimensional timing families
+
+Wrap a base timing problem in `TimingFamilyProblem`. Declarative `TimingGauge`
+objects can fix one named event, fix the return time, or impose a linear phase
+condition:
+
+```matlab
+gauge = lmz.schedule.TimingGauge.fixedReturnTime(1.0);
+pointProblem = lmz.schedule.TimingFamilyProblem( ...
+    baseProblem,gauge,struct('ExpectedLocalDimension',0));
+point = lmz.services.ContactTimingService().solve( ...
+    pointProblem,pointProblem.InputSchedule,struct(),context);
+assert(point.SolverDiagnostics.GaugeDiagnostics.Independent);
+```
+
+For an ungauged regular family, construct `TimingFamilyProblem` with
+`ExpectedLocalDimension=1`. `TimingContinuationService.run` verifies measured
+Jacobian nullity one, constructs or accepts a `SolutionPair`, and delegates the
+trace to the generic pseudo-arclength continuation service. It refuses a family
+whose measured nullity is not one. See
+`examples/demo_timing_family_continuation.m` for a complete public extension
+example.
 
 ## Reproducible multistart
 
@@ -159,6 +259,15 @@ A model implements `lmz.schedule.ContactConstraintProvider`:
   returns `ContactResidual`, `SectionResidual`, `TerminalState`,
   `SectionCrossing`, `Simulation`, and `Diagnostics`.
 
+When contact rows do not map one-to-one to interior scheduled events, the
+provider also returns one `ContactRowBindings` record per contact row:
+
+```matlab
+struct('Kind','event','EventName','L_TD')
+struct('Kind','return','EventName','')
+struct('Kind','always','EventName','')
+```
+
 The provider must evaluate one supplied schedule. It must not run `fsolve`,
 project another schedule, mutate fixed data, or insert periodicity rows. The
 generic `SectionReturnTimingProblem` owns chart decode/encode and named residual
@@ -185,7 +294,12 @@ model.
 
 ## Failure modes
 
-- `lmz:Timing:DimensionMismatch`: fixed/free mask and residual count disagree.
+- `lmz:Timing:GaugeRequired`: a point solve has fewer residual rows than unknowns.
+- `lmz:Solver:DimensionModeMismatch`: an explicitly selected solver is
+  incompatible with the residual/decision dimensions.
+- `lmz:Timing:FixedRowPolicy`: the fixed-row policy is unknown.
+- `lmz:Timing:ContactRowBindings`: provider bindings do not match its contact
+  residual rows.
 - `lmz:Schedule:EventOrder`: supplied events are not strictly ordered above the
   minimum gap.
 - `lmz:Timing:FixedDataMutated`: a provider or service changed fixed data.

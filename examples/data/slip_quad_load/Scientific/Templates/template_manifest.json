@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "1.0.0",
+  "modelId": "slip_quad_load",
+  "sourceRepository": "https://github.com/DLARlab/2025_Gait_Transitions_in_Load_Pulling_Quadrupeds_Insights.git",
+  "sourceCommit": "19f3133073c988cc0c3424a647b4adbb60a90b99",
+  "extraExamplesIntroductionCommit": "1046565048ca4414fe1c507fa6c286cc780ed406",
+  "redistribution": "Upstream README claims BSD-3-Clause, but the pinned commit contains no license file; redistribution authority remains unresolved.",
+  "files": [
+    {
+      "id": "individual_1_tr_single",
+      "gaitLabel": "TR",
+      "relativePath": "P3_Individual_1_TR.mat",
+      "sourcePath": "Section2_Single_Stride_Replication/P3_Individual_1_TR.mat",
+      "sha256": "56736cc33ab31a0ab40b3de6783b625a07ebd54f1ae6a561b47aea5e04cd6abe",
+      "byteCount": 6519,
+      "strideCount": 1,
+      "xAccumLength": 44,
+      "role": "single_stride_template"
+    },
+    {
+      "id": "individual_1_tr_to_rl",
+      "gaitLabel": "TR-RL",
+      "relativePath": "P4_TR_RL_Individual_1.mat",
+      "sourcePath": "Section3_Gait_Transition_Replication/P4_TR_RL_Individual_1.mat",
+      "sha256": "d23bd725a353d7cf1b6339699ed813755867b5dd1a0da213193eb24cb3bdad4b",
+      "byteCount": 24373,
+      "strideCount": 2,
+      "xAccumLength": 57,
+      "role": "two_stride_transition_template"
+    },
+    {
+      "id": "individual_1_identical_tr_to_rl",
+      "gaitLabel": "TGR-RGL",
+      "relativePath": "P4_TR_RL_Individual_1_identical.mat",
+      "sourcePath": "Section3_Gait_Transition_Replication/Extra_Examples/P4_TR_RL_Individual_1_identical.mat",
+      "sha256": "3212bc7af94bf66f7afb27dad92ae334970aa0a36ac6aa1a4e8251af9e511921",
+      "byteCount": 36386,
+      "strideCount": 2,
+      "xAccumLength": 57,
+      "role": "two_stride_transition_template"
+    },
+    {
+      "id": "individual_1_tr_to_tl",
+      "gaitLabel": "TGR-TGL",
+      "relativePath": "P4_TR_TL_Individual_1.mat",
+      "sourcePath": "Section3_Gait_Transition_Replication/Extra_Examples/P4_TR_TL_Individual_1.mat",
+      "sha256": "42f7065fa19b77b9df4de15df508eb5c62156ad0e08001511e69d8c0572e5bf7",
+      "byteCount": 43255,
+      "strideCount": 2,
+      "xAccumLength": 57,
+      "role": "two_stride_transition_template"
+    }
+  ]
+}
