@@ -8,7 +8,8 @@ classdef ObjectiveWeightSchema
             for index=1:3
                 specs(index,1)=lmz.schema.VariableSpec(names{index},'Group','objective_weight', ...
                     'DefaultValue',values(index),'LowerBound',0,'Scale',max(1,values(index)), ...
-                    'Topology','positive'); %#ok<AGROW>
+                    'Topology','positive','Role','derived', ...
+                    'EnergyEffect','invariant'); %#ok<AGROW>
             end
             schema=lmz.schema.VariableSchema(specs);
         end

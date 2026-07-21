@@ -240,7 +240,7 @@ See [examples/demo_slip_quad_load_single_stride.m](examples/demo_slip_quad_load_
 | Model ID | Label | Simulation | Visualization | Solve | Continuation | Optimization |
 |---|---|---:|---:|---:|---:|---:|
 | `slip_biped` | SLIP Biped | Yes | Yes | Yes | Yes | Yes |
-| `slip_quad_load` | SLIP Quadruped with Load | Yes | Yes | No | No | Yes |
+| `slip_quad_load` | SLIP Quadruped with Load | Yes | Yes | Yes | No | Yes |
 | `slip_quadruped` | SLIP Quadruped | Yes | Yes | Yes | Yes | No |
 | `tutorial_hopper` | Analytic Hybrid Hopper Tutorial | Yes | Yes | Yes | Yes | No |
 <!-- LMZ:MODEL_TABLE:END -->
@@ -251,15 +251,29 @@ Model-level availability is the union of implemented problem capabilities. Scien
 | Problem | Kind | Maturity | Validation | Capabilities |
 |---|---|---|---|---|
 | `slip_biped/periodic_apex` | nonlinear_equation | validated | source-equivalent | simulate, visualize, animate, solve, continue |
+| `slip_biped/periodic_orbit` | nonlinear_equation | experimental | tested | simulate, visualize, animate, solve, continue |
 | `slip_biped/trajectory_fit` | optimization | validated | source-equivalent | simulate, visualize, animate, optimize |
 | `slip_biped/demo_stride` | simulation | tutorial | tested | simulate, visualize, animate |
+| `slip_biped/section_return_timing` | nonlinear_equation | experimental | tested | simulate, visualize, animate, solve |
+| `slip_biped/n_stride_simulation` | simulation | validated | tested | simulate, visualize, animate |
 | `slip_quad_load/demo_stride` | simulation | tutorial | tested | simulate, visualize, animate |
 | `slip_quad_load/single_stride` | simulation | validated | source-equivalent | simulate, visualize, animate |
 | `slip_quad_load/multi_stride_fit` | optimization | validated | source-equivalent | simulate, visualize, animate, optimize |
+| `slip_quad_load/n_stride_fit` | optimization | experimental | tested | simulate, visualize, animate, optimize |
+| `slip_quad_load/section_return_timing` | nonlinear_equation | experimental | tested | simulate, visualize, animate, solve |
+| `slip_quad_load/n_stride_simulation` | simulation | validated | tested | simulate, visualize, animate |
+| `slip_quad_load/n_stride_periodic` | nonlinear_equation | experimental | tested | simulate, visualize, animate, solve |
 | `slip_quadruped/periodic_apex` | nonlinear_equation | validated | source-equivalent | simulate, visualize, animate, solve, continue, homotopy, family scan |
+| `slip_quadruped/periodic_orbit` | nonlinear_equation | experimental | tested | simulate, visualize, animate, solve, continue, homotopy, family scan |
 | `slip_quadruped/demo_stride` | simulation | tutorial | tested | simulate, visualize, animate |
+| `slip_quadruped/section_return_timing` | nonlinear_equation | experimental | tested | simulate, visualize, animate, solve |
+| `slip_quadruped/n_stride_simulation` | simulation | validated | tested | simulate, visualize, animate |
 | `tutorial_hopper/periodic_hop` | nonlinear_equation | tutorial | tested | simulate, visualize, animate, solve, continue |
 | `tutorial_hopper/demo_hop` | simulation | tutorial | tested | simulate, visualize, animate |
+| `tutorial_hopper/section_return_timing` | nonlinear_equation | tutorial | tested | simulate, visualize, animate, solve |
+| `tutorial_hopper/periodic_orbit` | nonlinear_equation | tutorial | tested | simulate, visualize, animate, solve, continue |
+| `tutorial_hopper/n_stride_simulation` | simulation | validated | tested | simulate, visualize, animate |
+| `tutorial_hopper/contact_timing_sequence` | nonlinear_equation | tutorial | tested | solve |
 <!-- LMZ:PROBLEM_TABLE:END -->
 
 `validated` means a problem has numerical regression evidence; `source-equivalent` means that evidence is tied to an immutable captured source baseline. `tutorial • tested` means the analytic demonstration works as designed, not that it reproduces a publication model.
@@ -274,8 +288,197 @@ Recommended end-to-end examples are:
 - `demo_slip_quad_load_single_stride.m`, `demo_slip_quad_load_multi_stride.m`, and `demo_slip_quad_load_fit.m`
 - `demo_slip_quadruped_roadmap_workflow.m`, `demo_all_scientific_models.m`, and `demo_full_desktop_workflow.m`
 - `demo_tutorial_hopper.m` for the complete built-in analytic hybrid/scene workflow
+- the eleven Round 9 section, timing, periodic, N-stride, and model-building
+  examples listed in the next section
 
 Each is safe to rerun, uses public APIs and repository-contained data, leaves a structured `output`, and prints an exact success marker.
+
+## Poincaré, timing-only, and N-stride workflows
+
+Round 9 separates four operations that are easy to conflate: selecting a
+Poincaré section, solving event timing with fixed physical data, enforcing
+periodicity, and completing/simulating a stride plan. Start MATLAB in the
+repository root and run `startup` once.
+
+Inspect a catalog-driven return and rephase a solved hopper orbit:
+
+```matlab
+registry = lmz.registry.ModelRegistry.discover();
+model = registry.createModel('tutorial_hopper');
+problem = model.createProblem('periodic_hop',struct());
+u = problem.getDecisionSchema().defaults();
+p = problem.getParameterSchema().defaults();
+context = lmz.api.RunContext.synchronous(901);
+evaluation = problem.evaluate(u,p,context,true);
+solution = problem.makeSolution(u,p,evaluation);
+
+returned = lmz.services.PoincareReturnService().simulate( ...
+    model,solution,struct('StopSectionId','height_descending'),context);
+transferred = lmz.services.SectionTransferService().transfer( ...
+    model,solution,'height_descending',context);
+assert(returned.StopCrossing.Accepted);
+assert(transferred.PhaseInvariantObservablesPreserved);
+assert(transferred.DecisionCodecRephased);
+```
+
+For the built-in tutorial, quadruped, and biped periodic codecs, transfer
+constructs a section-configured `periodic_orbit` solution and verifies that a
+fresh target-problem evaluation reproduces the transferred trajectory before
+setting `DecisionCodecRephased=true`. An external model with an unsupported
+decision codec retains `false` and must supply its own rephasing adapter before
+continuation. Composite catalog entries are also executable: each must provide
+nonempty, safe declarative acceptance conditions in addition to its primary
+section, and return/transfer services apply those conditions to every candidate
+crossing.
+
+Solve contact timing without changing the initial state or physical
+parameters. This is not a periodic-orbit solve:
+
+```matlab
+timingProblem = model.createProblem('section_return_timing',struct());
+fixedState = timingProblem.FixedInitialState;
+fixedParameters = timingProblem.FixedPhysicalParameters;
+timing = lmz.services.ContactTimingService().solve( ...
+    timingProblem,timingProblem.InputSchedule, ...
+    struct('MultistartCount',1,'Display','off'),context);
+assert(isequaln(timing.FixedInitialState,fixedState));
+assert(isequaln(timing.FixedPhysicalParameters,fixedParameters));
+assert(timing.SolverDiagnostics.NoPeriodicityResidual);
+```
+
+The tutorial also supports a genuine selected-section timing solve from one
+descending-height crossing to the next:
+
+```matlab
+descendingProblem = model.createProblem('section_return_timing',struct( ...
+    'StartSectionId','height_descending', ...
+    'StopSectionId','height_descending'));
+descending = lmz.services.ContactTimingService().solve( ...
+    descendingProblem,descendingProblem.InputSchedule, ...
+    struct('MultistartCount',1,'Display','off'),context);
+assert(strcmp(descending.SectionCrossing.SectionId,'height_descending'));
+assert(descending.SectionCrossing.Accepted);
+assert(descending.FixedInitialState(3) == 0.1);
+assert(descending.FixedInitialState(4) < 0);
+assert(norm([descending.ContactResiduals;descending.SectionResidual]) < 1e-9);
+```
+
+That state-plane path is intentionally narrow. The three migrated scientific
+providers currently support apex-to-apex timing only and reject non-apex
+requests instead of mislabeling them as source-equivalent. Tutorial named-event
+timing endpoints are likewise unsupported, and an apex-to-descending-height
+request is rejected because the requested occurrence is ambiguous relative to
+impact. The registered tutorial `contact_timing_sequence` problem provides the
+explicit N-stride timing-sequence formulation when more than one return is
+needed.
+
+The load adapter can demonstrate the exact five-stride
+`44 + 13*(N-1)` layout by explicitly copying schedules. That is a synthetic
+plan-layout demonstration, not a claim that the copied schedules return to the
+requested section:
+
+```matlab
+loadModel = registry.createModel('slip_quad_load');
+catalog = lmzmodels.slip_quad_load.ScientificDatasetCatalog.default();
+dataset = catalog.load(catalog.Manifest.defaultMultiStride);
+layoutRequest = lmz.multistride.MultiStrideRequest( ...
+    'NumberOfStrides',5,'InitialDecision',dataset.XAccum, ...
+    'CompletionPolicy','carry_forward', ...
+    'EnergyNeutralOnly',true,'FailurePolicy','error');
+layout = lmzmodels.slip_quad_load.QuadLoadStridePlanBuilder().build( ...
+    layoutRequest,context);
+xAccum5 = lmzmodels.slip_quad_load.XAccumPlanAdapter.encode(layout.Plan);
+assert(layout.CompletedStrideCount == 5);
+assert(numel(xAccum5) == 96);
+```
+
+Request timing correction separately and retain its structured partial-failure
+evidence. On the bundled two-stride seed, the stride-three prediction is
+outside the validated correction trust region, so no five-stride simulation is
+fabricated:
+
+```matlab
+correctedRequest = lmz.multistride.MultiStrideRequest( ...
+    'NumberOfStrides',5,'InitialDecision',dataset.XAccum, ...
+    'CompletionPolicy','predictor_corrector', ...
+    'EnergyNeutralOnly',true,'FailurePolicy','return_partial');
+corrected = lmz.services.MultiStrideSimulationService().simulate( ...
+    loadModel,correctedRequest,context);
+assert(corrected.Partial && corrected.CompletedStrideCount == 2);
+assert(strcmp(corrected.CompletionStatus,'failed'));
+assert(isempty(corrected.Simulation));
+assert(strcmp(corrected.Failure.Identifier, ...
+    'lmz:MultiStride:TimingSeedOutsideTrustRegion'));
+```
+
+For optimization with a complete fixed schedule, use the experimental Round 9
+`n_stride_fit` problem. Its default is a hash-bound, repository-captured
+two-stride fixed-timing seed; objective evaluation performs no timing solve and
+the 18 contact/section equations remain explicit constraints:
+
+```matlab
+two = loadModel.createProblem('n_stride_fit',struct());
+[c2,ceq2] = two.nonlinearConstraints( ...
+    two.getDecisionSchema().defaults(), ...
+    two.getParameterSchema().defaults(),context);
+assert(isempty(c2) && numel(ceq2) == 18);
+```
+
+Measurements bundled with the load dataset cover two strides. A repeated
+third stride can demonstrate the 70-decision/27-constraint schema, but it is
+not a validated timing seed or successful fit. It requires an explicit
+synthetic reference policy and is not source-equivalent:
+
+```matlab
+threeDecision = [two.SourceDecision; two.SourceDecision(end-12:end)];
+three = loadModel.createProblem('n_stride_fit',struct( ...
+    'InitialDecision',threeDecision,'NumberOfStrides',3, ...
+    'ReferenceExtensionPolicy','repeat_final_reference'));
+[objective,terms,diagnostics] = three.evaluateObjective( ...
+    three.getDecisionSchema().defaults(), ...
+    three.getParameterSchema().defaults(),context);
+[~,ceq3] = three.nonlinearConstraints( ...
+    three.getDecisionSchema().defaults(), ...
+    three.getParameterSchema().defaults(),context);
+assert(isfinite(objective) && ~diagnostics.HiddenTimingSolve);
+assert(~diagnostics.SourceEquivalent && numel(ceq3) == 27);
+```
+
+The source-equivalent `multi_stride_fit` compatibility problem is intentionally
+separate: it preserves the exact legacy two-stride timing projection and
+reports `HiddenTimingSolve=true`.
+
+The registered `slip_quad_load/n_stride_periodic` problem exposes per-stride
+contact blocks, explicit timing variables, and one final-section closure block.
+The included public example evaluates that formulation, but does not claim a
+converged periodic solution; current one-/two-stride seed experiments have no
+convergence evidence suitable for such a claim.
+
+Run the Round 9 examples directly:
+
+```matlab
+examplesRoot = fullfile(lmz.util.ProjectPaths.root(),'examples');
+run(fullfile(examplesRoot,'demo_custom_poincare_section.m'));
+run(fullfile(examplesRoot,'demo_section_transfer.m'));
+run(fullfile(examplesRoot,'demo_contact_timing_only.m'));
+run(fullfile(examplesRoot,'demo_tutorial_hopper_periodic_continuation.m'));
+run(fullfile(examplesRoot,'demo_tutorial_hopper_five_strides.m'));
+run(fullfile(examplesRoot,'demo_quadruped_contact_timing.m'));
+run(fullfile(examplesRoot,'demo_biped_contact_timing.m'));
+run(fullfile(examplesRoot,'demo_quad_load_extend_to_five_strides.m'));
+run(fullfile(examplesRoot,'demo_quad_load_n_stride_fit.m'));
+run(fullfile(examplesRoot,'demo_n_stride_periodic_orbit.m'));
+run(fullfile(examplesRoot,'demo_build_model_end_to_end.m'));
+```
+
+Each script creates an isolated temporary output location, returns an `output`
+struct, and prints a stable success marker. The full beginner path is in
+[getting-started-build-a-model.md](docs/getting-started-build-a-model.md);
+section selection, timing, multi-stride planning, and periodic continuation are
+covered in [poincare-sections.md](docs/poincare-sections.md),
+[contact-timing-solve.md](docs/contact-timing-solve.md),
+[multi-stride-planning.md](docs/multi-stride-planning.md), and
+[periodic-orbit-and-continuation-tutorial.md](docs/periodic-orbit-and-continuation-tutorial.md).
 
 ## Command-line quick start
 
@@ -454,6 +657,13 @@ optimizationResult = lmz.services.OptimizationService().run( ...
 ```
 
 The load objective reports stride-duration, footfall-timing, and loading-force terms plus guarded R-squared diagnostics, all matched to repository-contained source baselines. The biped objective preserves the source event-timing implicit-expansion behavior and supports both the active penalized Main path and the alternate equality-constrained path. A short bounded run demonstrates objective decrease; it is not presented as global convergence.
+
+For fixed, precompleted schedules beyond the measured two-stride load data,
+use the separate experimental `slip_quad_load/n_stride_fit` problem. It has no
+hidden timing solve, requires a complete plan/vector, and requires the explicit
+`repeat_final_reference` policy when the requested stride count exceeds the
+measured reference. That synthetic extension is never described as
+source-equivalent.
 
 Additional compatibility examples remain available (`demo_slip_biped_fit.m`, `demo_slip_quadruped_solve.m`, `demo_slip_quadruped_continuation.m`, and `demo_full_gui_workflow.m`), while the Round 6 scientific examples listed above are the recommended entry points.
 
@@ -802,4 +1012,34 @@ The untouched Round 6 baseline was rerun under MATLAB R2025b Update 5 before Rou
 
 Round 7 added version/API/artifact compatibility, the componentized GUI/event/preferences layer, compatibility fallbacks, release tooling, generic authoring proofs, security boundaries, reproduction, quality, benchmark, coverage, CI, and governance infrastructure. Round 8 adds source-audited compound research graphics, validated per-problem profiles/configuration, profile-aware GUI/recording, source-style plots, pure geometry fixtures, an 18-case source-versus-LMZ metric matrix, and clean-copy research rendering. The authoritative Round 8 suite passed 275/275, all 31 public examples passed, and the clean-copy isolation gate passed. Geometry-tested and image-metric-tested fidelity are recorded separately from the still-blocked human side-by-side review in [docs/TEST_STATUS.md](docs/TEST_STATUS.md) and [docs/RELEASE_CANDIDATE_STATUS.md](docs/RELEASE_CANDIDATE_STATUS.md).
 
-Release qualifications remain explicit: the human MATLAB desktop walkthrough is not executed; R2019b runtime is not executed; GitHub Actions workflows have not run remotely; and public core/scientific packaging is blocked by the missing project license and unresolved owner decisions. The present recommendation is an internal, numerically testable release candidate—not a public release.
+Round 9 adds catalog-driven Poincaré sections, true section-aware start/stop
+simulation and transfer, safe composite acceptance conditions,
+fixed-state/fixed-physics contact timing, native stride plans, requested-N
+simulation, explicit N-stride residual forms, recovery/checkpoint workflows,
+artifact/reproduction extensions, five detailed guides, and eleven public
+workflows. The final non-instrumented R2025b suite passed `396/396` in
+`549.278033` seconds; all 42 public examples passed in `264.010607` seconds;
+and clean-copy isolation passed in `40.948339` seconds. Instrumented coverage
+passed all stable-package floors at `14,190/18,428` statements (77.0024%)
+across 263 files and 28 packages. Code quality reported 265 files with zero
+unallowlisted violations, architecture checks were clean, and the R2019b
+static scan found zero violations across 558 MATLAB files. The seven Round 9
+performance workflows completed three warm repetitions with no budget
+overruns. Full evidence is recorded in
+[docs/TEST_STATUS.md](docs/TEST_STATUS.md).
+
+For quad-load specifically, five-stride carry-forward currently establishes
+only the exact 96-entry layout. Timing correction stops safely at stride 3 and
+returns a partial `2/5` result with no simulation; the repository does not
+claim a validated five-stride physical return from that seed.
+
+The refreshed redistribution scan inventories 775 candidate files and retains
+760 scientific-profile blockers while the project decision is unresolved.
+Technical-validation ZIP and toolbox clean-install checks pass and label their
+temporary output `NOT_FOR_REDISTRIBUTION`; they do not authorize publication.
+Release qualifications remain explicit: the human MATLAB desktop walkthrough
+is not executed; R2019b runtime is not executed; GitHub Actions workflows have
+not run remotely; and public core/scientific packaging is blocked by the
+missing project license and unresolved owner decisions. The present
+recommendation is an internal, numerically testable release candidate—not a
+public release.

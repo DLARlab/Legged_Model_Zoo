@@ -23,10 +23,14 @@ classdef MultiStrideDecisionSchema
             specs=lmz.schema.VariableSpec.empty(0,1);
             for index=1:numel(names)
                 scale=max(1,abs(defaults(index)));
+                [role,energyEffect]= ...
+                    lmzmodels.slip_quad_load.MultiStrideDecisionSchema.metadataFor( ...
+                    names{index},groups{index});
                 specs(index,1)=lmz.schema.VariableSpec(names{index}, ...
                     'Label',strrep(names{index},'_',' '),'Group',groups{index}, ...
                     'DefaultValue',defaults(index),'Scale',scale, ...
-                    'Unit',lmzmodels.slip_quad_load.MultiStrideDecisionSchema.unitFor(names{index})); %#ok<AGROW>
+                    'Unit',lmzmodels.slip_quad_load.MultiStrideDecisionSchema.unitFor(names{index}), ...
+                    'Role',role,'EnergyEffect',energyEffect); %#ok<AGROW>
             end
             schema=lmz.schema.VariableSchema(specs,'1.0.0');
         end
@@ -50,6 +54,25 @@ classdef MultiStrideDecisionSchema
         end
     end
     methods (Static, Access=private)
+        function [role,energyEffect] = metadataFor(name,group)
+            if contains(group,'events')
+                role='schedule';energyEffect='invariant';
+            elseif contains(group,'post_swing')
+                role='control';energyEffect='state_dependent';
+            elseif strcmp(group,'quadruped_parameters')
+                if startsWith(name,'swing_pre_')||startsWith(name,'swing_post_')
+                    role='control';
+                else
+                    role='physical';
+                end
+                energyEffect='state_dependent';
+            elseif strcmp(group,'load_parameters')
+                role='physical';energyEffect='state_dependent';
+            else
+                role='physical';energyEffect='unknown';
+            end
+        end
+
         function unit = unitFor(name)
             if ~isempty(regexp(name,'(^|_)t(BL|FL|BR|FR)_(TD|LO)$|tAPEX$','once'))
                 unit='sqrt(l0/g)';

@@ -6,8 +6,16 @@ The public legacy branch variable `results` is a 29-by-N matrix. Rows 1–13 are
 
 ## Jerboa branch
 
-The required importer contract is 14-by-N: twelve decision entries followed by left and right swing offsets. Fixture interpretation still requires execution and field inspection.
+The importer contract is 14-by-N: twelve decision entries followed by left and
+right swing offsets. `lmzmodels.slip_biped.Results14Adapter` preserves that
+layout across the six captured branches (2,967 points) with exact round-trip
+and per-point metadata checks.
 
 ## Load-pulling branch
 
-The source uses `X_accum` plus experimental, weight and sensitivity fields. Packing varies between first and later strides and remains unresolved pending fixture-led adapter tests.
+The source uses `X_accum` plus experimental, weight, and sensitivity fields.
+The first stride occupies 44 entries and each later stride adds 13, giving the
+exact `44 + 13*(N-1)` contract. The legacy adapters and native
+`XAccumPlanAdapter` round-trip one-, two-, and requested-N layouts; extensions
+beyond the two measured strides retain explicit synthetic/source-equivalence
+qualifications.

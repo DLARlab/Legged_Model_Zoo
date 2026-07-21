@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0.0",
+  "frameworkVersion": "1.0.0-rc.1",
+  "matlabRelease": "R2025b Update 5",
+  "platform": "macOS arm64",
+  "measuredDate": "2026-07-20",
+  "repetitions": 3,
+  "records": [
+    {"name": "poincare_crossing_detection_1000", "seconds": 0.060582, "spreadSeconds": 0.008066, "budgetSeconds": 5},
+    {"name": "tutorial_contact_timing_solve", "seconds": 0.099593, "spreadSeconds": 0.019963, "budgetSeconds": 15},
+    {"name": "stride_plan_completion_three_added", "seconds": 0.025213, "spreadSeconds": 0.002426, "budgetSeconds": 10},
+    {"name": "tutorial_three_stride_simulation", "seconds": 0.017648, "spreadSeconds": 0.002205, "budgetSeconds": 15},
+    {"name": "tutorial_five_stride_simulation", "seconds": 0.019201, "spreadSeconds": 0.002378, "budgetSeconds": 20},
+    {"name": "n_stride_objective_evaluation", "seconds": 0.054203, "spreadSeconds": 0.010937, "budgetSeconds": 20},
+    {"name": "gui_stride_plan_refresh_20", "seconds": 3.625582, "spreadSeconds": 0.150964, "budgetSeconds": 30}
+  ],
+  "notes": "Three warm-process repetitions; seconds are medians and spreadSeconds is median absolute deviation. The GUI record conservatively includes hidden application construction and model selection before twenty plan refreshes. Quad-load five-stride timing correction is separately qualified as a structured 2/5 partial failure and is not represented as a completed simulation benchmark."
+}

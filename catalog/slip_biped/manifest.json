@@ -4,7 +4,8 @@
   "version": "2.0.0",
   "name": "SLIP Biped",
   "implementationClass": "lmzmodels.slip_biped.Model",
-  "problems": ["periodic_apex", "trajectory_fit", "demo_stride"],
+  "poincareSections": "poincare_sections.json",
+  "problems": ["periodic_apex", "periodic_orbit", "trajectory_fit", "demo_stride", "section_return_timing", "n_stride_simulation"],
   "capabilities": {
     "simulate": true,
     "solve": true,

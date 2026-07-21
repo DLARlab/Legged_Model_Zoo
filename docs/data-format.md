@@ -2,6 +2,11 @@
 
 `Solution` owns model/problem identity, ordered decision/parameter schemas, values, observables, residual blocks, diagnostics, classification, feasibility, lineage, provenance, and creation time.
 
+Each serialized `VariableSpec` includes `Role` and `EnergyEffect`. Allowed roles
+are `physical`, `control`, `schedule`, and `derived`; allowed energy effects are
+`invariant`, `state_dependent`, `work_input`, and `unknown`. Older records
+without these fields load as `physical`/`unknown`.
+
 `SolutionBranch` stores decisions and parameters as `nVariable × nPoint` matrices. Per-point observables/classifications are struct cells; fixed metadata preserves residual blocks, feasibility, diagnostics, and a source record. `point(index)` reconstructs the complete `Solution`. Named coordinates cover decisions, parameters, and scalar observables. Arclength and nearest-point distance use schema scales and cyclic charts.
 
 ## Quadruped Results29 boundary
@@ -21,7 +26,53 @@ The RoadMap manifest records source repository/commit/path and, for every asset,
 
 Raw baseline trajectories retain the source evaluator's duplicate event timestamps. Public `SimulationResult` trajectories keep the final sample at each repeated time so `Time` is strictly increasing, while `EventRecords` preserve event, pre-event, and post-event states separately.
 
-Native MAT files contain exactly one top-level `artifact` struct. Supported types include solution, branch, solve-run, continuation-run, optimization-run, simulation, checkpoint, and branch-family-report. `ArtifactStore` validates common schema/dimension/finite metadata and uses an atomic temporary-save/rename sequence.
+Native MAT files contain exactly one top-level `artifact` struct. Supported
+types include solution, branch, solve-run, continuation-run, optimization-run,
+simulation, checkpoint, branch-family-report, contact-timing-run,
+section-transfer-run, stride-plan, stride-plan-completion-run,
+n-stride-simulation-run, and n-stride-periodic-run. `ArtifactStore` validates
+common schema/dimension/finite metadata and uses an atomic temporary-save/rename
+sequence.
+
+## Poincaré and timing payloads
+
+Section data is serialized as validated plain descriptors and SHA-256
+fingerprints, never executable callbacks. `StrideDefinition` stores start/stop
+section IDs and sides, direction, minimum return time, required event sequence,
+return occurrence, symmetry ID, and both section hashes. `SectionCrossing`
+stores value/derivative, direction/grazing, event/modes, time, pre/post states,
+selected side, occurrence, acceptance, rejection reason, and plain metadata.
+
+`PoincareReturnResult.toStruct()` stores initial, terminal and symmetry-aligned
+states; initial/return coordinates; periodic residual; return time; both
+crossings; simulation; diagnostics; stride definition; section descriptors; and
+symmetry descriptor.
+
+`SectionTransferResult.toArtifact()` records both source/transferred solutions,
+the rotated trajectory, crossing, source return, target section ID, catalog
+descriptors/hashes, symmetry lineage, and physical-orbit error. Executable
+section callbacks are never stored.
+
+`ContactTimingResult.toStruct()` stores fixed initial state and physical
+parameters, input/solved `EventSchedule`, fixed/free masks, contact and section
+residuals, terminal state, crossing, simulation, solver diagnostics, random
+seed, and provenance. Runtime callbacks are not part of this payload.
+
+## Multi-stride payloads
+
+`StridePlan.toStruct()` is authoritative for requested/completed counts,
+initial state, default physical parameters, ordered `StrideSpec` records,
+completion/energy/failure policies, and provenance. Each spec stores section
+IDs/sides, event schedule, physical/control parameters, explicit overrides,
+initial-state source, completion status, diagnostics, and lineage.
+
+`MultiStrideResult.toStruct()` adds simulation, completion status, partial and
+failure details, checkpoints, source-compatible `XAccum`, and per-transition
+energy diagnostics. Provider, checkpoint, and timing-corrector function handles
+are never serialized. `Simulation` may be empty for a structured partial or
+failed completion; inspect status/count/failure before using it. A persisted
+artifact records only plain results and whether runtime configuration was
+supplied.
 
 ## Biped Results14 boundary
 

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "n_stride_simulation",
+  "kind": "simulation",
+  "implementationId": "tutorial_hopper.n_stride_simulation.analytic.v1",
+  "implemented": true,
+  "maturity": "validated",
+  "validationStatus": "tested",
+  "provenance": {"sourceProblem": "periodic_hop", "method": "analytic homogeneous stride repetition"},
+  "capabilities": {"simulate": true, "solve": false, "continue": false, "optimize": false, "visualize": true, "animate": true}
+}

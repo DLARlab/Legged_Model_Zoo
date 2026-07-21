@@ -18,25 +18,41 @@ classdef Model < lmz.api.LeggedModel
             schema=lmzmodels.slip_biped.OffsetParameterSchema.create();
         end
         function value=listProblems(~)
-            value={'periodic_apex','trajectory_fit','demo_stride'};
+            value={'periodic_apex','periodic_orbit','trajectory_fit','demo_stride', ...
+                'section_return_timing','n_stride_simulation'};
         end
         function problem=createProblem(obj,problemId,configuration)
             if nargin<3,configuration=struct();end
             switch problemId
                 case 'periodic_apex'
                     problem=lmzmodels.slip_biped.PeriodicApexProblem(obj,configuration);
+                case 'periodic_orbit'
+                    problem=lmzmodels.slip_biped.PeriodicOrbitProblem( ...
+                        obj,configuration);
                 case 'trajectory_fit'
                     problem=lmzmodels.slip_biped.TrajectoryFitProblem(obj,configuration);
                 case 'demo_stride'
                     problem=lmz.api.SimulationProblem(obj,problemId,configuration);
+                case 'section_return_timing'
+                    problem=lmzmodels.slip_biped. ...
+                        ContactConstraintProvider.createProblem(obj,configuration);
+                case 'n_stride_simulation'
+                    problem=lmz.multistride.NStrideSimulationProblem( ...
+                        obj,configuration);
                 otherwise
                     error('lmz:slip_biped:UnknownProblem','Unknown problem: %s',problemId);
             end
         end
         function result=simulate(obj,request,context)
             switch request.ProblemId
-                case 'periodic_apex'
-                    problem=obj.createProblem('periodic_apex',struct());
+                case 'n_stride_simulation'
+                    configuration=nStrideConfiguration(obj,request, ...
+                        'periodic_apex');
+                    outcome=obj.createProblem(request.ProblemId, ...
+                        configuration).simulate(context);
+                    result=outcome.Simulation;
+                case {'periodic_apex','periodic_orbit'}
+                    problem=obj.createProblem(request.ProblemId,request.Options);
                     [u,p]=lmzmodels.slip_biped.Model.requestValues(problem,request);
                     result=problem.evaluate(u,p,context,true).Simulation;
                     context.progress(1,'Scientific SLIP biped stride simulated.');
@@ -116,4 +132,20 @@ classdef Model < lmz.api.LeggedModel
             context.progress(1,'SLIP biped introductory demonstration simulated.');
         end
     end
+end
+
+function value=nStrideConfiguration(model,request,sourceProblemId)
+value=request.Options;
+problem=model.createProblem(sourceProblemId,struct());
+if isa(request.Solution,'lmz.data.Solution')
+    value.InitialDecision=request.Solution.DecisionValues;
+elseif isfield(value,'decision')
+    value.InitialDecision=problem.getDecisionSchema().pack(value.decision);
+    value=rmfield(value,'decision');
+end
+if isfield(value,'parameters')
+    error('lmz:MultiStride:FixedSourceParameters', ...
+        ['Source-periodic N-stride repetition currently fixes the registered ' ...
+        'physical parameters.']);
+end
 end

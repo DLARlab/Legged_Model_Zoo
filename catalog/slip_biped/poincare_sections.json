@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "1.0.0",
+  "defaultSectionByProblem": {
+    "periodic_apex": "apex",
+    "periodic_orbit": "apex",
+    "section_return_timing": "apex",
+    "n_stride_simulation": "apex"
+  },
+  "sections": [
+    {
+      "id": "apex",
+      "label": "Apex",
+      "kind": "named_event",
+      "eventId": "APEX",
+      "crossingDirection": -1,
+      "stateSide": "post",
+      "minimumReturnTime": 1e-8,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["dx", "y", "alphaL", "dalphaL", "alphaR", "dalphaR"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["validated"],
+      "validationStatus": "source-equivalent"
+    },
+    {
+      "id": "left_touchdown",
+      "label": "Left touchdown",
+      "kind": "named_event",
+      "eventId": "L_TD",
+      "crossingDirection": -1,
+      "stateSide": "post",
+      "minimumReturnTime": 1e-8,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["dx", "y", "dy", "alphaL", "dalphaL", "alphaR", "dalphaR"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["experimental"],
+      "validationStatus": "tested"
+    },
+    {
+      "id": "left_liftoff",
+      "label": "Left liftoff",
+      "kind": "named_event",
+      "eventId": "L_LO",
+      "crossingDirection": 1,
+      "stateSide": "post",
+      "minimumReturnTime": 1e-8,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["dx", "y", "dy", "alphaL", "dalphaL", "alphaR", "dalphaR"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["experimental"],
+      "validationStatus": "untested"
+    },
+    {
+      "id": "right_touchdown",
+      "label": "Right touchdown",
+      "kind": "named_event",
+      "eventId": "R_TD",
+      "crossingDirection": -1,
+      "stateSide": "post",
+      "minimumReturnTime": 1e-8,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["dx", "y", "dy", "alphaL", "dalphaL", "alphaR", "dalphaR"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["experimental"],
+      "validationStatus": "untested"
+    },
+    {
+      "id": "right_liftoff",
+      "label": "Right liftoff",
+      "kind": "named_event",
+      "eventId": "R_LO",
+      "crossingDirection": 1,
+      "stateSide": "post",
+      "minimumReturnTime": 1e-8,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["dx", "y", "dy", "alphaL", "dalphaL", "alphaR", "dalphaR"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["experimental"],
+      "validationStatus": "untested"
+    }
+  ]
+}

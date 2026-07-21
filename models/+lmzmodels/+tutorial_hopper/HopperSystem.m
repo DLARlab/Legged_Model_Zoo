@@ -8,8 +8,11 @@ classdef HopperSystem < lmz.simulation.HybridSystem
 
         function value = initialState(~, request)
             decision = request.Decision;
-            value = [0; decision.horizontal_speed; ...
-                decision.apex_height; 0];
+            initialX=0;if isfield(decision,'initial_x'),initialX=decision.initial_x;end
+            initialVy=0;if isfield(decision,'initial_vertical_speed'), ...
+                    initialVy=decision.initial_vertical_speed;end
+            value = [initialX; decision.horizontal_speed; ...
+                decision.apex_height; initialVy];
         end
 
         function value = initialMode(~, ~)
@@ -25,8 +28,12 @@ classdef HopperSystem < lmz.simulation.HybridSystem
         end
 
         function value = eventPolicy(~, request)
+            impactTime=request.Decision.stride_period/2;
+            if isfield(request.Decision,'impact_time')
+                impactTime=request.Decision.impact_time;
+            end
             event = lmz.simulation.HybridEvent('impact', ...
-                request.Decision.stride_period / 2, ...
+                impactTime, ...
                 'Priority', 0, 'DeclarationOrder', 1, ...
                 'FromMode', 'flight_down', 'ToMode', 'flight_up', ...
                 'ResetId', 'impact');

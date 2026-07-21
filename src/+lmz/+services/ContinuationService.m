@@ -2,6 +2,14 @@ classdef ContinuationService
     %CONTINUATIONSERVICE Run and resume generic numerical continuation.
     methods
         function result=run(~,problem,pair,options,context)
+            if ~isa(pair,'lmz.data.SolutionPair')
+                error('lmz:Continuation:SeedPair', ...
+                    'Continuation requires a SolutionPair.');
+            end
+            lmz.services.SeedService.validateSectionConfiguration( ...
+                problem,pair.First.Lineage);
+            lmz.services.SeedService.validateSectionConfiguration( ...
+                problem,pair.Second.Lineage);
             if isstruct(options),options=lmz.continuation.ContinuationOptions(options);end
             result=lmz.continuation.PseudoArclengthContinuation().run(problem,pair,options,context); context.progress(1,'Continuation complete');
         end

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "n_stride_fit",
+  "kind": "optimization",
+  "implementationId": "slip_quad_load.n_stride_fit.fixed_timing.v1",
+  "implemented": true,
+  "maturity": "experimental",
+  "validationStatus": "tested",
+  "provenance": {"sourceProblem": "multi_stride_fit", "method": "complete StridePlan with explicit fixed event schedules; no nested timing solve"},
+  "capabilities": {"simulate": true, "solve": false, "continue": false, "optimize": true, "visualize": true, "animate": true}
+}

@@ -1,6 +1,6 @@
 # Release candidate status
 
-This report audits Legged Model Zoo `1.0.0-rc.1` on 2026-07-19. It keeps
+This report audits Legged Model Zoo `1.0.0-rc.1` on 2026-07-20. It keeps
 technical validation separate from release authority: a green test does not
 grant permission to redistribute a file, and a configured CI job is not a
 successful remote run.
@@ -13,17 +13,46 @@ decisions remain unresolved. No public ZIP, toolbox, GitHub release, or other
 distribution artifact was retained or published.
 
 **Passed with qualification** as an internal release candidate. The final
-Round 8 R2025b suite passed 275/275, all 31 public examples passed, and the
-clean-copy workflow rendered the research profile for all three scientific
-models. The closing coverage gate and the historical Round 7 baseline are
-recorded below. Technical-validation packages are temporary, carry
-`NOT_FOR_REDISTRIBUTION`, and are removed after verification.
+Round 9 R2025b suite passed 396/396, all 42 public examples passed, and the
+clean-copy workflow exercised all three scientific models, research graphics,
+GUI construction, and artifact reproduction. Coverage, quality, compatibility,
+performance, and packaging evidence are recorded below. Technical-validation
+packages are temporary, carry `NOT_FOR_REDISTRIBUTION`, and are removed after
+verification.
+
+## Round 9 worktree addendum (2026-07-20)
+
+Round 9 is technically closed on the local R2025b batch platform. Catalog-driven
+state/event/composite sections, true section-aware return/transfer, verified
+built-in decision-codec rephasing, fixed-data timing solves, native N-stride
+plans/forms, recovery checkpoints, artifact reproduction, GUI controls, and
+the detailed usage route have all executed. The closing evidence is:
+
+- final suite `396/396` in `549.278033` seconds;
+- all 42 public examples in `264.010607` seconds;
+- clean-copy isolation 1/1 in `40.948339` seconds;
+- coverage `14,190/18,428` statements (77.0024%) across 263 files/28 packages,
+  with all stable floors passing;
+- zero unallowlisted quality violations across 265 files, zero architecture
+  violations, and zero R2019b static violations across 558 MATLAB files; and
+- seven Round 9 benchmarks over three warm repetitions with no budget overrun.
+
+Qualifications remain part of that result:
+
+- the quad-load 96-entry carry-forward layout is labeled synthetic, while
+  predictor-corrector retains a partial `2/5` trust-region failure and no
+  simulation; a validated five-stride return remains unmet;
+- the registered load N-stride periodic example is evaluation-only and makes
+  no solver-convergence claim; and
+- the refreshed 775-file inventory retains 760 blockers under an unresolved
+  project decision; no licensing, redistribution, human-desktop, R2019b-runtime, or remote-CI
+  conclusion changes.
 
 ## Evidence by release dimension
 
 | Dimension | Status | Evidence and qualification |
 |---|---|---|
-| Scientific correctness | Passed with qualification | The untouched Round 6 baseline ran 117 tests with 0 failures and 0 incomplete tests before edits. Round 7 preserved the scientific equations/tolerances and passed 195/195 on R2025b. Round 8 preserved every numerical tolerance, passed 275/275, and adds pinned-source geometry exact to `2.22e-16` for the quadruped plus fixture-backed biped/load geometry. |
+| Scientific correctness | Passed with qualification | The untouched Round 6 baseline ran 117 tests with 0 failures and 0 incomplete tests before edits. Rounds 7–8 preserved the scientific equations/tolerances and closed at 195/195 and 275/275. Round 9 closed at 396/396 with apex timing equivalence, section-return/transfer, N-stride, artifact, GUI, and non-regression checks; the quad-load physical five-stride seed limitation remains explicit. |
 | Research graphics fidelity | Passed with qualification | `research_legacy`, `clean_generic`, and `high_contrast` use pure geometry plus renderer integration. The 18-case headless source-versus-LMZ matrix passes for quadruped, biped, and load; exact metrics are listed below. This is image-metric-tested evidence, not human approval. |
 | Automated GUI | Passed | All six tabs own their complete handles and behavior; lifecycle, event synchronization, accessibility state, generic scenes, application construction, controller workflows, profile selection, and classic-axes/UIAxes renderer integration run in batch tests. |
 | Human desktop | Not executed | No interactive desktop was available in the batch session. Keyboard traversal, visual clipping, research/source side-by-side fidelity, high-contrast appearance, dialog expansion/copy, and real-time interaction still require the checklist in `MANUAL_DESKTOP_QA.md`. |
@@ -35,18 +64,19 @@ recorded below. Technical-validation packages are temporary, carry
 | Redistribution authority | Blocked | Project decision is `NOASSERTION`/unresolved. The machine-readable inventory lists every file, source/hash, classification, profile, release role, required notice, and inherited decision. No authority was fabricated. |
 | External extensibility | Passed | A generated external `analytic_hopper` fixture is discovered only through the explicit plugin API and runs simulation, solve, continuation, rendering, artifacts, and clean removal without modifying core registration code. |
 | Hybrid and scene contracts | Passed | The analytic plugin and built-in `tutorial_hopper` exercise native hybrid modes/events/resets plus validated declarative 2-D scene contracts. Scientific compatibility evaluators remain unchanged. |
-| Performance | Passed | In addition to the historical workflow baseline, focused research-renderer medians cover construction, 100-frame updates, profile switching, capture, ground generation, and phase-diagram updates. All observed handle counts remain stable. |
-| Coverage | Passed | The closing 275-test instrumented run covered 9,601/12,546 statements (76.5264%) across 204 runtime files and 25 packages. No runtime file was excluded and all five tracked Round 7 stable-package floors passed. |
-| Code quality | Passed with qualification | The repository analyzer reports zero unallowlisted violations. It still reports informational missing-help and complexity findings explicitly rather than hiding them behind a broad suppression. |
+| Performance | Passed | The seven Round 9 workflows completed three warm repetitions (21 records) with no budget overrun. Final-suite research-renderer construction, 100-frame updates, profile switching, capture, ground generation, and phase-diagram updates also passed with stable handle counts. |
+| Coverage | Passed | The closing 396-test instrumented run covered 14,190/18,428 statements (77.0024%) across 263 runtime files and 28 packages. No runtime file was excluded and all five tracked stable-package floors passed. |
+| Code quality | Passed with qualification | The repository analyzer checked 265 files and reports zero unallowlisted violations. It still reports informational missing-help and complexity findings explicitly rather than hiding them behind a broad suppression; architecture and the 558-file R2019b static scan report zero violations. |
 | Security/trust boundaries | Passed with qualification | JSON size/depth/key limits, canonical path containment, MAT variable/type/shape checks, plugin trust lifecycle, and hostile-input tests pass. MAT validation is a data-contract boundary, not a malware sandbox; nested MATLAB objects may deserialize before recursive rejection. |
 | Raster retention | Passed | No comparison or golden raster is committed. Machine-readable batch metrics are retained; redistribution authority must be resolved before source-derived image evidence is added. |
-| Documentation/API contract | Passed with qualification | Versioning, API stability, authoring, configuration, testing, visualization, artifacts, architecture, governance, CI, release notes, detailed usage README, and migration status are present. Round 8 configuration/authoring, fidelity-map, comparison, test, migration, and release evidence is reconciled to the closing gates. |
+| Documentation/API contract | Passed with qualification | Versioning, API stability, executable authoring, configuration, testing, visualization, sections/timing/N-stride usage, artifacts, architecture, governance, CI, release notes, detailed README, and migration status are present. Generated documentation validates four models and 24 problem kinds. |
 
 ## Environment and frozen baseline
 
 - Repository: `/Users/nanyoujiayu/Documents/GitHub/Legged_Model_Zoo`
 - Round 7 frozen HEAD: `0ec3b32c7e6ed1db6efd86c30a9fd3c38cb73d11`
 - Round 8 closing HEAD: `c2616735354a354fa432bac549f81861f8ddd9a5`; the requested implementation remains an uncommitted worktree change
+- Round 9 base HEAD: `f65abf2f9dee17b3b5be363f8d6e508631a7435c`; the requested implementation remains an uncommitted worktree change
 - Framework candidate: `1.0.0-rc.1`
 - MATLAB: R2025b Update 5, `25.2.0.3177638`, Student License
 - Platform: macOS arm64; MATLAB batch mode (`usejava('desktop') == false`)
@@ -121,10 +151,10 @@ python3 tools/ci/static_checks.py --all
 git diff --check
 ```
 
-Round 8 coverage was measured with `tools/run_coverage.m` over every runtime
-file under `src/+lmz` and `models/+lmzmodels`; its 275-test run enforced the
-tracked Round 7 stable-package floors. Performance is measured with warm
-repetitions through the focused research-renderer benchmark and
+Round 9 coverage was measured with `tools/run_coverage.m` over every runtime
+file under `src/+lmz` and `models/+lmzmodels`; its 396-test run enforced every
+tracked stable-package floor. Performance is measured with warm repetitions
+through the focused research-renderer benchmark and
 `benchmarks/run_benchmarks.m`.
 
 ## Release recommendation

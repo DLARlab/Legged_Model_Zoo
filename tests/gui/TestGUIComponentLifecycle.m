@@ -40,6 +40,20 @@ classdef TestGUIComponentLifecycle < matlab.unittest.TestCase
             testCase.verifyEqual(controller.Events.subscriptionCount(),0);
             testCase.verifyEmpty(app.Figure);delete(app);preferences.reset();
         end
+
+        function inspectorShowsRoleAndEnergyMetadata(testCase)
+            [app,cleanup]=makeApp();
+            app.Controller.selectModel('tutorial_hopper');drawnow;
+            tableHandle=app.tab('solution').ParameterTable;
+            testCase.verifyEqual(tableHandle.ColumnName{5}, ...
+                'Bounds / activity / role / energy');
+            row=find(strcmp(tableHandle.Data(:,1),'gravity'),1);
+            testCase.verifyNotEmpty(row);
+            testCase.verifySubstring(tableHandle.Data{row,5},'physical');
+            testCase.verifySubstring( ...
+                tableHandle.Data{row,5},'state_dependent');
+            clear cleanup
+        end
     end
 end
 

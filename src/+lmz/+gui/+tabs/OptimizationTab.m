@@ -6,6 +6,8 @@ classdef OptimizationTab < lmz.gui.tabs.BaseTab
         R2Axes
         RunButton
         CancelButton
+        StrideCountSpinner
+        PlanStatusLabel
     end
 
     methods
@@ -17,6 +19,7 @@ classdef OptimizationTab < lmz.gui.tabs.BaseTab
                 lmz.gui.PresentationEvents.ProblemChanged, ...
                 lmz.gui.PresentationEvents.WorkingSolutionChanged, ...
                 lmz.gui.PresentationEvents.OptimizationChanged, ...
+                lmz.gui.PresentationEvents.StridePlanChanged, ...
                 lmz.gui.PresentationEvents.RunStateChanged});
             obj.setCapabilities(controller.capabilities());obj.refresh();
         end
@@ -29,7 +32,14 @@ classdef OptimizationTab < lmz.gui.tabs.BaseTab
             title(obj.SensitivityAxes,'Sensitivity / terms');
             obj.R2Axes=uiaxes(grid,'Tag','lmz-optimization-r2');
             title(obj.R2Axes,'Fit quality');
-            controls=uigridlayout(grid,[1 2]);place(controls,2,[1 3]);
+            controls=uigridlayout(grid,[1 5]);place(controls,2,[1 3]);
+            uilabel(controls,'Text','Plan strides');
+            obj.StrideCountSpinner=uispinner(controls,'Limits',[1 100], ...
+                'Value',1,'Step',1,'RoundFractionalValues','on', ...
+                'Tag','lmz-optimization-stride-count', ...
+                'ValueChangedFcn',@(~,~)obj.strideCountChanged());
+            obj.PlanStatusLabel=uilabel(controls,'Text','No plan', ...
+                'Tag','lmz-optimization-plan-status');
             obj.RunButton=uibutton(controls,'Text','Run fit (supported models)', ...
                 'Tag','lmz-optimization-run', ...
                 'Tooltip','Run the bounded fit for the selected optimization problem.', ...
@@ -38,12 +48,22 @@ classdef OptimizationTab < lmz.gui.tabs.BaseTab
                 'Tag','lmz-optimization-cancel', ...
                 'Tooltip','Request a controlled stop of the current fit.', ...
                 'ButtonPushedFcn',@(~,~)obj.Controller.stopCurrentRun());
-            obj.ActionControls={obj.RunButton};obj.CancelControls={obj.CancelButton};
+            obj.ActionControls={obj.RunButton obj.StrideCountSpinner};
+            obj.CancelControls={obj.CancelButton};
         end
 
         function refresh(obj,varargin)
             refresh@lmz.gui.tabs.BaseTab(obj);
             result=obj.Controller.State.OptimizationResult;
+            obj.StrideCountSpinner.Value= ...
+                obj.Controller.State.RequestedStrideCount;
+            plan=obj.Controller.State.StridePlan;
+            if isempty(plan)
+                obj.PlanStatusLabel.Text='No completed plan';
+            else
+                obj.PlanStatusLabel.Text=sprintf('%d/%d strides complete', ...
+                    plan.CompletedStrideCount,plan.RequestedStrideCount);
+            end
             if isempty(result)
                 cla(obj.ObjectiveAxes);cla(obj.SensitivityAxes);cla(obj.R2Axes);
                 title(obj.ObjectiveAxes,'Objective history');
@@ -73,7 +93,8 @@ classdef OptimizationTab < lmz.gui.tabs.BaseTab
             names={batch.Name};
             if any(ismember(names,{lmz.gui.PresentationEvents.ModelChanged, ...
                     lmz.gui.PresentationEvents.ProblemChanged, ...
-                    lmz.gui.PresentationEvents.OptimizationChanged}))
+                    lmz.gui.PresentationEvents.OptimizationChanged, ...
+                    lmz.gui.PresentationEvents.StridePlanChanged}))
                 obj.refresh(batch);
             end
         end
@@ -81,11 +102,24 @@ classdef OptimizationTab < lmz.gui.tabs.BaseTab
         function controls=controlMap(obj)
             controls=struct('ObjectiveAxes',obj.ObjectiveAxes, ...
                 'SensitivityAxes',obj.SensitivityAxes,'R2Axes',obj.R2Axes, ...
-                'RunButton',obj.RunButton,'CancelButton',obj.CancelButton);
+                'RunButton',obj.RunButton,'CancelButton',obj.CancelButton, ...
+                'StrideCountSpinner',obj.StrideCountSpinner, ...
+                'PlanStatusLabel',obj.PlanStatusLabel);
         end
     end
 
     methods (Access=private)
+        function strideCountChanged(obj)
+            state=obj.Controller.State;
+            try
+                obj.Controller.setStrideSettings( ...
+                    obj.StrideCountSpinner.Value,state.CompletionPolicy, ...
+                    state.FailurePolicy,state.EnergyNeutralOnly);
+            catch exception
+                obj.refresh();obj.reportError(exception);
+            end
+        end
+
         function optimize(obj)
             if ~obj.Controller.capabilities().optimize
                 obj.reportStatus('Selected problem does not support optimization.');

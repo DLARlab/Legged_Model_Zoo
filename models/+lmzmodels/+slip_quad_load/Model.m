@@ -3,7 +3,7 @@ classdef Model < lmz.api.LeggedModel
     methods
         function value=getManifest(~),value=struct('id','slip_quad_load','version','2.0.0');end
         function value=getCapabilities(~)
-            value=struct('simulate',true,'solve',false,'continue',false, ...
+            value=struct('simulate',true,'solve',true,'continue',false, ...
                 'optimize',true,'visualize',true,'animate',true, ...
                 'parameterHomotopy',false,'branchFamilyScan',false);
         end
@@ -11,32 +11,109 @@ classdef Model < lmz.api.LeggedModel
             common=struct('simulate',true,'solve',false,'continue',false, ...
                 'optimize',false,'visualize',true,'animate',true);
             fit=common;fit.optimize=true;
+            periodic=common;periodic.solve=true;
             value=[struct('id','demo_stride','maturity','tutorial', ...
                 'validationStatus','tested','capabilities',common), ...
                 struct('id','single_stride','maturity','validated', ...
                 'validationStatus','source-equivalent','capabilities',common), ...
                 struct('id','multi_stride_fit','maturity','validated', ...
-                'validationStatus','source-equivalent','capabilities',fit)];
+                'validationStatus','source-equivalent','capabilities',fit), ...
+                struct('id','n_stride_fit','maturity','experimental', ...
+                'validationStatus','tested','capabilities',fit), ...
+                struct('id','n_stride_simulation','maturity','validated', ...
+                'validationStatus','tested','capabilities',common), ...
+                struct('id','n_stride_periodic','maturity','experimental', ...
+                'validationStatus','tested','capabilities',periodic)];
         end
         function schema=getPhysicalStateSchema(~),schema=lmzmodels.slip_quad_load.PhysicalStateSchema.create();end
         function schema=getParameterSchema(~)
-            schema=lmz.schema.VariableSchema([lmz.schema.VariableSpec('speed','DefaultValue',.8); ...
-                lmz.schema.VariableSpec('stride_period','DefaultValue',.9,'LowerBound',0,'Topology','positive'); ...
-                lmz.schema.VariableSpec('rope_length','DefaultValue',.8,'LowerBound',0,'Topology','positive')]);
+            schema=lmz.schema.VariableSchema([ ...
+                lmz.schema.VariableSpec('speed','DefaultValue',.8, ...
+                    'Role','control','EnergyEffect','unknown'); ...
+                lmz.schema.VariableSpec('stride_period','DefaultValue',.9, ...
+                    'LowerBound',0,'Topology','positive','Role','schedule', ...
+                    'EnergyEffect','invariant'); ...
+                lmz.schema.VariableSpec('rope_length','DefaultValue',.8, ...
+                    'LowerBound',0,'Topology','positive','Role','physical', ...
+                    'EnergyEffect','state_dependent')]);
         end
-        function value=listProblems(~),value={'demo_stride','single_stride','multi_stride_fit'};end
+        function value=listProblems(~),value={'demo_stride','single_stride', ...
+                'multi_stride_fit','section_return_timing', ...
+                'n_stride_simulation','n_stride_fit','n_stride_periodic'};end
         function problem=createProblem(obj,problemId,configuration)
             if nargin<3,configuration=struct();end
             switch problemId
                 case 'demo_stride',problem=lmz.api.SimulationProblem(obj,problemId,configuration);
-                case 'single_stride',problem=lmzmodels.slip_quad_load.SingleStrideProblem(obj,configuration);
-                case 'multi_stride_fit',problem=lmzmodels.slip_quad_load.MultiStrideFitProblem(obj,configuration);
+                case 'single_stride',problem=createSingleStrideProblem(obj,configuration);
+                case 'multi_stride_fit',problem=createMultiStrideFitProblem(obj,configuration);
+                case 'n_stride_fit'
+                    configuration.ProblemId='n_stride_fit';
+                    configuration.ObjectiveTimingMode='fixed_precompleted';
+                    problem=lmzmodels.slip_quad_load.MultiStrideFitProblem( ...
+                        obj,configuration);
+                case 'section_return_timing',problem=lmzmodels.slip_quad_load. ...
+                        ContactConstraintProvider.createProblem(obj,configuration);
+                case 'n_stride_simulation'
+                    problem=lmz.multistride.NStrideSimulationProblem( ...
+                        obj,multiStrideConfiguration(configuration));
+                case 'n_stride_periodic'
+                    problem=lmzmodels.slip_quad_load.NStridePeriodicFactory. ...
+                        create(obj,configuration);
                 otherwise,error('lmz:slip_quad_load:UnknownProblem','Unknown problem: %s',problemId);
             end
         end
         function result=simulate(obj,request,context)
             context.check();
             if strcmp(request.ProblemId,'demo_stride'),result=obj.simulateTutorial(request,context);return,end
+            if strcmp(request.ProblemId,'n_stride_simulation')
+                configuration=request.Options;
+                if isa(request.Solution,'lmz.data.Solution')
+                    configuration.InitialDecision=request.Solution.DecisionValues;
+                elseif isfield(configuration,'XAccum')
+                    configuration.InitialDecision=configuration.XAccum(:);
+                    configuration=rmfield(configuration,'XAccum');
+                end
+                outcome=obj.createProblem(request.ProblemId, ...
+                    configuration).simulate(context);
+                result=outcome.Simulation;return
+            end
+            if strcmp(request.ProblemId,'n_stride_periodic')
+                problem=obj.createProblem(request.ProblemId,request.Options);
+                decision=problem.getDecisionSchema().defaults();
+                parameters=problem.getParameterSchema().defaults();
+                if isa(request.Solution,'lmz.data.Solution')
+                    decision=request.Solution.DecisionValues;
+                    parameters=request.Solution.ParameterValues;
+                elseif isfield(request.Options,'decision')
+                    decision=problem.getDecisionSchema().pack( ...
+                        request.Options.decision);
+                    if isfield(request.Options,'parameters')
+                        parameters=problem.getParameterSchema().pack( ...
+                            request.Options.parameters);
+                    end
+                end
+                result=problem.evaluate(decision,parameters,context,true).Simulation;
+                return
+            end
+            if strcmp(request.ProblemId,'single_stride')&& ...
+                    hasStrideRoutingFields(request.Options)
+                configuration=request.Options;
+                if isfield(configuration,'XAccum')
+                    configuration.InitialDecision=configuration.XAccum(:);
+                    configuration=rmfield(configuration,'XAccum');
+                elseif isa(request.Solution,'lmz.data.Solution')
+                    configuration.InitialDecision= ...
+                        request.Solution.DecisionValues;
+                end
+                problem=obj.createProblem('single_stride',configuration);
+                if isa(problem,'lmz.multistride.NStrideSimulationProblem')
+                    outcome=problem.simulate(context);result=outcome.Simulation;
+                else
+                    result=problem.simulateDecision( ...
+                        problem.getDecisionSchema().defaults(),context);
+                end
+                return
+            end
             problem=obj.createProblem(request.ProblemId,struct());options=request.Options;
             if isa(request.Solution,'lmz.data.Solution')
                 decision=request.Solution.DecisionValues;
@@ -105,4 +182,152 @@ classdef Model < lmz.api.LeggedModel
 end
 function value=fieldOr(source,name,fallback)
 if isfield(source,name),value=source.(name);else,value=fallback;end
+end
+
+function value=multiStrideConfiguration(value)
+if isfield(value,'InitialDecision')||isfield(value,'StridePlan')
+    return
+end
+catalog=lmzmodels.slip_quad_load.ScientificDatasetCatalog.default();
+dataset=lmzmodels.slip_quad_load.XAccumAdapter.loadDataset( ...
+    catalog.defaultMultiPath());
+value.InitialDecision=dataset.XAccum;
+end
+
+function problem=createSingleStrideProblem(model,configuration)
+[configuration,count]=normalizeStrideConfiguration(configuration,1);
+if count==1
+    if isfield(configuration,'StridePlan')&&~isempty(configuration.StridePlan)
+        configuration.InitialDecision= ...
+            lmzmodels.slip_quad_load.XAccumPlanAdapter.encode( ...
+            configuration.StridePlan);
+        configuration=rmfield(configuration,'StridePlan');
+    end
+    problem=lmzmodels.slip_quad_load.SingleStrideProblem( ...
+        model,configuration);
+    return
+end
+if ~isfield(configuration,'InitialDecision')&& ...
+        ~isfield(configuration,'StridePlan')&&isfield(configuration,'DatasetPath')
+    dataset=lmzmodels.slip_quad_load.XAccumAdapter.loadDataset( ...
+        configuration.DatasetPath);
+    configuration.InitialDecision=dataset.XAccum;
+end
+configuration=simulationConfiguration(configuration);
+problem=lmz.multistride.NStrideSimulationProblem( ...
+    model,multiStrideConfiguration(configuration));
+end
+
+function problem=createMultiStrideFitProblem(model,configuration)
+generalized=isfield(configuration,'NumberOfStrides')|| ...
+    (isfield(configuration,'StridePlan')&&~isempty(configuration.StridePlan))|| ...
+    (isfield(configuration,'InitialDecision')&& ...
+    ~isempty(configuration.InitialDecision));
+if generalized
+    [configuration,~]=normalizeStrideConfiguration(configuration,2);
+    configuration.ProblemId='n_stride_fit';
+    configuration.ObjectiveTimingMode='fixed_precompleted';
+end
+problem=lmzmodels.slip_quad_load.MultiStrideFitProblem(model,configuration);
+end
+
+function [configuration,requested]=normalizeStrideConfiguration( ...
+        configuration,defaultCount)
+if ~isstruct(configuration)||~isscalar(configuration)
+    error('lmz:MultiStride:SimulationConfiguration', ...
+        'Stride configuration must be a scalar struct.');
+end
+hasPlan=isfield(configuration,'StridePlan')&& ...
+    ~isempty(configuration.StridePlan);
+hasDecision=isfield(configuration,'InitialDecision')&& ...
+    ~isempty(configuration.InitialDecision);
+if hasPlan&&hasDecision
+    error('lmz:MultiStride:AmbiguousInput', ...
+        'Specify StridePlan or InitialDecision, not both.');
+end
+available=0;inferred=defaultCount;source='none';originalLength=0;
+if hasPlan
+    plan=configuration.StridePlan;
+    if ~isa(plan,'lmz.multistride.StridePlan')||~isscalar(plan)|| ...
+            ~strcmp(plan.ModelId,'slip_quad_load')
+        error('lmz:MultiStride:PlanModel', ...
+            'StridePlan must be a scalar slip_quad_load plan.');
+    end
+    available=plan.CompletedStrideCount;
+    inferred=plan.RequestedStrideCount;source='StridePlan';
+    originalLength=xAccumLength(available);
+elseif hasDecision
+    configuration.InitialDecision= ...
+        lmzmodels.slip_quad_load.XAccumAdapter.encode( ...
+        configuration.InitialDecision);
+    available=lmzmodels.slip_quad_load.XAccumAdapter.strideCount( ...
+        configuration.InitialDecision);
+    inferred=available;source='InitialDecision';
+    originalLength=numel(configuration.InitialDecision);
+end
+if isfield(configuration,'NumberOfStrides')
+    requested=configuration.NumberOfStrides;
+    validateStrideCount(requested);
+else
+    requested=inferred;
+    configuration.NumberOfStrides=requested;
+end
+truncatePlan=hasPlan&&requested<=available&& ...
+    (requested<available||configuration.StridePlan.RequestedStrideCount~=requested);
+truncateDecision=hasDecision&&requested<available;
+if truncatePlan
+    originalRequested=configuration.StridePlan.RequestedStrideCount;
+    configuration.StridePlan=configuration.StridePlan.truncate(requested);
+    diagnostics=truncationDiagnostics(source,available,requested, ...
+        originalLength,xAccumLength(requested));
+    diagnostics.OriginalRequestedStrideCount=originalRequested;
+    configuration=recordTruncation(configuration,diagnostics);
+elseif truncateDecision
+    [configuration.InitialDecision,diagnostics]= ...
+        lmzmodels.slip_quad_load.XAccumPlanAdapter.truncate( ...
+        configuration.InitialDecision,requested);
+    diagnostics.Source=source;
+    configuration=recordTruncation(configuration,diagnostics);
+end
+end
+
+function configuration=recordTruncation(configuration,diagnostics)
+configuration.InputTruncationDiagnostics=diagnostics;
+provenance=struct();
+if isfield(configuration,'Provenance')&&isstruct(configuration.Provenance)
+    provenance=configuration.Provenance;
+end
+provenance.InputTruncation=diagnostics;
+configuration.Provenance=provenance;
+end
+
+function value=simulationConfiguration(value)
+if isfield(value,'DatasetPath'),value=rmfield(value,'DatasetPath');end
+if isfield(value,'InputTruncationDiagnostics')
+    value=rmfield(value,'InputTruncationDiagnostics');
+end
+end
+
+function value=truncationDiagnostics(source,original,retained, ...
+        originalLength,retainedLength)
+value=struct('Source',source,'OriginalStrideCount',original, ...
+    'RetainedStrideCount',retained,'OriginalLength',originalLength, ...
+    'RetainedLength',retainedLength,'ExplicitTruncation',true);
+end
+
+function value=xAccumLength(count)
+if count<1,value=0;else,value=44+13*(count-1);end
+end
+
+function validateStrideCount(value)
+if ~isnumeric(value)||~isreal(value)||~isscalar(value)|| ...
+        ~isfinite(value)||value<1||value~=fix(value)
+    error('lmz:MultiStride:StrideCount', ...
+        'NumberOfStrides must be a positive integer.');
+end
+end
+
+function value=hasStrideRoutingFields(configuration)
+value=any(isfield(configuration,{'NumberOfStrides','StridePlan', ...
+    'InitialDecision','XAccum'}));
 end

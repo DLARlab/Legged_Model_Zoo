@@ -2,7 +2,7 @@
 
 ## Environment
 
-- Date: 2026-07-19 Round 8 status refresh
+- Date: 2026-07-20 Round 9 closing verification
 - MATLAB: `25.2.0.3177638 (R2025b) Update 5`, Apple silicon
 - License: Student License
 - Operating system: macOS 26.5.2 (build 25F84), arm64
@@ -13,6 +13,89 @@
 MATLAB R2019b is the compatibility target, but no R2019b installation is
 available. Runtime verification is therefore R2025b-only; the R2019b result
 below is a static audit and is not described as execution evidence.
+
+## Round 9 closing verification
+
+- Base HEAD: `f65abf2f9dee17b3b5be363f8d6e508631a7435c`
+- Framework version: `1.0.0-rc.1`
+- Final non-instrumented suite: `396 run, 0 failed, 0 incomplete` in
+  `549.278033` seconds
+- Instrumented suite: `396/396`; coverage `14,190/18,428` statements
+  (77.0024%) across 263 runtime files and 28 packages, with every tracked
+  stable-package floor passing
+- Public examples: all 42 passed with exact markers in `264.010607` seconds
+- Clean-copy isolation: 1/1 passed in `40.948339` seconds; the isolated run
+  exercised all three scientific models, research graphics, GUI, and artifact
+  reproduction from an empty temporary parent
+- Documentation: contracts passed, the executable author tutorial passed 2/2,
+  and the generated README validated 4 model rows and 24 problem rows
+- Quality/compatibility: 265 files checked with zero unallowlisted quality
+  violations; architecture checks passed; the R2019b static audit found zero
+  violations across 558 MATLAB files
+- Performance: 21 measurements (seven workflows, three warm repetitions) and
+  zero budget overruns
+
+### Section, transfer, and timing evidence
+
+| Workflow | Observed result / scope |
+|---|---|
+| Custom tutorial descending-height return | Accepted transverse crossing at `t=0.403852566131`, directional derivative `-3.96094815836`; simulation starts from the selected section and ends at the accepted stop crossing |
+| Composite sections | Three end-to-end tests passed; registry validation requires nonempty safe declarative conditions, and both return and transfer locators apply them after the primary crossing |
+| Tutorial section transfer | Ground-impact physical-orbit error was at most `1.78e-15`; period and phase-invariant observables were preserved |
+| Built-in decision-codec transfer | Tutorial, quadruped, and biped returned target-configured `periodic_orbit` solutions; fresh target evaluations reproduced the transferred trajectory before `DecisionCodecRephased=true` was recorded |
+| Tutorial apex timing | Residual norm `2.47329473327e-15`; state/physics bitwise unchanged |
+| Tutorial descending-height timing | `height_descending` to `height_descending` crossing accepted, residual below `1e-9`, fixed height `0.1`, and fixed vertical velocity negative |
+| Quadruped apex timing | Residual norm `1.94889638942e-11`; state/physics bitwise unchanged |
+| Biped apex timing | Residual norm `1.16315967992e-13`; state/physics bitwise unchanged |
+| Quad-load apex timing | Residual norm `7.16498253998e-14`; state/physics bitwise unchanged |
+
+Every timing result reported `NoPeriodicityResidual=true`. The three migrated
+scientific timing providers deliberately remain apex-only and reject non-apex
+requests before solve; they are not mislabeled as source-equivalent. Tutorial
+named-event endpoints are unsupported, and an ambiguous apex-to-descending
+occurrence is rejected explicitly. Solver exit flags are retained rather than
+converted into claims: quadruped and load returned small residuals with exit
+flag 4, while tutorial and biped returned exit flag 1.
+
+### Multi-stride, artifacts, and authoring evidence
+
+| Workflow | Observed result / qualification |
+|---|---|
+| Tutorial periodic solve/second seed/continuation | Solved residual `1.75e-15`; 5-point branch |
+| Tutorial five-stride simulation | 5 completed strides, 1,781 strictly ordered public samples |
+| Generic N-stride layout | Quad-load vector lengths are exactly 44/57/70/96 for 1/2/3/5 strides; native plans carry definition, configuration, catalog, and descriptor hashes |
+| Quad-load five-stride layout | `carry_forward` built an exact 96-entry round trip; copied schedules are explicitly synthetic, not validated returns |
+| Quad-load timing-corrected attempt | The deterministic baseline/step-reduction/parameter-homotopy/multistart ladder returned `failed`, partial `2/5`, no simulation, at stride 3 with `lmz:MultiStride:TimingSeedOutsideTrustRegion`; its failure checkpoint resumes deterministically |
+| Quad-load third-stride audit | Independent nonlinear searches reduced the seed residual norm from `0.9407916867` to approximately `0.4347` but did not find a validated third return; the physical five-stride blocker remains |
+| Quad-load fixed-schedule fit | Experimental `n_stride_fit` keeps complete supplied timings fixed, exposes explicit rows, and reports `HiddenTimingSolve=false`; extensions beyond two measured strides require an explicit synthetic reference policy |
+| Legacy load routes | Explicit counts/plans delegate to N-stride forms with truncation diagnostics; bare `single_stride` and `multi_stride_fit` defaults remain unchanged |
+| Registered N-stride forms | Tutorial `contact_timing_sequence` is registered and GUI-selectable; the load periodic example exposes explicit timing/final closure but remains evaluation-only with no convergence claim |
+| Round 9 artifacts | Six artifact/reproduction tests passed, including a first-class N-stride-periodic run producer; declarative payloads are hash-bound and runtime callbacks are rejected |
+| Generated external model | Executable author tutorial passed 2/2, including custom return/timing/periodic/seed/continuation/branch comparison and a clean plugin registry lease |
+
+### Closing performance, graphics, and release evidence
+
+Round 9 benchmark medians/spreads in seconds were crossing detection
+`0.060582/0.008066`, tutorial timing `0.099593/0.019963`, three-stride plan
+completion `0.025213/0.002426`, tutorial three-/five-stride simulation
+`0.017648/0.002205` and `0.019201/0.002378`, N-stride objective evaluation
+`0.054203/0.010937`, and twenty GUI plan refreshes
+`3.625582/0.150964`. Every median was below its tracked budget.
+
+Final-suite graphics construction/update-100/per-frame/profile-switch/capture
+seconds were quadruped `0.130687/0.320315/0.003203/0.082491/0.767753`, biped
+`0.111033/0.200342/0.002003/0.027844/0.897627`, and load
+`0.115339/0.426176/0.004262/0.035000/0.772931`. Their 49/12/34 renderer
+handles remained stable. Dense-ground construction was
+`0.002058/0.001463` seconds for quadruped/biped and 100 phase computations took
+`0.015384` seconds; all geometry, image, profile, and recording tests passed.
+
+The final redistribution scan inventories 775 files with 760 blockers and an
+unresolved project decision. Core ZIP and toolbox technical-validation clean
+installs passed with `NOT_FOR_REDISTRIBUTION`; public builders remain fail
+closed. Human desktop QA, R2019b runtime execution, remote CI, and public
+redistribution authority remain open and are not inferred from the technical
+gate.
 
 ## Round 8 research graphics verification
 

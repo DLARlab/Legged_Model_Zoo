@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "contact_timing_sequence",
+  "kind": "nonlinear_equation",
+  "implementationId": "tutorial_hopper.contact_timing_sequence.explicit.v1",
+  "implemented": true,
+  "maturity": "tutorial",
+  "validationStatus": "tested",
+  "workflowKind": "contact_timing_sequence",
+  "provenance": {
+    "sourceProblem": "section_return_timing",
+    "method": "explicit repeated positive-gap charts with sequential terminal-state propagation; fixed physical parameters; no nested timing solve or state-periodicity row"
+  },
+  "capabilities": {
+    "simulate": false,
+    "solve": true,
+    "continue": false,
+    "optimize": false,
+    "visualize": false,
+    "animate": false,
+    "parameterHomotopy": false,
+    "branchFamilyScan": false
+  }
+}

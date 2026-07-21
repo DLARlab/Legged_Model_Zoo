@@ -111,6 +111,42 @@ This short configuration is a deterministic objective-decrease regression,
 not a global-optimum claim. Increase the iteration/evaluation limits for an
 actual fitting study and retain the resulting options/seed in the artifact.
 
+## Round 9 fixed-schedule and requested-N workflows
+
+`multi_stride_fit` above is the exact two-stride legacy oracle. Its preserved
+source timing projection is explicit in diagnostics as
+`TimingMode='legacy_source_timing_projection'` and `HiddenTimingSolve=true`.
+Use the separate experimental `n_stride_fit` problem when timing must remain a
+fixed input to the objective:
+
+```matlab
+fixed = model.createProblem('n_stride_fit',struct());
+u = fixed.getDecisionSchema().defaults();
+p = fixed.getParameterSchema().defaults();
+[objective,fixedTerms,fixedDiagnostics] = ...
+    fixed.evaluateObjective(u,p,context);
+[c,ceq] = fixed.nonlinearConstraints(u,p,context);
+assert(isfinite(objective));
+assert(isempty(c) && numel(ceq) == 18);
+assert(~fixedDiagnostics.HiddenTimingSolve);
+```
+
+The default is a hash-bound corrected two-stride timing seed captured in this
+repository; no timing service runs inside the objective. For `N>2`, supply a
+complete `44 + 13*(N-1)` vector/plan and explicitly set
+`ReferenceExtensionPolicy='repeat_final_reference'`. The repeated reference is
+synthetic. Repeating the final 13-entry block gives a 70-decision,
+27-constraint three-stride schema demonstration, not a validated timing seed
+or source-equivalent fit.
+
+A five-stride `carry_forward` plan similarly demonstrates the exact 96-entry
+layout only. With the bundled two-stride seed, public predictor-corrector
+simulation returns a structured partial `2/5` failure at stride 3 with
+`lmz:MultiStride:TimingSeedOutsideTrustRegion` and no simulation. See
+[`demo_quad_load_extend_to_five_strides.m`](../../../examples/demo_quad_load_extend_to_five_strides.m),
+[`demo_quad_load_n_stride_fit.m`](../../../examples/demo_quad_load_n_stride_fit.m),
+and [`docs/multi-stride-planning.md`](../../../docs/multi-stride-planning.md).
+
 ## GUI and visualization
 
 Select **SLIP Quadruped with Load** in `legged_model_zoo`. The scientific
@@ -263,6 +299,9 @@ demo_slip_quad_load_multi_stride.m
 demo_slip_quad_load_fit.m
 demo_slip_quad_load_scientific.m
 demo_quad_load_research_graphics.m
+demo_quad_load_extend_to_five_strides.m
+demo_quad_load_n_stride_fit.m
+demo_n_stride_periodic_orbit.m
 demo_visual_profile_switching.m
 demo_research_graphics_recording.m
 demo_graphics_comparison_gallery.m

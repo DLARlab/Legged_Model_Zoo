@@ -71,7 +71,35 @@ Locking synchronizes active dataset, working solution, problem, and oscillator
 index and invalidates stale derived state. The inspector separates initial
 state, event timing, parameters, observables, residual/objective blocks,
 diagnostics, and provenance. Editable values update an unevaluated working copy;
-evaluation repopulates derived data.
+evaluation repopulates derived data. Schema rows display activity, role, and
+energy effect so a control or unknown-energy change is visible before workflow
+handoff.
+
+## Section, timing, and stride interaction contract
+
+Round 9 controls remain generic and capability-driven. A section selector binds
+start/stop IDs and pre/post sides from `PoincareSectionRegistry`; changing a
+section invalidates incompatible working seed pairs, continuation previews,
+checkpoints, and solver state. The UI displays direction, minimum return time,
+required event sequence, occurrence, maturity, validation status, and
+transversality diagnostics.
+
+Solve mode distinguishes **Contact timing only** from **Periodic orbit**.
+Timing-only locks initial state and physical parameters, presents the named
+event table and fixed/free masks, and dispatches `ContactTimingService`.
+Periodic mode dispatches `SolveService` for the periodic problem. The labels and
+result panels must not imply that a stop-section return is state periodicity.
+
+The stride-plan editor displays requested/completed count, per-stride section
+sides, copied physical parameters (read-only by default), event schedule seed,
+four model-defined control overrides where applicable, energy delta, declared
+work, completion policy, and status. Actions such as use defaults, apply
+overrides, validate energy, solve timings, and complete remaining strides send
+explicit data to the controller/services.
+
+`request_user` never opens a core dialog. It returns
+`missing_stride_specification`; the GUI may then focus the editor. Unknown
+energy effects require an explicit policy choice and cannot pass silently.
 
 ## Simulation and extensibility
 

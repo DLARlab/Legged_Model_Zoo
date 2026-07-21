@@ -24,6 +24,15 @@ classdef TrajectoryFitDecisionSchema
                 arguments={'Group','fit_decision','Unit',units{index}, ...
                     'DefaultValue',defaults(index),'LowerBound',lower(index), ...
                     'UpperBound',upper(index),'Scale',scales(index)};
+                if index<=7
+                    arguments=[arguments,{'Role','physical','EnergyEffect','unknown'}]; %#ok<AGROW>
+                elseif index<=12
+                    arguments=[arguments,{'Role','schedule','EnergyEffect','invariant'}]; %#ok<AGROW>
+                elseif index==13
+                    arguments=[arguments,{'Role','physical','EnergyEffect','state_dependent'}]; %#ok<AGROW>
+                else
+                    arguments=[arguments,{'Role','control','EnergyEffect','unknown'}]; %#ok<AGROW>
+                end
                 if index>=8 && index<=11
                     arguments=[arguments,{'Topology','cyclic_time','PeriodSource','tAPEX'}]; %#ok<AGROW>
                 elseif index==12 || index==13 || index==14

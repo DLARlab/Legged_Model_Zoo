@@ -68,9 +68,98 @@ are logical scalars named `simulate`, `solve`, `continue`, `optimize`,
 
 `VariableSpec` supports `Label`, `LatexLabel`, `Group`, `Unit`, `Note`,
 `DefaultValue`, `LowerBound`, `UpperBound`, `Scale`, `Topology`,
-`PeriodSource`, and `Activity`. Topologies are `euclidean`, `positive`,
-`bounded`, `angle`, and `cyclic_time`. Activities are `active`, `inactive`,
-and `derived`.
+`PeriodSource`, `Activity`, `Role`, and `EnergyEffect`. Topologies are
+`euclidean`, `positive`, `bounded`, `angle`, and `cyclic_time`. Activities are
+`active`, `inactive`, and `derived`.
+
+Roles are `physical`, `control`, `schedule`, and `derived`. Energy effects are
+`invariant`, `state_dependent`, `work_input`, and `unknown`. Missing fields in
+older serialized specifications default to `physical` and `unknown`, which is
+the conservative transition behavior.
+
+## Poincaré section catalog
+
+`catalog/<model-id>/poincare_sections.json` uses schema `1.0.0` and contains
+only `schemaVersion`, `defaultSectionByProblem`, and `sections`. Every problem
+default names a declared section; there is no first-entry fallback.
+
+Common section fields are `id`, `label`, `kind`, `crossingDirection` (or the
+equivalent `direction`), `stateSide`, `minimumReturnTime`,
+`requiredEventSequence`, `returnOccurrence`, `coordinateNames`,
+`symmetryClass`, `symmetryParameters`, `maturities`, and `validationStatus`.
+`named_event` requires `eventId`. Declarative `state_plane` requires
+`stateName` and accepts `threshold` and `modeRestriction`. A declarative
+`composite` requires `parameters.primarySectionId` plus a nonempty
+`parameters.conditions` list. Safe condition kinds are `state_comparison`
+(`stateName`, `comparator` in `gt/ge/lt/le`, finite `threshold`, and optional
+`stateSide`), `mode_equals` (`modeId` and optional `stateSide`), and
+`event_seen` (`eventId`). Empty conditions and unknown fields/operators are
+rejected; JSON conditions cannot contain callbacks. A trusted implementation
+class may implement an extension inside the registered code root.
+
+Custom implementation and symmetry classes must resolve uniquely within the
+registered trusted code root and namespace. JSON never stores executable
+section functions.
+
+## Contact timing configuration
+
+`section_return_timing` problems accept `InitialState`,
+`PhysicalParameters`, `EventSchedule`, `FixedEventMask`, `FreeEvents`,
+`FixedEvents`, `FreeReturnTime`, `FixReturnTime`, `MinimumGap`,
+`StartSectionId`, and `StopSectionId`. A complete `EventSchedule` takes
+precedence over masks. The free count must equal the explicit contact plus
+section residual dimension.
+
+Section-pair support is provider-specific. The tutorial implements
+`apex`-to-`apex` and `height_descending`-to-`height_descending`; it rejects
+named-event endpoints and the ambiguous apex-to-descending occurrence. The
+quadruped, biped, and quad-load timing providers are apex-only to preserve the
+migrated source formulation and reject non-apex requests before solve. Catalog
+membership alone does not imply timing-provider support.
+
+`ContactTimingService.solve` additionally accepts ordinary solver options and
+`MultistartCount`/`MultistartScale`. The random sequence is determined by
+`RunContext.RandomSeed`.
+
+## Multi-stride request and policies
+
+`MultiStrideRequest` fields are `NumberOfStrides`, `InitialDecision` or
+`StridePlan`, `CompletionPolicy`, `EnergyPolicy`, `EnergyNeutralOnly`,
+`FailurePolicy`, `StartSectionId`, `StopSectionId`, `ProviderCallback`,
+`ParameterOverrides`, `DeclaredWork`, `MaximumStrides`, and `Provenance`.
+Specifying both input forms is invalid; exceeding `MaximumStrides` is rejected.
+
+Completion policies are `error_if_missing`, `carry_forward`,
+`carry_forward_and_solve_timings`, `predictor_corrector`, `request_user`, and
+`provider_callback`. Failure policies are `return_partial` and `error`.
+`request_user` returns structured missing state; it never invokes a UI.
+
+Energy-policy IDs are `energy_neutral_only`, `declared_work`, and
+`allow_non_neutral`. `EnergyNeutralOnly=true` conflicts with
+`allow_non_neutral`. Unknown energy effects are rejected under every policy.
+Runtime callbacks are not serialized.
+
+### Load N-stride optimization configuration
+
+`slip_quad_load/n_stride_fit` accepts `NumberOfStrides`, a complete
+`InitialDecision` or `StridePlan`, `ReferenceExtensionPolicy`,
+`ActiveOptimizationIndices`, and `InitialPerturbation`. The exact decision
+length is `44 + 13*(N-1)`. An incomplete/fallback plan is rejected before the
+optimizer starts, and objective evaluation keeps the supplied timings fixed
+with `HiddenTimingSolve=false`. Nonlinear constraints expose nine explicit
+contact/section rows per stride.
+
+The bundled reference contains two measured strides. For `N>2`, callers must
+explicitly choose `ReferenceExtensionPolicy='repeat_final_reference'`; this is
+synthetic, experimental, and not source-equivalent. The separate validated
+`multi_stride_fit` compatibility problem is restricted to the exact bundled
+two-stride vector and retains the legacy timing projection with
+`HiddenTimingSolve=true`.
+
+When no plan/vector is supplied, the default two-stride `n_stride_fit` uses a
+hash-bound corrected timing seed captured in the repository; it does not solve
+timings at runtime. Repeating its final 13-entry block demonstrates a
+three-stride schema, but does not by itself satisfy the new nine timing rows.
 
 ## Hybrid simulator options
 

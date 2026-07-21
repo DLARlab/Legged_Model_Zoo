@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "n_stride_simulation",
+  "kind": "simulation",
+  "implementationId": "slip_quad_load.n_stride_simulation.plan.v1",
+  "implemented": true,
+  "maturity": "validated",
+  "validationStatus": "tested",
+  "provenance": {"sourceProblem": "single_stride/multi_stride_fit", "method": "explicit StridePlan completion and X_accum codec"},
+  "capabilities": {"simulate": true, "solve": false, "continue": false, "optimize": false, "visualize": true, "animate": true}
+}

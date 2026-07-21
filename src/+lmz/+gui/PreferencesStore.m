@@ -5,7 +5,7 @@ classdef PreferencesStore < handle
         ProjectRoot
     end
     properties (Constant)
-        SchemaVersion = 2
+        SchemaVersion = 3
     end
 
     methods
@@ -88,6 +88,67 @@ classdef PreferencesStore < handle
             obj.set(name,profileId);
         end
 
+        function value=sectionPreference(obj,modelId,problemId,fallback)
+            if nargin<4,fallback=struct();end
+            name=workflowPreferenceName('Section',modelId,problemId);
+            value=obj.get(name,fallback);
+            required={'StartSectionId','StopSectionId','StartStateSide', ...
+                'StopStateSide','CrossingDirection','MinimumReturnTime'};
+            if ~isstruct(value)||~isscalar(value)||~all(isfield(value,required))
+                value=fallback;return
+            end
+            identifiers={value.StartSectionId,value.StopSectionId};
+            validIds=all(cellfun(@(item)ischar(item)&&~isempty(regexp( ...
+                item,'^[A-Za-z][A-Za-z0-9_]*$','once')),identifiers));
+            validSides=ischar(value.StartStateSide)&& ...
+                ischar(value.StopStateSide)&& ...
+                any(strcmp(value.StartStateSide,{'pre','post'}))&& ...
+                any(strcmp(value.StopStateSide,{'pre','post'}));
+            validNumbers=isnumeric(value.CrossingDirection)&& ...
+                isscalar(value.CrossingDirection)&& ...
+                ismember(value.CrossingDirection,[-1 0 1])&& ...
+                isnumeric(value.MinimumReturnTime)&& ...
+                isscalar(value.MinimumReturnTime)&& ...
+                isfinite(value.MinimumReturnTime)&&value.MinimumReturnTime>=0;
+            if ~(validIds&&validSides&&validNumbers),value=fallback;end
+        end
+
+        function setSectionPreference(obj,modelId,problemId,value)
+            fallback=struct('StartSectionId','apex','StopSectionId','apex', ...
+                'StartStateSide','post','StopStateSide','post', ...
+                'CrossingDirection',0,'MinimumReturnTime',0);
+            name=workflowPreferenceName('Section',modelId,problemId);
+            obj.set(name,value);
+            if ~isequaln(obj.sectionPreference(modelId,problemId,fallback),value)
+                if ispref(obj.Namespace,name),rmpref(obj.Namespace,name);end
+                error('lmz:GUI:SectionPreference', ...
+                    'Poincare section preference is invalid.');
+            end
+        end
+
+        function value=stridePreference(obj,modelId,problemId,fallback)
+            if nargin<4
+                fallback=struct('RequestedStrideCount',1, ...
+                    'CompletionPolicy','error_if_missing', ...
+                    'FailurePolicy','return_partial','EnergyNeutralOnly',true);
+            end
+            name=workflowPreferenceName('Stride',modelId,problemId);
+            value=obj.get(name,fallback);
+            if ~isstruct(value)||~isscalar(value)|| ...
+                    ~all(isfield(value,fieldnames(fallback)))|| ...
+                    ~isnumeric(value.RequestedStrideCount)|| ...
+                    ~isscalar(value.RequestedStrideCount)|| ...
+                    value.RequestedStrideCount<1|| ...
+                    value.RequestedStrideCount~=fix(value.RequestedStrideCount)
+                value=fallback;
+            end
+        end
+
+        function setStridePreference(obj,modelId,problemId,value)
+            name=workflowPreferenceName('Stride',modelId,problemId);
+            obj.set(name,value);
+        end
+
         function reset(obj)
             if ispref(obj.Namespace), rmpref(obj.Namespace); end
         end
@@ -98,7 +159,8 @@ classdef PreferencesStore < handle
                 'WindowPosition',obj.windowPosition([40 40 1460 900]), ...
                 'RecentDataFolder',obj.recentDataFolder(''), ...
                 'RecentOutputFolder',obj.recentOutputFolder(''), ...
-                'VisualizationProfiles',obj.visualizationProfiles());
+                'VisualizationProfiles',obj.visualizationProfiles(), ...
+                'WorkflowPreferences',obj.workflowPreferences());
         end
     end
 
@@ -148,6 +210,20 @@ classdef PreferencesStore < handle
                 end
             end
         end
+
+        function values=workflowPreferences(obj)
+            values=struct();
+            if ~ispref(obj.Namespace),return,end
+            preferences=getpref(obj.Namespace);names=fieldnames(preferences);
+            prefixes={'SectionPreference_','StridePreference_'};
+            for index=1:numel(names)
+                name=names{index};
+                if any(cellfun(@(prefix)strncmp(name,prefix,numel(prefix)), ...
+                        prefixes))
+                    values.(name)=preferences.(name);
+                end
+            end
+        end
     end
 end
 
@@ -160,6 +236,17 @@ if isempty(regexp(modelId,expression,'once'))|| ...
         'Model and problem IDs must be lowercase identifiers.');
 end
 name=['VisualizationProfile_' modelId '__' problemId];
+end
+
+function name=workflowPreferenceName(kind,modelId,problemId)
+modelId=char(modelId);problemId=char(problemId);
+expression='^[a-z][a-z0-9_]*$';
+if isempty(regexp(modelId,expression,'once'))|| ...
+        isempty(regexp(problemId,expression,'once'))
+    error('lmz:GUI:WorkflowPreferenceKey', ...
+        'Model and problem IDs must be lowercase identifiers.');
+end
+name=[kind 'Preference_' modelId '__' problemId];
 end
 
 function value = canonicalPath(value)

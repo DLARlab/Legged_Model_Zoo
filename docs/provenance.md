@@ -10,6 +10,27 @@ Immutable reference repositories selected from the common workspace root:
 
 Round 5 copies the complete quadruped `1_Roadmap` folder: nine MAT branches, two reference FIG files, and no Finder metadata. `roadmap_manifest.json` records all source hashes. Round 6 additionally copies six biped GaitMap MAT branches, two biped trajectory-fit MAT inputs, one 44-entry load single-stride MAT, and one 57-entry load transition MAT. Their manifests record source paths, commits, exact dimensions, hashes, and native artifact paths. All three source repositories were clean before capture and are checked again after validation.
 
+## Round 9 section and multi-stride provenance
+
+Round 9 introduces native framework classes, catalogs, guides, and examples;
+it copies no additional upstream code, datasets, graphics, or raster assets.
+The scientific apex compatibility evaluators and repository fixtures remain
+pinned to the commits above. New scientific section/timing descriptors record
+their source problem and commit but receive their own maturity/validation
+status; they do not inherit `source-equivalent` merely by sharing an apex
+evaluator.
+
+The quad-load stride-plan adapter preserves the captured `X_accum` layout and
+uses the two repository-contained datasets as its only built-in data.
+Carry-forward can structurally generate native blocks beyond the measured
+two-stride reference, but copied schedules are labeled synthetic and are not
+validated returns. The public predictor-corrector attempt stops at the
+stride-three trust-region boundary rather than inventing a replacement
+trajectory. Repeated reference values for an extended fit likewise require
+`ReferenceExtensionPolicy='repeat_final_reference'` and are not presented as
+new measurements. Artifact section/catalog hashes and plan lineage identify
+the exact declarative configuration used without serializing callbacks.
+
 ## Round 8 research graphics provenance
 
 Round 8 does not copy the legacy handle-owning graphics classes into normal

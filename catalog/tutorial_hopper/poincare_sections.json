@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "1.0.0",
+  "defaultSectionByProblem": {
+    "periodic_hop": "apex",
+    "demo_hop": "apex",
+    "periodic_orbit": "apex",
+    "section_return_timing": "apex",
+    "n_stride_simulation": "apex"
+  },
+  "sections": [
+    {
+      "id": "apex",
+      "label": "Descending apex",
+      "kind": "state_plane",
+      "stateName": "vy",
+      "threshold": 0,
+      "modeRestriction": "flight_up",
+      "crossingDirection": -1,
+      "stateSide": "post",
+      "minimumReturnTime": 1e-6,
+      "requiredEventSequence": ["impact"],
+      "returnOccurrence": 1,
+      "coordinateNames": ["vx", "y"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["tutorial"],
+      "validationStatus": "tested"
+    },
+    {
+      "id": "ground_impact_pre",
+      "label": "Ground impact (pre-reset)",
+      "kind": "named_event",
+      "eventId": "impact",
+      "crossingDirection": -1,
+      "stateSide": "pre",
+      "minimumReturnTime": 1e-6,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["vx", "vy"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["tutorial"],
+      "validationStatus": "tested"
+    },
+    {
+      "id": "ground_impact_post",
+      "label": "Ground impact (post-reset)",
+      "kind": "named_event",
+      "eventId": "impact",
+      "crossingDirection": -1,
+      "stateSide": "post",
+      "minimumReturnTime": 1e-6,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["vx", "vy"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["tutorial"],
+      "validationStatus": "tested"
+    },
+    {
+      "id": "height_descending",
+      "label": "Descending height 0.1 m",
+      "kind": "state_plane",
+      "stateName": "y",
+      "threshold": 0.1,
+      "modeRestriction": "flight_down",
+      "crossingDirection": -1,
+      "stateSide": "post",
+      "minimumReturnTime": 1e-6,
+      "requiredEventSequence": [],
+      "returnOccurrence": 1,
+      "coordinateNames": ["vx", "vy"],
+      "symmetryClass": "lmz.poincare.PlanarTranslationSymmetry",
+      "symmetryParameters": {"id": "planar_translation", "positionStateNames": ["x"]},
+      "maturities": ["tutorial"],
+      "validationStatus": "tested"
+    }
+  ]
+}

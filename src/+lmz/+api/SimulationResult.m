@@ -63,16 +63,54 @@ classdef SimulationResult
         end
 
         function value = toStruct(obj)
-            value = struct('time', obj.Time, ...
-                'stateSchema', obj.StateSchema.toStruct(), ...
-                'states', obj.States, 'modes', obj.Modes, ...
-                'observables', obj.Observables, ...
-                'parameters', obj.Parameters, ...
-                'diagnostics', obj.Diagnostics, ...
-                'provenance', obj.Provenance, ...
-                'eventRecords', obj.EventRecords, ...
-                'groundReactionForces', obj.GroundReactionForces, ...
-                'kinematics', obj.Kinematics);
+            % Assign fields individually so cell-valued modes remain one
+            % scalar artifact record instead of expanding a struct array.
+            value = struct();
+            value.time = obj.Time;
+            value.stateSchema = obj.StateSchema.toStruct();
+            value.states = obj.States;
+            value.modes = obj.Modes;
+            value.observables = obj.Observables;
+            value.parameters = obj.Parameters;
+            value.diagnostics = obj.Diagnostics;
+            value.provenance = obj.Provenance;
+            value.eventRecords = obj.EventRecords;
+            value.groundReactionForces = obj.GroundReactionForces;
+            value.kinematics = obj.Kinematics;
+        end
+    end
+
+    methods (Static)
+        function obj = fromStruct(value)
+            required = {'time','stateSchema','states','modes','observables', ...
+                'parameters','diagnostics','provenance'};
+            if ~isstruct(value) || ~isscalar(value) || ...
+                    ~all(isfield(value, required))
+                error('lmz:Simulation:StoredResult', ...
+                    'Stored simulation data are incomplete.');
+            end
+            eventRecords = struct([]);
+            if isfield(value, 'eventRecords')
+                eventRecords = value.eventRecords;
+            end
+            groundReactionForces = [];
+            if isfield(value, 'groundReactionForces')
+                groundReactionForces = value.groundReactionForces;
+            end
+            kinematics = struct();
+            if isfield(value, 'kinematics')
+                kinematics = value.kinematics;
+            end
+            schema = value.stateSchema;
+            if isstruct(schema)
+                schema = lmz.schema.VariableSchema.fromStruct(schema);
+            end
+            obj = lmz.api.SimulationResult(value.time, schema, value.states, ...
+                value.modes, value.observables, value.parameters, ...
+                value.diagnostics, value.provenance, ...
+                'EventRecords', eventRecords, ...
+                'GroundReactionForces', groundReactionForces, ...
+                'Kinematics', kinematics);
         end
     end
 end

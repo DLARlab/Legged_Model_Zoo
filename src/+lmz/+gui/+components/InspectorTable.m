@@ -8,7 +8,7 @@ classdef InspectorTable
                 'Position',[0 0 1 1],'Tag','lmz-inspector-table');
             if editable
                 tableHandle.ColumnName = {'Name','Label','Value','Unit', ...
-                    'Bounds / activity','Scale','Edited'};
+                    'Bounds / activity / role / energy','Scale','Edited'};
                 tableHandle.ColumnEditable = ...
                     [false false true false false false false];
                 if ~isempty(editCallback)

@@ -15,7 +15,7 @@ classdef TestRegistryDiscovery < matlab.unittest.TestCase
                 testCase.verifyTrue(capabilities.simulate);
                 testCase.verifyTrue(capabilities.visualize);
                 if strcmp(ids{index},'slip_quad_load')
-                    testCase.verifyFalse(capabilities.solve);
+                    testCase.verifyTrue(capabilities.solve);
                     testCase.verifyTrue(capabilities.optimize);
                 else
                     testCase.verifyTrue(capabilities.solve);

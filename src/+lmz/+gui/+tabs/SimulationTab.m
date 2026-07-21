@@ -21,6 +21,22 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
         ResetCameraButton
         ProfileMetadataLabel
         SimulateButton
+        StridePlanTable
+        StrideCountSpinner
+        CompletionPolicyDropDown
+        FailurePolicyDropDown
+        EnergyNeutralCheckBox
+        EnergyDiagnosticLabel
+        UsePreviousButton
+        ApplyOverridesButton
+        ValidateEnergyButton
+        SolveTimingsButton
+        CompletePlanButton
+        ValidatePlanButton
+        SimulatePlanButton
+        SavePlanButton
+        LoadPlanButton
+        LastStridePreferenceKey = ''
         AnimationRenderer
         AnimationPlayer
         ProfileRegistry
@@ -41,24 +57,32 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
                 lmz.gui.PresentationEvents.SelectionChanged, ...
                 lmz.gui.PresentationEvents.WorkingSolutionChanged, ...
                 lmz.gui.PresentationEvents.SimulationChanged, ...
+                lmz.gui.PresentationEvents.StridePlanChanged, ...
                 lmz.gui.PresentationEvents.RunStateChanged});
             obj.setCapabilities(controller.capabilities());obj.refresh();
         end
 
         function build(obj)
             rootGrid=uigridlayout(obj.Root,[3 2]);
-            rootGrid.RowHeight={'1x','1x',150};rootGrid.ColumnWidth={'1.12x','1x'};
+            rootGrid.RowHeight={'1x','1x',225};rootGrid.ColumnWidth={'1.12x','1x'};
             obj.Axes=uiaxes(rootGrid,'Tag','lmz-simulation-animation');place(obj.Axes,[1 2],1);
             title(obj.Axes,'Select and simulate a branch point');
             trajectories=uitabgroup(rootGrid);place(trajectories,1,2);
             obj.TorsoAxes=tabAxes(trajectories,'Torso','lmz-simulation-torso');
             obj.BackLegAxes=tabAxes(trajectories,'Back legs','lmz-simulation-back');
             obj.FrontLegAxes=tabAxes(trajectories,'Front legs','lmz-simulation-front');
+            planTab=uitab(trajectories,'Title','Stride plan');
+            obj.StridePlanTable=uitable(planTab,'Units','normalized', ...
+                'Position',[0 0 1 1], ...
+                'ColumnName',{'#','Start → stop','Status','Physical (read-only)', ...
+                'Post-swing stiffness','Event-time seed','Energy Δ','Declared work'}, ...
+                'ColumnEditable',[false false false false true true false true], ...
+                'Tag','lmz-simulation-stride-plan');
             lower=uigridlayout(rootGrid,[1 2]);place(lower,2,2);
             obj.GRFAxes=uiaxes(lower,'Tag','lmz-simulation-grf');
             obj.OscillatorAxes=uiaxes(lower,'Tag','lmz-simulation-oscillator');
-            controls=uigridlayout(rootGrid,[4 12]);place(controls,3,[1 2]);
-            controls.RowHeight={30,30,22,34};
+            controls=uigridlayout(rootGrid,[6 12]);place(controls,3,[1 2]);
+            controls.RowHeight={30,30,22,30,34,34};
             controls.ColumnWidth={110,'1x','1x','1x',72,58,84,66,72,86,92,105};
             label=uilabel(controls,'Text','Normalized stride');place(label,1,1);
             obj.TimeSlider=uislider(controls,'Limits',[0 1],'Tag','lmz-simulation-time', ...
@@ -116,6 +140,67 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
                 'Tag','lmz-simulation-profile-metadata', ...
                 'FontAngle','italic','HorizontalAlignment','left');
             place(obj.ProfileMetadataLabel,3,[1 12]);
+            label=uilabel(controls,'Text','Requested strides');place(label,4,1);
+            obj.StrideCountSpinner=uispinner(controls,'Limits',[1 100], ...
+                'Value',1,'Step',1,'RoundFractionalValues','on', ...
+                'Tag','lmz-simulation-stride-count', ...
+                'ValueChangedFcn',@(~,~)obj.strideSettingsChanged());
+            place(obj.StrideCountSpinner,4,2);
+            obj.CompletionPolicyDropDown=uidropdown(controls, ...
+                'Items',lmz.multistride.MissingStridePolicy.values(), ...
+                'Value','error_if_missing', ...
+                'Tag','lmz-simulation-completion-policy', ...
+                'ValueChangedFcn',@(~,~)obj.strideSettingsChanged());
+            place(obj.CompletionPolicyDropDown,4,[3 4]);
+            obj.FailurePolicyDropDown=uidropdown(controls, ...
+                'Items',{'return_partial','error'},'Value','return_partial', ...
+                'Tag','lmz-simulation-failure-policy', ...
+                'ValueChangedFcn',@(~,~)obj.strideSettingsChanged());
+            place(obj.FailurePolicyDropDown,4,[5 6]);
+            obj.EnergyNeutralCheckBox=uicheckbox(controls, ...
+                'Text','Energy neutral only','Value',true, ...
+                'Tag','lmz-simulation-energy-neutral', ...
+                'ValueChangedFcn',@(~,~)obj.strideSettingsChanged());
+            place(obj.EnergyNeutralCheckBox,4,[7 8]);
+            obj.EnergyDiagnosticLabel=uilabel(controls, ...
+                'Text','Energy transition: not evaluated', ...
+                'Tag','lmz-simulation-energy-diagnostic');
+            place(obj.EnergyDiagnosticLabel,4,[9 12]);
+
+            obj.UsePreviousButton=uibutton(controls,'Text','Use previous defaults', ...
+                'Tag','lmz-simulation-use-previous', ...
+                'ButtonPushedFcn',@(~,~)obj.usePreviousDefaults());
+            place(obj.UsePreviousButton,5,[1 2]);
+            obj.ApplyOverridesButton=uibutton(controls,'Text','Apply overrides', ...
+                'Tag','lmz-simulation-apply-overrides', ...
+                'ButtonPushedFcn',@(~,~)obj.applyStrideOverrides());
+            place(obj.ApplyOverridesButton,5,3);
+            obj.ValidateEnergyButton=uibutton(controls,'Text','Validate energy', ...
+                'Tag','lmz-simulation-validate-energy', ...
+                'ButtonPushedFcn',@(~,~)obj.validateEnergy());
+            place(obj.ValidateEnergyButton,5,4);
+            obj.SolveTimingsButton=uibutton(controls,'Text','Solve timings', ...
+                'Tag','lmz-simulation-solve-timings', ...
+                'ButtonPushedFcn',@(~,~)obj.solveMissingTimings());
+            place(obj.SolveTimingsButton,5,[5 6]);
+            obj.CompletePlanButton=uibutton(controls,'Text','Complete remaining', ...
+                'Tag','lmz-simulation-complete-plan', ...
+                'ButtonPushedFcn',@(~,~)obj.completePlan());
+            place(obj.CompletePlanButton,5,[7 8]);
+            obj.ValidatePlanButton=uibutton(controls,'Text','Validate', ...
+                'Tag','lmz-simulation-validate-plan', ...
+                'ButtonPushedFcn',@(~,~)obj.validatePlan());
+            place(obj.ValidatePlanButton,5,9);
+            obj.SimulatePlanButton=uibutton(controls,'Text','Simulate plan', ...
+                'Tag','lmz-simulation-simulate-plan', ...
+                'ButtonPushedFcn',@(~,~)obj.simulatePlan());
+            place(obj.SimulatePlanButton,5,10);
+            obj.SavePlanButton=uibutton(controls,'Text','Save plan…', ...
+                'Tag','lmz-simulation-save-plan', ...
+                'ButtonPushedFcn',@(~,~)obj.savePlan());place(obj.SavePlanButton,5,11);
+            obj.LoadPlanButton=uibutton(controls,'Text','Load plan…', ...
+                'Tag','lmz-simulation-load-plan', ...
+                'ButtonPushedFcn',@(~,~)obj.loadPlan());place(obj.LoadPlanButton,5,12);
             labels={'Play','Pause','Stop','Reset','Simulate point','GIF…','MP4…', ...
                 'Keyframes…','Export plots…','Oscillator GIF…','Cancel export'};
             tags={'play','pause','stop','reset','simulate','gif','mp4','keyframes', ...
@@ -128,20 +213,28 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
             for index=1:numel(labels)
                 buttons{index}=uibutton(controls,'Text',labels{index}, ...
                     'Tag',['lmz-simulation-' tags{index}], ...
-                    'ButtonPushedFcn',@(~,~)callbacks{index}());place(buttons{index},4,index);
+                    'ButtonPushedFcn',@(~,~)callbacks{index}());
+                place(buttons{index},6,index);
             end
             obj.SimulateButton=buttons{5};
             obj.ActionControls=[buttons(1:10) {obj.TimeSlider obj.NormalizedTimeField ...
                 obj.FPSSpinner obj.SpeedSpinner obj.LoopCheckBox obj.ForceCheckBox ...
                 obj.TrajectoryModeDropDown obj.VisualProfileDropDown ...
                 obj.DetailedOverlayCheckBox obj.GroundStyleDropDown ...
-                obj.CameraFollowCheckBox obj.ResetCameraButton}];
+                obj.CameraFollowCheckBox obj.ResetCameraButton ...
+                obj.StrideCountSpinner obj.CompletionPolicyDropDown ...
+                obj.FailurePolicyDropDown obj.EnergyNeutralCheckBox ...
+                obj.UsePreviousButton obj.ApplyOverridesButton ...
+                obj.ValidateEnergyButton obj.SolveTimingsButton ...
+                obj.CompletePlanButton obj.ValidatePlanButton ...
+                obj.SimulatePlanButton obj.SavePlanButton obj.LoadPlanButton}];
             obj.CancelControls=buttons(11);
         end
 
         function refresh(obj,varargin)
             refresh@lmz.gui.tabs.BaseTab(obj);
             obj.refreshProfileControls();
+            obj.refreshStridePlan();
             simulation=obj.Controller.State.Simulation;
             if isempty(simulation)
                 obj.clearPresentation();return
@@ -170,7 +263,8 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
                     lmz.gui.PresentationEvents.ProblemChanged, ...
                     lmz.gui.PresentationEvents.SelectionChanged, ...
                     lmz.gui.PresentationEvents.WorkingSolutionChanged, ...
-                    lmz.gui.PresentationEvents.SimulationChanged}))
+                    lmz.gui.PresentationEvents.SimulationChanged, ...
+                    lmz.gui.PresentationEvents.StridePlanChanged}))
                 obj.refresh(batch);
             end
         end
@@ -198,11 +292,200 @@ classdef SimulationTab < lmz.gui.tabs.BaseTab
                 'GroundStyleDropDown',obj.GroundStyleDropDown, ...
                 'CameraFollowCheckBox',obj.CameraFollowCheckBox, ...
                 'ResetCameraButton',obj.ResetCameraButton, ...
-                'ProfileMetadataLabel',obj.ProfileMetadataLabel);
+                'ProfileMetadataLabel',obj.ProfileMetadataLabel, ...
+                'StridePlanTable',obj.StridePlanTable, ...
+                'StrideCountSpinner',obj.StrideCountSpinner, ...
+                'CompletionPolicyDropDown',obj.CompletionPolicyDropDown, ...
+                'FailurePolicyDropDown',obj.FailurePolicyDropDown, ...
+                'EnergyNeutralCheckBox',obj.EnergyNeutralCheckBox, ...
+                'EnergyDiagnosticLabel',obj.EnergyDiagnosticLabel, ...
+                'UsePreviousButton',obj.UsePreviousButton, ...
+                'ApplyOverridesButton',obj.ApplyOverridesButton, ...
+                'ValidateEnergyButton',obj.ValidateEnergyButton, ...
+                'SolveTimingsButton',obj.SolveTimingsButton, ...
+                'CompletePlanButton',obj.CompletePlanButton, ...
+                'ValidatePlanButton',obj.ValidatePlanButton, ...
+                'SimulatePlanButton',obj.SimulatePlanButton, ...
+                'SavePlanButton',obj.SavePlanButton, ...
+                'LoadPlanButton',obj.LoadPlanButton);
         end
     end
 
     methods (Access=private)
+        function refreshStridePlan(obj)
+            state=obj.Controller.State;
+            key=[state.ModelId '/' state.ProblemId];
+            if ~strcmp(key,obj.LastStridePreferenceKey)
+                obj.LastStridePreferenceKey=key;
+                fallback=stridePreferenceStruct(state);
+                preferred=obj.Preferences.stridePreference( ...
+                    state.ModelId,state.ProblemId,fallback);
+                if ~isequaln(preferred,fallback)
+                    try
+                        obj.Controller.setStrideSettings( ...
+                            preferred.RequestedStrideCount, ...
+                            preferred.CompletionPolicy, ...
+                            preferred.FailurePolicy, ...
+                            logical(preferred.EnergyNeutralOnly));
+                        state=obj.Controller.State;
+                    catch
+                    end
+                end
+            end
+            obj.StrideCountSpinner.Value=state.RequestedStrideCount;
+            obj.CompletionPolicyDropDown.Value=state.CompletionPolicy;
+            obj.FailurePolicyDropDown.Value=state.FailurePolicy;
+            obj.EnergyNeutralCheckBox.Value=state.EnergyNeutralOnly;
+            rows=cell(state.RequestedStrideCount,8);plan=state.StridePlan;
+            for index=1:state.RequestedStrideCount
+                if ~isempty(plan)&&index<=plan.CompletedStrideCount
+                    spec=plan.StrideSpecs(index);
+                    sections=[spec.StartSectionId ' → ' spec.StopSectionId];
+                    stiffness=controlText(spec.ControlParameters, ...
+                        'PostSwingStiffness');
+                    physical=physicalText(spec.PhysicalParameters);
+                    schedule=scheduleText(spec.EventSchedule);
+                    energy=energyText(spec.Diagnostics);
+                    rows(index,:)={index,sections,spec.CompletionStatus, ...
+                        physical,stiffness,schedule,energy,declaredWorkAt( ...
+                        state.DeclaredWork,index)};
+                else
+                    rows(index,:)={index,'configured sections','missing', ...
+                        'copied on completion','', '',NaN, ...
+                        declaredWorkAt(state.DeclaredWork,index)};
+                end
+            end
+            obj.StridePlanTable.Data=rows;
+            result=state.MultiStrideResult;
+            if isempty(result)||isempty(result.EnergyDiagnostics)
+                obj.EnergyDiagnosticLabel.Text= ...
+                    'Energy transition: not evaluated';
+            else
+                obj.EnergyDiagnosticLabel.Text=sprintf( ...
+                    'Energy policy %s • %d transitions accepted', ...
+                    result.Plan.EnergyPolicy.Id,numel(result.EnergyDiagnostics));
+            end
+        end
+
+        function strideSettingsChanged(obj)
+            try
+                obj.Controller.setStrideSettings( ...
+                    obj.StrideCountSpinner.Value, ...
+                    obj.CompletionPolicyDropDown.Value, ...
+                    obj.FailurePolicyDropDown.Value, ...
+                    logical(obj.EnergyNeutralCheckBox.Value));
+                state=obj.Controller.State;
+                obj.Preferences.setStridePreference(state.ModelId, ...
+                    state.ProblemId,stridePreferenceStruct(state));
+            catch exception
+                obj.refreshStridePlan();obj.reportError(exception);
+            end
+        end
+
+        function usePreviousDefaults(obj)
+            obj.CompletionPolicyDropDown.Value='carry_forward';
+            obj.strideSettingsChanged();
+            obj.reportStatus('Missing strides will copy the previous defaults.');
+        end
+
+        function applyStrideOverrides(obj)
+            try
+                rows=obj.StridePlanTable.Data;overrides=struct();
+                work=zeros(size(rows,1),1);
+                for index=1:size(rows,1)
+                    item=struct();stiffness=parseNumericVector(rows{index,5});
+                    if ~isempty(stiffness)
+                        if numel(stiffness)~=4
+                            error('lmz:GUI:StrideStiffness', ...
+                                'Post-swing stiffness requires four values.');
+                        end
+                        item.PostSwingStiffness=stiffness(:);
+                    end
+                    timing=parseNumericVector(rows{index,6});
+                    if ~isempty(timing)
+                        item.EventSchedule=obj.scheduleOverride(index,timing);
+                    end
+                    if ~isempty(fieldnames(item))
+                        overrides.(sprintf('stride%d',index))=item;
+                    end
+                    value=rows{index,8};
+                    if ischar(value)||isstring(value),value=str2double(value);end
+                    if isempty(value),value=0;end
+                    if ~isnumeric(value)||~isscalar(value)||~isfinite(value)
+                        error('lmz:GUI:DeclaredWork', ...
+                            'Declared work must be one finite value per stride.');
+                    end
+                    work(index)=value;
+                end
+                obj.Controller.setStrideOverrides(overrides,work);
+            catch exception
+                obj.refreshStridePlan();obj.reportError(exception);
+            end
+        end
+
+        function schedule=scheduleOverride(obj,index,timing)
+            schedule=obj.Controller.strideScheduleOverride(index,timing);
+        end
+
+        function validateEnergy(obj)
+            try
+                obj.applyStrideOverrides();
+                report=obj.Controller.validateStrideEnergy();
+                obj.EnergyDiagnosticLabel.Text=sprintf( ...
+                    'Energy preview accepted • %d pending transitions', ...
+                    numel(report.EnergyDiagnostics));
+            catch exception
+                obj.reportError(exception);
+            end
+        end
+
+        function solveMissingTimings(obj)
+            obj.CompletionPolicyDropDown.Value= ...
+                'carry_forward_and_solve_timings';
+            obj.strideSettingsChanged();obj.completePlan();
+        end
+
+        function completePlan(obj)
+            try
+                obj.applyStrideOverrides();
+                obj.Controller.completeStridePlan();
+            catch exception
+                obj.reportError(exception);
+            end
+        end
+
+        function validatePlan(obj)
+            try,obj.Controller.validateStridePlan(false); ...
+            catch exception,obj.reportError(exception);end
+        end
+
+        function simulatePlan(obj)
+            try,obj.Controller.simulateStridePlan(); ...
+            catch exception,obj.reportError(exception);end
+        end
+
+        function savePlan(obj)
+            start=obj.Preferences.recentOutputFolder(pwd);
+            [file,path]=uiputfile(fullfile(start,'*.lmz.mat'), ...
+                'Save stride plan');
+            if isequal(file,0),return,end
+            try
+                obj.Controller.saveStridePlan(fullfile(path,file));
+                obj.Preferences.rememberOutputFolder(path);
+            catch exception,obj.reportError(exception);end
+        end
+
+        function loadPlan(obj)
+            start=obj.Preferences.recentDataFolder(pwd);
+            [file,path]=uigetfile(fullfile(start,'*.lmz.mat'), ...
+                'Load stride plan');
+            if isequal(file,0),return,end
+            try
+                obj.Controller.loadStridePlan(fullfile(path,file));
+                obj.Preferences.rememberDataFolder(path);
+            catch exception,obj.reportError(exception);end
+        end
+
         function simulate(obj)
             try,obj.Controller.simulateWorkingSolution();catch exception,obj.reportError(exception);end
         end
@@ -512,4 +795,91 @@ end
 
 function value=fieldOr(source,name,fallback)
 if isfield(source,name),value=source.(name);else,value=fallback;end
+end
+
+function value=controlText(source,name)
+value='';
+if isstruct(source)&&isfield(source,name)
+    item=source.(name);value=mat2str(item(:).',6);
+end
+end
+
+function value=physicalText(source)
+value='';
+if ~isstruct(source),return,end
+parts=cell(1,2);count=0;
+if isfield(source,'QuadrupedInvariantVector')
+    count=count+1;
+    parts{count}=sprintf('quadruped %s', ...
+        mat2str(source.QuadrupedInvariantVector(:).',4));
+end
+if isfield(source,'LoadVector')
+    count=count+1;
+    parts{count}=sprintf('load %s', ...
+        mat2str(source.LoadVector(:).',4));
+end
+if count==0
+    names=fieldnames(source);
+    parts=names(:).';
+else
+    parts=parts(1:count);
+end
+value=strjoin(parts,'; ');
+end
+
+function value=scheduleText(source)
+value='';
+if isobject(source)&&ismethod(source,'toStruct'),source=source.toStruct();end
+if isstruct(source)&&isfield(source,'Times')
+    value=mat2str(source.Times(:).',6);
+elseif isstruct(source)&&isfield(source,'Occurrences')
+    stored=source.Occurrences;
+    if isstruct(stored),stored=num2cell(stored);end
+    times=cellfun(@(item)item.Time,stored);
+    value=mat2str([times(:);source.ReturnTime].',6);
+end
+end
+
+function value=energyText(source)
+value=NaN;
+if ~isstruct(source),return,end
+energy=fieldOr(source,'Energy',struct());
+if isstruct(energy)
+    value=fieldOr(energy,'EnergyDelta',fieldOr(energy,'Delta',NaN));
+end
+end
+
+function value=declaredWorkAt(source,index)
+if isempty(source),value=0; ...
+elseif isscalar(source),value=source; ...
+elseif index<=numel(source),value=source(index); ...
+else,value=0;end
+end
+
+function values=parseNumericVector(source)
+if isempty(source),values=zeros(0,1);return,end
+if isnumeric(source)
+    values=source(:);
+elseif ischar(source)||(isstring(source)&&isscalar(source))
+    text=char(source);
+    if isempty(strtrim(text)),values=zeros(0,1);return,end
+    if isempty(regexp(text,'^[0-9eE+\-.,;\[\]() \t]+$','once'))
+        error('lmz:GUI:NumericVector', ...
+            'Vector text may contain only finite numeric literals.');
+    end
+    text=regexprep(text,'[\[\](),;]',' ');
+    values=sscanf(text,'%f');
+else
+    error('lmz:GUI:NumericVector','Vector entry must be numeric text.');
+end
+if any(~isfinite(values))
+    error('lmz:GUI:NumericVector','Vector values must be finite.');
+end
+end
+
+function value=stridePreferenceStruct(state)
+value=struct('RequestedStrideCount',state.RequestedStrideCount, ...
+    'CompletionPolicy',state.CompletionPolicy, ...
+    'FailurePolicy',state.FailurePolicy, ...
+    'EnergyNeutralOnly',state.EnergyNeutralOnly);
 end

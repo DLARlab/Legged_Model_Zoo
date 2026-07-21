@@ -1,25 +1,28 @@
 # Performance benchmarks
 
-`run_benchmarks` measures the release workflows requested for Round 7: startup
-and discovery, scientific data loading/evaluation, animation rendering, a short
-solve and continuation, GUI construction, and artifact I/O. Run it from a
-fresh MATLAB process after `startup`:
+`run_benchmarks` measures 21 release workflows: the 14 historical Round 7
+startup/discovery, scientific data/evaluation, rendering, short solve and
+continuation, GUI, and artifact paths plus seven Round 9 section, timing,
+stride-plan, requested-N simulation/objective, and GUI-refresh paths. Run it
+from a fresh MATLAB process after `startup`:
 
 ```matlab
 addpath(fullfile(pwd, 'benchmarks'));
 report = run_benchmarks(struct('Repetitions', 3));
 ```
 
-The tracked Round 7 measurement is
+The tracked historical Round 7 measurement is
 `baseline_r2025b_macos_arm64.json`. It contains 14 three-repetition records
-from MATLAB R2025b on macOS arm64; all medians are below their conservative
-budgets. Regenerate it explicitly with:
+from MATLAB R2025b on macOS arm64. The tracked Round 9 addendum is
+`round9_r2025b_macos_arm64.json`; it records the seven new workflows over three
+warm repetitions. All medians are below their conservative budgets. Regenerate
+the complete current 21-workflow report explicitly with:
 
 ```matlab
 report = run_benchmarks(struct( ...
     'Repetitions', 3, ...
     'OutputPath', fullfile(pwd, 'benchmarks', ...
-    'baseline_r2025b_macos_arm64.json')));
+    'current_r2025b_macos_arm64.json')));
 ```
 
 The reported median and median absolute deviation are warm-process wall-clock

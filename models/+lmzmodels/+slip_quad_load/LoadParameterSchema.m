@@ -7,7 +7,9 @@ classdef LoadParameterSchema
             specs=lmz.schema.VariableSpec.empty(0,1);
             for index=1:numel(names)
                 specs(index,1)=lmz.schema.VariableSpec(names{index},'Group','load_parameter', ...
-                    'DefaultValue',defaults(index),'Scale',max(1,abs(defaults(index))),'Unit','normalized'); %#ok<AGROW>
+                    'DefaultValue',defaults(index),'Scale',max(1,abs(defaults(index))), ...
+                    'Unit','normalized','Role','physical', ...
+                    'EnergyEffect','state_dependent'); %#ok<AGROW>
             end
             schema=lmz.schema.VariableSchema(specs);
         end

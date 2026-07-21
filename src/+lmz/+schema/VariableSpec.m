@@ -14,6 +14,8 @@ classdef VariableSpec
         Topology
         PeriodSource
         Activity
+        Role
+        EnergyEffect
     end
 
     methods
@@ -36,6 +38,8 @@ classdef VariableSpec
             addParameter(parser, 'Topology', 'euclidean', @ischar);
             addParameter(parser, 'PeriodSource', '', @ischar);
             addParameter(parser, 'Activity', 'active', @ischar);
+            addParameter(parser, 'Role', 'physical', @ischar);
+            addParameter(parser, 'EnergyEffect', 'unknown', @ischar);
             parse(parser, name, varargin{:});
             values = parser.Results;
 
@@ -72,6 +76,18 @@ classdef VariableSpec
                 error('lmz:Schema:InvalidActivity', ...
                     'Unknown activity %s for %s.', values.Activity, name);
             end
+            validRoles = {'physical', 'control', 'schedule', 'derived'};
+            if ~any(strcmp(values.Role, validRoles))
+                error('lmz:Schema:InvalidRole', ...
+                    'Unknown role %s for %s.', values.Role, name);
+            end
+            validEnergyEffects = {'invariant', 'state_dependent', ...
+                'work_input', 'unknown'};
+            if ~any(strcmp(values.EnergyEffect, validEnergyEffects))
+                error('lmz:Schema:InvalidEnergyEffect', ...
+                    'Unknown energy effect %s for %s.', ...
+                    values.EnergyEffect, name);
+            end
             if ~isfinite(values.DefaultValue) || ...
                     values.DefaultValue < values.LowerBound || ...
                     values.DefaultValue > values.UpperBound
@@ -92,6 +108,8 @@ classdef VariableSpec
             obj.Topology = values.Topology;
             obj.PeriodSource = values.PeriodSource;
             obj.Activity = values.Activity;
+            obj.Role = values.Role;
+            obj.EnergyEffect = values.EnergyEffect;
         end
 
         function value = toStruct(obj)
@@ -108,7 +126,9 @@ classdef VariableSpec
                 'Scale', obj.Scale, ...
                 'Topology', obj.Topology, ...
                 'PeriodSource', obj.PeriodSource, ...
-                'Activity', obj.Activity);
+                'Activity', obj.Activity, ...
+                'Role', obj.Role, ...
+                'EnergyEffect', obj.EnergyEffect);
         end
     end
 
@@ -117,6 +137,14 @@ classdef VariableSpec
             activity = 'active';
             if isfield(value, 'Activity')
                 activity = value.Activity;
+            end
+            role = 'physical';
+            if isfield(value, 'Role')
+                role = value.Role;
+            end
+            energyEffect = 'unknown';
+            if isfield(value, 'EnergyEffect')
+                energyEffect = value.EnergyEffect;
             end
             obj = lmz.schema.VariableSpec(value.Name, ...
                 'Label', value.Label, ...
@@ -130,7 +158,9 @@ classdef VariableSpec
                 'Scale', value.Scale, ...
                 'Topology', value.Topology, ...
                 'PeriodSource', value.PeriodSource, ...
-                'Activity', activity);
+                'Activity', activity, ...
+                'Role', role, ...
+                'EnergyEffect', energyEffect);
         end
     end
 

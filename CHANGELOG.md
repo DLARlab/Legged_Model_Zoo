@@ -1,5 +1,60 @@
 # Changelog
 
+## Unreleased — Round 9 configurable sections and N-stride workflows
+
+- Added catalog-driven Poincaré section descriptors, named-event/state-plane/
+  composite implementations, pre/post reset semantics, transversality and
+  initial-root handling, explicit symmetries, return maps, public return and
+  section-transfer services, typed results, hashes, lineage, and artifacts.
+  Returns now start from the selected section and truncate at the accepted stop
+  crossing; composite sections require nonempty safe declarative conditions.
+  Built-in tutorial/quadruped/biped transfers verify a fresh target-problem
+  evaluation before reporting `DecisionCodecRephased=true`.
+- Added fixed-initial-state/fixed-physical-parameter contact-timing problems and
+  services for the tutorial, quadruped, biped, and load models. Timing results
+  keep contact and section rows separate, report no periodicity residual, and
+  retain exact fixed/free schedules and reproducible solver diagnostics. The
+  tutorial supports `height_descending`-to-`height_descending` state-plane
+  timing; migrated scientific providers remain explicitly apex-only, and
+  unsupported/ambiguous section occurrences fail before solve.
+- Added native stride plans, missing-data/failure/energy policies, checkpointed
+  completion, exact load `44 + 13*(N-1)` conversion, requested-N APIs for all
+  four models with explicit partial/failure outcomes, and explicit
+  periodic/transition/timing-sequence residual forms that prohibit a declared
+  hidden timing solve. Completion exposes deterministic baseline, step
+  reduction, parameter homotopy, and multistart recovery attempts plus durable
+  failure checkpoints. Legacy load problems accept explicit counts/plans and
+  route to the N-stride forms while preserving their bare defaults.
+- Added the experimental load `n_stride_fit` problem for complete fixed
+  schedules with `HiddenTimingSolve=false`. Extensions beyond the two measured
+  strides require the explicit synthetic `repeat_final_reference` policy; the
+  source-equivalent `multi_stride_fit` compatibility oracle remains separate
+  and labels its preserved legacy timing projection.
+- Added parameter `Role` and `EnergyEffect` metadata plus explicit
+  energy-transition/work diagnostics. Unknown and unbudgeted energy-changing
+  transitions are rejected by the conservative policy.
+- Added artifact payloads and reproduction routes for contact timing, section
+  transfer, stride plans/completion, N-stride simulation, and N-stride periodic
+  workflows, including a first-class N-stride-periodic run producer. Native
+  stride definitions, configurations, catalogs, and descriptors are hash-bound;
+  executable callbacks remain runtime-only trusted configuration.
+- Added five detailed guides, expanded the beginner README with copyable usage
+  and qualifications, and added eleven public examples with structured output,
+  temporary output locations, and exact success markers.
+- Closed the R2025b Round 9 gate with 396/396 tests, all 42 public examples,
+  clean-copy isolation, and 14,190/18,428 covered statements (77.0024%) across
+  263 files/28 packages. Code quality and architecture reported zero
+  unallowlisted violations, the 558-file R2019b static scan reported zero
+  violations, and seven workflows completed three benchmark repetitions with
+  no budget overrun. Technical ZIP/toolbox clean installs passed; the refreshed
+  775-file redistribution inventory retains 760 blockers because release
+  authority remains unresolved.
+- The load five-stride and N-stride periodic demonstrations are reported
+  conservatively. Carry-forward proves the exact 96-entry layout only; timing
+  correction returns an honest partial `2/5` failure at stride 3 and no
+  simulation. The registered periodic example validates the explicit
+  final-closure formulation without claiming solver convergence.
+
 ## 1.0.0-rc.1 — Round 8 research graphics fidelity
 
 - Added validated `research_legacy`, `clean_generic`, and `high_contrast`

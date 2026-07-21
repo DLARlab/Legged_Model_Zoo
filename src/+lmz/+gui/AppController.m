@@ -23,7 +23,11 @@ classdef AppController < handle
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if obj.Context.Cancellation.IsCancellationRequested,obj.Context=lmz.api.RunContext.synchronous(obj.Context.RandomSeed);else,obj.Context.Pause.resume();end
             model=obj.Registry.createModel(modelId);manifest=model.getManifest();problems=model.listProblems();
-            obj.State.ModelId=manifest.id;obj.State.ProblemId=problems{1};obj.State.Simulation=[];
+            obj.State.ModelId=manifest.id;obj.State.ProblemId=problems{1};
+            obj.State.ProblemConfiguration=obj.defaultProblemConfiguration( ...
+                manifest.id,problems{1});
+            obj.State.SolveMode=obj.solveModeForProblem(problems{1});
+            obj.State.Simulation=[];
             examples=obj.builtInExamples();
             if isempty(examples)
                 obj.State.ExampleId='';
@@ -33,9 +37,17 @@ classdef AppController < handle
             obj.State.CandidateSimulation=[];obj.State.Datasets={};obj.State.Selection=[];
             obj.State.LockedSelection=[];obj.State.HoverSelection=[];obj.State.WorkingSolution=[];
             obj.State.WorkingEvaluation=[];
-            obj.State.SolvedSolution=[];obj.State.SolveResult=[];obj.State.SeedPair=[];
+            obj.State.SolvedSolution=[];obj.State.SolveResult=[];
+            obj.State.TimingResult=[];obj.State.SectionTransferResult=[];
+            obj.State.SeedPair=[];
             obj.State.ContinuationPreview=[];obj.State.ContinuationResult=[];
-            obj.State.OptimizationResult=[];obj.State.CurrentRun=[];obj.State.RecordingState=struct();
+            obj.State.OptimizationResult=[];obj.State.RequestedStrideCount=1;
+            obj.State.StridePlan=[];obj.State.MultiStrideResult=[];
+            obj.State.CompletionPolicy='error_if_missing';
+            obj.State.FailurePolicy='return_partial';
+            obj.State.EnergyNeutralOnly=true;obj.State.PlanValidation=struct();
+            obj.State.StrideParameterOverrides=struct();obj.State.DeclaredWork=0;
+            obj.State.CurrentRun=[];obj.State.RecordingState=struct();
             obj.State.Status=['Selected ' manifest.id];
             switch modelId
                 case 'slip_quadruped'
@@ -49,6 +61,340 @@ classdef AppController < handle
             end
         end
         function ids=problemIds(obj),ids=obj.Registry.createModel(obj.State.ModelId).listProblems();end
+
+        function ids=sectionIds(obj)
+            try
+                catalog=obj.Registry.getPoincareSectionRegistry( ...
+                    obj.State.ModelId);
+                ids=catalog.listSections();
+            catch
+                ids={};
+            end
+        end
+
+        function value=sectionDescriptor(obj,sectionId)
+            catalog=obj.Registry.getPoincareSectionRegistry(obj.State.ModelId);
+            value=catalog.descriptor(char(sectionId)).toStruct();
+        end
+
+        function value=timingEditorData(obj)
+            value=struct('Available',false,'EventNames',{{}}, ...
+                'FreeMask',false(0,1),'ReturnTimeFree',false, ...
+                'FixedInitialState',zeros(0,1), ...
+                'FixedPhysicalParameters',zeros(0,1));
+            try
+                problem=obj.problem(obj.State.ProblemId);
+            catch
+                return
+            end
+            if ~isa(problem,'lmz.schedule.SectionReturnTimingProblem'),return,end
+            schedule=problem.InputSchedule;
+            value=struct('Available',true,'EventNames',{schedule.names()}, ...
+                'FreeMask',schedule.freeMask(), ...
+                'ReturnTimeFree',~schedule.ReturnTimeFixed, ...
+                'FixedInitialState',problem.FixedInitialState, ...
+                'FixedPhysicalParameters',problem.FixedPhysicalParameters);
+        end
+
+        function configuration=configureSections(obj,changes)
+            if ~isstruct(changes)||~isscalar(changes)
+                error('lmz:GUI:SectionConfiguration', ...
+                    'Section configuration must be a scalar struct.');
+            end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            catalog=obj.Registry.getPoincareSectionRegistry(obj.State.ModelId);
+            configuration=obj.State.ProblemConfiguration;
+            names=fieldnames(changes);
+            allowed={'StartSectionId','StopSectionId','StartStateSide', ...
+                'StopStateSide','CrossingDirection','MinimumReturnTime', ...
+                'RequiredEventSequence','ReturnOccurrence','SymmetryId'};
+            if ~all(ismember(names,allowed))
+                unknown=names{find(~ismember(names,allowed),1)};
+                error('lmz:GUI:SectionConfiguration', ...
+                    'Unknown section configuration field %s.',unknown);
+            end
+            for index=1:numel(names)
+                configuration.(names{index})=changes.(names{index});
+            end
+            if ~isfield(configuration,'StartSectionId')
+                configuration.StartSectionId='apex';
+            end
+            if ~isfield(configuration,'StopSectionId')
+                configuration.StopSectionId=configuration.StartSectionId;
+            end
+            if ~catalog.hasSection(configuration.StartSectionId)|| ...
+                    ~catalog.hasSection(configuration.StopSectionId)
+                error('lmz:GUI:UnknownSection', ...
+                    'Configured start or stop section is not in the model catalog.');
+            end
+            start=catalog.descriptor(configuration.StartSectionId);
+            stop=catalog.descriptor(configuration.StopSectionId);
+            configuration=completeSectionConfiguration( ...
+                configuration,start,stop,catalog);
+            model=obj.Registry.createModel(obj.State.ModelId);
+            model.createProblem(obj.State.ProblemId, ...
+                obj.problemConfigurationForCreation( ...
+                obj.State.ProblemId,configuration));
+            changed=~isequaln(configuration,obj.State.ProblemConfiguration);
+            if changed
+                obj.invalidateDerived();
+                obj.State.ProblemConfiguration=configuration;
+                obj.State.Status=sprintf( ...
+                    'Configured return from %s to %s.', ...
+                    configuration.StartSectionId,configuration.StopSectionId);
+            end
+        end
+
+        function setSolveMode(obj,mode)
+            mode=char(mode);
+            modes={'Periodic orbit','Contact timings only', ...
+                'N-stride periodic orbit','Timing sequence'};
+            if ~any(strcmp(mode,modes))
+                error('lmz:GUI:SolveMode','Unknown solve mode %s.',mode);
+            end
+            ids=obj.problemIds();target='';
+            switch mode
+                case 'Periodic orbit'
+                    if any(strcmp(ids,'periodic_orbit')),target='periodic_orbit'; ...
+                    elseif any(strcmp(ids,'periodic_apex')),target='periodic_apex'; ...
+                    elseif any(strcmp(ids,'periodic_hop')),target='periodic_hop';end
+                case 'Contact timings only'
+                    if any(strcmp(ids,'section_return_timing'))
+                        target='section_return_timing';
+                    end
+                case 'N-stride periodic orbit'
+                    if any(strcmp(ids,'n_stride_periodic'))
+                        target='n_stride_periodic';
+                    end
+                case 'Timing sequence'
+                    if any(strcmp(ids,'contact_timing_sequence'))
+                        target='contact_timing_sequence';
+                    end
+            end
+            if isempty(target)
+                error('lmz:GUI:SolveModeUnavailable', ...
+                    '%s is unavailable for %s.',mode,obj.State.ModelId);
+            end
+            obj.selectProblem(target);
+            obj.State.SolveMode=mode;
+        end
+
+        function setEventFreeMask(obj,freeMask,returnTimeFree)
+            if ~islogical(freeMask)||~isvector(freeMask)|| ...
+                    ~islogical(returnTimeFree)||~isscalar(returnTimeFree)
+                error('lmz:GUI:EventMask','Event free mask is invalid.');
+            end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            configuration=obj.State.ProblemConfiguration;
+            configuration.FixedEventMask=~freeMask(:);
+            configuration.FreeReturnTime=logical(returnTimeFree);
+            if isfield(configuration,'FreeEvents')
+                configuration=rmfield(configuration,'FreeEvents');
+            end
+            obj.invalidateDerived();
+            obj.State.ProblemConfiguration=configuration;
+            obj.State.Status='Updated explicit fixed/free event mask.';
+        end
+
+        function result=transferWorkingSolution(obj,targetSectionId)
+            if isempty(obj.State.WorkingSolution)
+                error('lmz:GUI:SectionTransferSeed', ...
+                    'A working solution is required for section transfer.');
+            end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            model=obj.Registry.createModel(obj.State.ModelId);
+            result=lmz.services.SectionTransferService().transfer(model, ...
+                obj.State.WorkingSolution,char(targetSectionId),obj.Context);
+            obj.invalidateDerived();
+            obj.State.SectionTransferResult=result;
+            obj.State.WorkingSolution=result.Solution;
+            obj.State.Simulation=result.Simulation;
+            obj.State.Status=sprintf('Transferred orbit to %s.',targetSectionId);
+        end
+
+        function setStrideSettings(obj,count,completion,failure,energyNeutral)
+            if ~isnumeric(count)||~isscalar(count)||~isfinite(count)|| ...
+                    count<1||count~=fix(count)
+                error('lmz:GUI:StrideCount', ...
+                    'Requested stride count must be a positive integer.');
+            end
+            lmz.multistride.MissingStridePolicy.from(completion);
+            if ~any(strcmp(char(failure),{'return_partial','error'}))
+                error('lmz:GUI:FailurePolicy','Failure policy is invalid.');
+            end
+            if ~(islogical(energyNeutral)&&isscalar(energyNeutral))
+                error('lmz:GUI:EnergyPolicy', ...
+                    'Energy-neutral selection must be logical.');
+            end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            plan=obj.State.StridePlan;
+            if ~isempty(plan)
+                if count<plan.CompletedStrideCount
+                    plan=plan.truncate(count);
+                elseif count>plan.CompletedStrideCount
+                    plan=plan.withRequestedStrideCount(count);
+                end
+                plan=plan.withPolicies(completion,plan.EnergyPolicy,failure);
+            end
+            obj.State.RequestedStrideCount=count;
+            obj.State.CompletionPolicy=char(completion);
+            obj.State.FailurePolicy=char(failure);
+            obj.State.EnergyNeutralOnly=logical(energyNeutral);
+            obj.State.StridePlan=plan;obj.State.MultiStrideResult=[];
+            obj.State.PlanValidation=struct();
+            obj.State.Status=sprintf('Requested %d strides.',count);
+        end
+
+        function setStrideOverrides(obj,overrides,declaredWork)
+            if ~isstruct(overrides)||~isnumeric(declaredWork)|| ...
+                    ~isreal(declaredWork)||any(~isfinite(declaredWork(:)))
+                error('lmz:GUI:StrideOverrides', ...
+                    'Stride overrides or declared work are invalid.');
+            end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.State.StrideParameterOverrides=overrides;
+            obj.State.DeclaredWork=declaredWork;
+            obj.State.MultiStrideResult=[];obj.State.PlanValidation=struct();
+            obj.State.Status='Per-stride overrides stored; validate energy next.';
+        end
+
+        function schedule=strideScheduleOverride(obj,index,timing)
+            if ~isnumeric(index)||~isscalar(index)||index<1||index~=fix(index)|| ...
+                    ~isnumeric(timing)||~isvector(timing)|| ...
+                    any(~isfinite(timing(:)))||isempty(timing)
+                error('lmz:GUI:EventSeed', ...
+                    'Stride index and event-time seed are invalid.');
+            end
+            timing=timing(:);plan=obj.State.StridePlan;
+            if ~isempty(plan)&&plan.CompletedStrideCount>0
+                source=plan.StrideSpecs(min(index,plan.CompletedStrideCount)). ...
+                    EventSchedule;
+            elseif strcmp(obj.State.ModelId,'slip_quad_load')
+                names=lmzmodels.slip_quad_load.LaterStrideLayout.baseNames();
+                source=struct('Names',{names(:)},'Times',timing, ...
+                    'ReturnTime',timing(end),'Chart','legacy_named_cyclic', ...
+                    'MinimumGap',0);
+            else
+                error('lmz:GUI:EventSeed', ...
+                    'Create or load a plan before editing event-time seeds.');
+            end
+            schedule=source;schedule.Times=timing;
+            schedule.ReturnTime=timing(end);
+            if isfield(schedule,'Names')
+                [~,order]=sort(schedule.Times);
+                schedule.OccurrenceOrder=schedule.Names(order);
+            end
+        end
+
+        function result=completeStridePlan(obj)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            model=obj.Registry.createModel(obj.State.ModelId);
+            configuration=obj.multiStrideConfiguration();
+            problem=model.createProblem('n_stride_simulation',configuration);
+            result=problem.simulate(obj.Context);
+            if ~isa(result,'lmz.multistride.MultiStrideResult')
+                error('lmz:GUI:MultiStrideResult', ...
+                    'N-stride problem returned an invalid result.');
+            end
+            obj.State.MultiStrideResult=result;obj.State.StridePlan=result.Plan;
+            obj.State.PlanValidation= ...
+                lmz.multistride.StridePlanValidator.validate(result.Plan);
+            if ~isempty(result.Simulation),obj.State.Simulation=result.Simulation;end
+            obj.State.Status=sprintf('%s: %d of %d strides completed.', ...
+                result.CompletionStatus,result.CompletedStrideCount, ...
+                result.RequestedStrideCount);
+        end
+
+        function report=validateStridePlan(obj,requireComplete)
+            if nargin<2,requireComplete=false;end
+            if isempty(obj.State.StridePlan)
+                error('lmz:GUI:MissingStridePlan','No stride plan is available.');
+            end
+            report=lmz.multistride.StridePlanValidator.validate( ...
+                obj.State.StridePlan,logical(requireComplete));
+            obj.State.PlanValidation=report;
+            obj.State.Status='Stride plan validation complete.';
+        end
+
+        function report=validateStrideEnergy(obj)
+            if ~strcmp(obj.State.ModelId,'slip_quad_load')|| ...
+                    isempty(obj.State.StridePlan)
+                error('lmz:GUI:EnergyPreviewUnavailable', ...
+                    'Energy preview requires a loaded quad-load stride plan.');
+            end
+            plan=obj.State.StridePlan.clone();
+            count=obj.State.RequestedStrideCount;
+            if count<plan.CompletedStrideCount
+                plan=plan.truncate(count);
+            elseif count>plan.CompletedStrideCount
+                plan=plan.withRequestedStrideCount(count);
+            end
+            if obj.State.EnergyNeutralOnly
+                policy=lmz.multistride.EnergyConsistencyPolicy();
+            else
+                policy=lmz.multistride.EnergyConsistencyPolicy( ...
+                    'Id','allow_non_neutral');
+            end
+            plan=plan.withPolicies('carry_forward',policy,'error');
+            builder=lmzmodels.slip_quad_load.QuadLoadStridePlanBuilder();
+            diagnostics=cell(0,1);
+            options=struct('ParameterOverrides', ...
+                obj.State.StrideParameterOverrides, ...
+                'DeclaredWork',obj.State.DeclaredWork, ...
+                'TransitionState',plan.InitialState);
+            while plan.CompletedStrideCount<count
+                plan=builder.completeNext(plan,options,obj.Context);
+                diagnostics{end+1,1}= ...
+                    plan.StrideSpecs(end).Diagnostics.Energy; %#ok<AGROW>
+            end
+            report=struct('Valid',true,'Estimated',true, ...
+                'TransitionStateSource','plan_initial_state_preview', ...
+                'CompletedStrideCount',plan.CompletedStrideCount, ...
+                'RequestedStrideCount',count, ...
+                'EnergyDiagnostics',{diagnostics}, ...
+                'PreviewPlan',plan.toStruct());
+            obj.State.PlanValidation=report;
+            obj.State.Status=sprintf( ...
+                'Energy preview accepted %d pending transitions.', ...
+                numel(diagnostics));
+        end
+
+        function result=simulateStridePlan(obj)
+            if isempty(obj.State.StridePlan)
+                result=obj.completeStridePlan();return
+            end
+            obj.validateStridePlan(true);
+            result=obj.completeStridePlan();
+        end
+
+        function saveStridePlan(obj,path)
+            if isempty(obj.State.StridePlan)
+                error('lmz:GUI:MissingStridePlan','No stride plan is available.');
+            end
+            lmz.io.ArtifactStore.save(path,obj.State.StridePlan.toArtifact());
+            obj.State.Status=sprintf('Saved stride plan to %s.',path);
+        end
+
+        function plan=loadStridePlan(obj,path)
+            artifact=lmz.io.ArtifactStore.load(path);
+            plan=lmz.multistride.StridePlan.fromArtifact(artifact);
+            if ~strcmp(plan.ModelId,obj.State.ModelId)
+                error('lmz:GUI:StridePlanModel', ...
+                    'Stride plan belongs to %s, not %s.', ...
+                    plan.ModelId,obj.State.ModelId);
+            end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.State.StridePlan=plan;
+            obj.State.RequestedStrideCount=plan.RequestedStrideCount;
+            obj.State.CompletionPolicy=plan.CompletionPolicy.Id;
+            obj.State.FailurePolicy=plan.FailurePolicy;
+            obj.State.EnergyNeutralOnly= ...
+                ~strcmp(plan.EnergyPolicy.Id,'allow_non_neutral');
+            obj.State.PlanValidation= ...
+                lmz.multistride.StridePlanValidator.validate(plan);
+            obj.State.Status=sprintf('Loaded %d-stride plan.', ...
+                plan.RequestedStrideCount);
+        end
         function solution=selectProblem(obj,problemId)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             model=obj.Registry.createModel(obj.State.ModelId);
@@ -58,9 +404,14 @@ classdef AppController < handle
                     'Unknown problem %s for selected model %s.', ...
                     problemId,obj.State.ModelId);
             end
-            problem=model.createProblem(problemId,struct());
+            configuration=obj.defaultProblemConfiguration( ...
+                obj.State.ModelId,problemId);
+            problem=model.createProblem(problemId, ...
+                obj.problemConfigurationForCreation(problemId,configuration));
             obj.invalidateDerived();
             obj.State.ProblemId=problemId;
+            obj.State.ProblemConfiguration=configuration;
+            obj.State.SolveMode=obj.solveModeForProblem(problemId);
             obj.State.HoverSelection=[];
 
             [dataset,index]=obj.problemDataset(problemId);
@@ -73,7 +424,8 @@ classdef AppController < handle
 
             obj.State.Selection=[];
             obj.State.LockedSelection=[];
-            if isa(problem,'lmz.api.SimulationProblem')
+            if isa(problem,'lmz.api.SimulationProblem')|| ...
+                    isa(problem,'lmz.multistride.NStrideSimulationProblem')
                 solution=obj.makeTutorialSolution(problemId);
             else
                 solution=problem.makeSolution( ...
@@ -432,6 +784,9 @@ classdef AppController < handle
             obj.invalidateDerived();
             obj.State.Selection=selection;obj.State.LockedSelection=selection;obj.State.WorkingSolution=solution;
             obj.State.ProblemId=solution.ProblemId;
+            obj.State.ProblemConfiguration=obj.defaultProblemConfiguration( ...
+                obj.State.ModelId,solution.ProblemId);
+            obj.State.SolveMode=obj.solveModeForProblem(solution.ProblemId);
             obj.State.OscillatorIndex=index;obj.State.Status=sprintf('Locked %s point %d.',dataset.Name,index);
         end
         function solution=selectBranchPoint(obj,index),solution=obj.lockBranchPoint(obj.State.ActiveDatasetId,index);end
@@ -495,6 +850,11 @@ classdef AppController < handle
                 options=obj.simulationOptions(problem.Id);
                 simulation=lmz.services.SimulationService().simulate( ...
                     problem,struct(),options,obj.Context);
+            elseif isa(problem,'lmz.multistride.NStrideSimulationProblem')
+                outcome=problem.simulate(obj.Context);
+                obj.State.MultiStrideResult=outcome;
+                obj.State.StridePlan=outcome.Plan;
+                simulation=outcome.Simulation;
             else
                 simulation=lmz.services.SolutionService().simulate( ...
                     problem,solution,obj.Context);
@@ -514,6 +874,28 @@ classdef AppController < handle
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
             obj.State.SeedPair=[];obj.State.ContinuationPreview=[];obj.State.ContinuationResult=[];
+            if isa(problem,'lmz.schedule.SectionReturnTimingProblem')
+                seed=problem.InputSchedule;
+                if ~isempty(obj.State.WorkingSolution)&& ...
+                        numel(obj.State.WorkingSolution.DecisionValues)== ...
+                        problem.unknownDimension()
+                    seed=obj.State.WorkingSolution;
+                end
+                result=lmz.services.ContactTimingService().solve( ...
+                    problem,seed,options,obj.Context);
+                evaluation=problem.evaluate( ...
+                    problem.decisionFromSchedule(result.SolvedSchedule),[], ...
+                    obj.Context,true);
+                solution=problem.makeSolution( ...
+                    problem.decisionFromSchedule(result.SolvedSchedule),[], ...
+                    evaluation);
+                obj.State.TimingResult=result;obj.State.SolveResult=[];
+                obj.State.SolvedSolution=solution;obj.State.WorkingSolution=solution;
+                obj.State.WorkingEvaluation=evaluation;
+                obj.State.Simulation=result.Simulation;
+                obj.State.Status='Contact timing solve complete';
+                return
+            end
             result=lmz.services.SolveService().solve(problem,obj.State.WorkingSolution,options,obj.Context);
             obj.State.SolveResult=result;obj.State.SolvedSolution=result.Solution;obj.State.WorkingSolution=result.Solution;obj.State.WorkingEvaluation=result.Evaluation;obj.State.Status='Solve complete';
         end
@@ -622,6 +1004,27 @@ classdef AppController < handle
                 if isempty(fieldnames(options)),options=struct('Algorithm','sqp', ...
                         'MaxIterations',1,'MaxFunctionEvaluations',30, ...
                         'OptimalityTolerance',1e-5,'StepTolerance',1e-5);end
+            elseif strcmp(id,'n_stride_fit')
+                if isempty(obj.State.StridePlan)
+                    error('lmz:GUI:MissingStridePlan', ...
+                        ['Complete and validate the shared stride plan before ' ...
+                        'running N-stride optimization.']);
+                end
+                lmz.multistride.StridePlanValidator.validate( ...
+                    obj.State.StridePlan,true);
+                configuration=struct('StridePlan',obj.State.StridePlan, ...
+                    'NumberOfStrides',obj.State.StridePlan.RequestedStrideCount);
+                if isfield(options,'ReferenceExtensionPolicy')
+                    configuration.ReferenceExtensionPolicy= ...
+                        options.ReferenceExtensionPolicy;
+                    options=rmfield(options,'ReferenceExtensionPolicy');
+                end
+                problem=model.createProblem(id,configuration);
+                if isempty(fieldnames(options))
+                    options=struct('Algorithm','sqp', ...
+                        'MaxIterations',1,'MaxFunctionEvaluations',30, ...
+                        'OptimalityTolerance',1e-5,'StepTolerance',1e-5);
+                end
             else
                 problem=model.createProblem(id,struct());
             end
@@ -680,6 +1083,9 @@ classdef AppController < handle
             mappings={ ...
                 'ModelId',lmz.gui.PresentationEvents.ModelChanged; ...
                 'ProblemId',lmz.gui.PresentationEvents.ProblemChanged; ...
+                'ProblemConfiguration', ...
+                    lmz.gui.PresentationEvents.ProblemConfigurationChanged; ...
+                'SolveMode',lmz.gui.PresentationEvents.ProblemConfigurationChanged; ...
                 'ExampleId',lmz.gui.PresentationEvents.ExampleChanged; ...
                 'RoadMapCatalog',lmz.gui.PresentationEvents.DatasetsChanged; ...
                 'Datasets',lmz.gui.PresentationEvents.DatasetsChanged; ...
@@ -693,10 +1099,23 @@ classdef AppController < handle
                 'CandidateSimulation',lmz.gui.PresentationEvents.SimulationChanged; ...
                 'SolvedSolution',lmz.gui.PresentationEvents.SolveResultChanged; ...
                 'SolveResult',lmz.gui.PresentationEvents.SolveResultChanged; ...
+                'TimingResult',lmz.gui.PresentationEvents.SolveResultChanged; ...
+                'SectionTransferResult', ...
+                    lmz.gui.PresentationEvents.ProblemConfigurationChanged; ...
                 'SeedPair',lmz.gui.PresentationEvents.SeedPairChanged; ...
                 'ContinuationPreview',lmz.gui.PresentationEvents.ContinuationChanged; ...
                 'ContinuationResult',lmz.gui.PresentationEvents.ContinuationChanged; ...
                 'OptimizationResult',lmz.gui.PresentationEvents.OptimizationChanged; ...
+                'RequestedStrideCount',lmz.gui.PresentationEvents.StridePlanChanged; ...
+                'StridePlan',lmz.gui.PresentationEvents.StridePlanChanged; ...
+                'MultiStrideResult',lmz.gui.PresentationEvents.StridePlanChanged; ...
+                'CompletionPolicy',lmz.gui.PresentationEvents.StridePlanChanged; ...
+                'FailurePolicy',lmz.gui.PresentationEvents.StridePlanChanged; ...
+                'EnergyNeutralOnly',lmz.gui.PresentationEvents.StridePlanChanged; ...
+                'StrideParameterOverrides', ...
+                    lmz.gui.PresentationEvents.StridePlanChanged; ...
+                'DeclaredWork',lmz.gui.PresentationEvents.StridePlanChanged; ...
+                'PlanValidation',lmz.gui.PresentationEvents.StridePlanChanged; ...
                 'AxisVariables',lmz.gui.PresentationEvents.BranchViewChanged; ...
                 'OscillatorIndex',lmz.gui.PresentationEvents.SelectionChanged; ...
                 'CurrentRun',lmz.gui.PresentationEvents.RunStateChanged; ...
@@ -712,12 +1131,92 @@ classdef AppController < handle
             end
         end
 
+        function configuration=defaultProblemConfiguration(obj,modelId,problemId)
+            try
+                catalog=obj.Registry.getPoincareSectionRegistry(modelId);
+                defaults=catalog.DefaultSectionByProblem;
+                if isfield(defaults,problemId)
+                    sectionId=defaults.(problemId);
+                elseif catalog.hasSection('apex')
+                    sectionId='apex';
+                else
+                    ids=catalog.listSections();sectionId=ids{1};
+                end
+                descriptor=catalog.descriptor(sectionId);
+                configuration=completeSectionConfiguration(struct( ...
+                    'StartSectionId',sectionId,'StopSectionId',sectionId), ...
+                    descriptor,descriptor,catalog);
+            catch
+                configuration=struct();
+            end
+            configuration.StrideCount=1;
+            if any(strcmp(problemId,{'n_stride_simulation', ...
+                    'n_stride_periodic','contact_timing_sequence'}))
+                configuration.NumberOfStrides=max(1, ...
+                    obj.State.RequestedStrideCount);
+            end
+        end
+
+        function value=solveModeForProblem(~,problemId)
+            if strcmp(problemId,'section_return_timing')
+                value='Contact timings only';
+            elseif strcmp(problemId,'n_stride_periodic')
+                value='N-stride periodic orbit';
+            elseif strcmp(problemId,'contact_timing_sequence')
+                value='Timing sequence';
+            else
+                value='Periodic orbit';
+            end
+        end
+
+        function value=problemConfigurationForCreation(~,problemId,value)
+            if strcmp(problemId,'n_stride_simulation')
+                allowed={'NumberOfStrides','InitialDecision','StridePlan', ...
+                    'CompletionPolicy','EnergyPolicy','EnergyNeutralOnly', ...
+                    'FailurePolicy','StartSectionId','StopSectionId', ...
+                    'ProviderCallback','ParameterOverrides','DeclaredWork', ...
+                    'MaximumStrides','Provenance'};
+                names=fieldnames(value);remove=names(~ismember(names,allowed));
+                if ~isempty(remove),value=rmfield(value,remove);end
+            end
+        end
+
+        function value=multiStrideConfiguration(obj)
+            value=struct('NumberOfStrides',obj.State.RequestedStrideCount, ...
+                'CompletionPolicy',obj.State.CompletionPolicy, ...
+                'FailurePolicy',obj.State.FailurePolicy, ...
+                'EnergyNeutralOnly',obj.State.EnergyNeutralOnly);
+            if obj.State.EnergyNeutralOnly
+                value.EnergyPolicy=lmz.multistride.EnergyConsistencyPolicy();
+            else
+                value.EnergyPolicy=lmz.multistride.EnergyConsistencyPolicy( ...
+                    'Id','allow_non_neutral');
+            end
+            configuration=obj.State.ProblemConfiguration;
+            value.StartSectionId=fieldOr(configuration, ...
+                'StartSectionId','apex');
+            value.StopSectionId=fieldOr(configuration, ...
+                'StopSectionId','apex');
+            if ~isempty(obj.State.StridePlan)
+                value.StridePlan=obj.State.StridePlan;
+            elseif ~isempty(obj.State.WorkingSolution)&& ...
+                    strcmp(obj.State.ModelId,'slip_quad_load')&& ...
+                    numel(obj.State.WorkingSolution.DecisionValues)>=44
+                value.InitialDecision=obj.State.WorkingSolution.DecisionValues;
+            end
+            value.ParameterOverrides=obj.State.StrideParameterOverrides;
+            value.DeclaredWork=obj.State.DeclaredWork;
+        end
+
         function initializeGenericModel(obj,model,problemId)
-            problem=model.createProblem(problemId,struct());
+            problem=model.createProblem(problemId, ...
+                obj.problemConfigurationForCreation( ...
+                problemId,obj.State.ProblemConfiguration));
             obj.State.RoadMapCatalog=[];obj.State.Datasets={};
             obj.State.ActiveDatasetId='';obj.State.Selection=[];
             obj.State.LockedSelection=[];obj.State.HoverSelection=[];
-            if isa(problem,'lmz.api.SimulationProblem')
+            if isa(problem,'lmz.api.SimulationProblem')|| ...
+                    isa(problem,'lmz.multistride.NStrideSimulationProblem')
                 obj.State.WorkingSolution=obj.makeTutorialSolution(problemId);
             else
                 obj.State.WorkingSolution=problem.makeSolution( ...
@@ -807,6 +1306,7 @@ classdef AppController < handle
         function invalidateDerived(obj)
             obj.State.WorkingEvaluation=[];obj.State.CandidateSimulation=[];obj.State.Simulation=[];
             obj.State.SolvedSolution=[];obj.State.SolveResult=[];obj.State.SeedPair=[];
+            obj.State.TimingResult=[];obj.State.SectionTransferResult=[];
             obj.State.ContinuationPreview=[];obj.State.ContinuationResult=[];obj.State.OptimizationResult=[];
         end
         function applyEvaluation(obj,problem,evaluation)
@@ -824,7 +1324,15 @@ classdef AppController < handle
             dataset=[];for index=1:numel(obj.State.Datasets),if strcmp(obj.State.Datasets{index}.Id,id),dataset=obj.State.Datasets{index};break,end,end
             if isempty(dataset),error('lmz:GUI:DatasetMissing','Dataset is missing.');end
         end
-        function problem=problem(obj,id),problem=obj.Registry.createModel(obj.State.ModelId).createProblem(id,struct());end
+        function problem=problem(obj,id)
+            configuration=obj.defaultProblemConfiguration(obj.State.ModelId,id);
+            if strcmp(id,obj.State.ProblemId)&& ...
+                    isstruct(obj.State.ProblemConfiguration)
+                configuration=obj.State.ProblemConfiguration;
+            end
+            problem=obj.Registry.createModel(obj.State.ModelId).createProblem( ...
+                id,obj.problemConfigurationForCreation(id,configuration));
+        end
         function [dataset,index]=problemDataset(obj,problemId)
             dataset=[];index=1;
             if ~isempty(obj.State.LockedSelection)
@@ -885,6 +1393,37 @@ classdef AppController < handle
             datasets={};for index=1:numel(obj.State.Datasets),if ~obj.State.Datasets{index}.ReadOnly,datasets{end+1}=obj.State.Datasets{index};end,end %#ok<AGROW>
         end
     end
+end
+
+function value=completeSectionConfiguration(value,start,stop,catalog)
+defaults=struct('StartStateSide',start.StateSide, ...
+    'StopStateSide',stop.StateSide, ...
+    'CrossingDirection',stop.CrossingDirection, ...
+    'MinimumReturnTime',stop.MinimumReturnTime, ...
+    'RequiredEventSequence',{stop.RequiredEventSequence}, ...
+    'ReturnOccurrence',stop.ReturnOccurrence, ...
+    'SymmetryId',catalog.symmetryFor(stop.Id).Id);
+names=fieldnames(defaults);
+for index=1:numel(names)
+    if ~isfield(value,names{index}),value.(names{index})=defaults.(names{index});end
+end
+if ~ischar(value.StartStateSide)||~ischar(value.StopStateSide)|| ...
+        ~any(strcmp(value.StartStateSide,{'pre','post'}))|| ...
+        ~any(strcmp(value.StopStateSide,{'pre','post'}))
+    error('lmz:GUI:SectionSide','Section side must be pre or post.');
+end
+if ~isnumeric(value.CrossingDirection)|| ...
+        ~isscalar(value.CrossingDirection)|| ...
+        ~ismember(value.CrossingDirection,[-1 0 1])
+    error('lmz:GUI:SectionDirection', ...
+        'Section crossing direction must be -1, 0, or 1.');
+end
+if ~isnumeric(value.MinimumReturnTime)|| ...
+        ~isscalar(value.MinimumReturnTime)|| ...
+        ~isfinite(value.MinimumReturnTime)||value.MinimumReturnTime<0
+    error('lmz:GUI:MinimumReturnTime', ...
+        'Minimum return time must be finite and nonnegative.');
+end
 end
 
 function value=fieldOr(source,name,fallback)

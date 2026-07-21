@@ -6,6 +6,16 @@ candidate. Consequently, neither the core profile nor the scientific profile
 is authorized for public redistribution. Temporary packaging tests do not
 change that status.
 
+## Round 9 framework additions
+
+The Poincaré, contact-timing, stride-plan, N-stride, artifact, GUI, guide, and
+public-example additions are native Legged Model Zoo worktree material. Round 9
+copies no new third-party code, data, graphics, or raster files. Scientific
+compatibility calculations and built-in measurements continue to rely only on
+the previously recorded pinned materials below. New experimental sections,
+synthetic stride completions, and repeated reference values do not create new
+source measurements or change any redistribution decision.
+
 ## DLARlab SLIP quadruped RoadMap and compatibility equations
 
 - Source: `https://github.com/DLARlab/SLIP_Model_Zoo.git`

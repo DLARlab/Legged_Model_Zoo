@@ -201,6 +201,25 @@ classdef ModelRegistry < handle
             config.validateContract(contract.frames,contract.parameters);
         end
 
+        function sections = getPoincareSectionRegistry(obj, modelId)
+            manifest=obj.getManifest(modelId);
+            if isempty(manifest.poincareSectionsPath)
+                error('lmz:Registry:MissingPoincareCatalog', ...
+                    'Model %s does not declare a Poincare section catalog.', ...
+                    manifest.id);
+            end
+            model=obj.createModel(modelId);
+            sections=lmz.poincare.PoincareSectionRegistry.fromJson( ...
+                manifest.poincareSectionsPath,'ModelId',manifest.id, ...
+                'StateSchema',model.getPhysicalStateSchema(), ...
+                'TrustedCodeRoot',manifest.trustedCodeRoot, ...
+                'TrustedNamespace',manifest.trustedNamespace);
+            if ~strcmp(sections.CatalogHash,manifest.poincareSectionsHash)
+                error('lmz:Registry:PoincareCatalogChanged', ...
+                    'Poincare catalog changed after registry discovery.');
+            end
+        end
+
         function model = createModel(obj, modelId)
             modelId = lmz.registry.ModelRegistry.canonicalModelId(modelId);
             manifest = obj.getManifest(modelId);
@@ -309,6 +328,31 @@ classdef ModelRegistry < handle
             end
             lmz.registry.ModelRegistry.assertResolvedClass( ...
                 manifest.implementationClass, info.CodeRoot);
+
+            if ~isfield(manifest,'poincareSections')
+                manifest.poincareSections='';
+            end
+            manifest.poincareSectionsPath='';
+            manifest.poincareSectionsHash='';
+            if ~isempty(manifest.poincareSections)
+                if ~ischar(manifest.poincareSections)|| ...
+                        isempty(regexp(manifest.poincareSections, ...
+                        '^[A-Za-z0-9_.-]+\.json$','once'))
+                    error('lmz:Registry:PoincareCatalogPath', ...
+                        'poincareSections must be a safe relative JSON filename.');
+                end
+                catalogPath=lmz.util.PathGuard.resolveWithin( ...
+                    catalogDirectory,manifest.poincareSections,true);
+                constructor=str2func(manifest.implementationClass);
+                catalogModel=constructor();
+                sectionRegistry=lmz.poincare.PoincareSectionRegistry.fromJson( ...
+                    catalogPath,'ModelId',manifest.id, ...
+                    'StateSchema',catalogModel.getPhysicalStateSchema(), ...
+                    'TrustedCodeRoot',info.CodeRoot, ...
+                    'TrustedNamespace',info.Namespace);
+                manifest.poincareSectionsPath=catalogPath;
+                manifest.poincareSectionsHash=sectionRegistry.CatalogHash;
+            end
 
             problemIds = lmz.registry.ModelRegistry.cellstrValue( ...
                 manifest.problems, 'problems');

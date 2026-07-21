@@ -87,12 +87,26 @@ classdef SolutionTab < lmz.gui.tabs.BaseTab
             end
             solution=obj.Controller.State.WorkingSolution;
             locked=[];try,locked=obj.Controller.lockedSolution();catch,end
-            obj.SolutionTable.Data=obj.schemaRows(solution.DecisionSchema, ...
-                solution.DecisionValues,'initial_state',locked);
+            timing=obj.Controller.timingEditorData();
+            if timing.Available
+                obj.SolutionTable.Data=fixedRows( ...
+                    'initial_state',timing.FixedInitialState);
+                obj.ParameterTable.Data=fixedRows( ...
+                    'physical_parameter',timing.FixedPhysicalParameters);
+                obj.SolutionTable.ColumnEditable=false(1,7);
+                obj.ParameterTable.ColumnEditable=false(1,7);
+            else
+                obj.SolutionTable.Data=obj.schemaRows(solution.DecisionSchema, ...
+                    solution.DecisionValues,'initial_state',locked);
+                obj.ParameterTable.Data=obj.schemaRows(solution.ParameterSchema, ...
+                    solution.ParameterValues,'parameter',locked);
+                obj.SolutionTable.ColumnEditable= ...
+                    [false false true false false false false];
+                obj.ParameterTable.ColumnEditable= ...
+                    [false false true false false false false];
+            end
             obj.EventTable.Data=obj.schemaRows(solution.DecisionSchema, ...
                 solution.DecisionValues,'event_timing',locked);
-            obj.ParameterTable.Data=obj.schemaRows(solution.ParameterSchema, ...
-                solution.ParameterValues,'parameter',locked);
             fields=fieldnames(solution.Observables);data=cell(numel(fields),2);
             for index=1:numel(fields)
                 data(index,:)={fields{index},displayValue(solution.Observables.(fields{index}))};
@@ -247,7 +261,9 @@ classdef SolutionTab < lmz.gui.tabs.BaseTab
                         1e-12*max(1,abs(lockedValues(indices(index))));
                 end
                 rows(index,:)={spec.Name,spec.Label,values(indices(index)),spec.Unit, ...
-                    sprintf('[%g, %g] • %s',spec.LowerBound,spec.UpperBound,spec.Activity), ...
+                    sprintf('[%g, %g] • %s • %s • %s', ...
+                    spec.LowerBound,spec.UpperBound,spec.Activity, ...
+                    spec.Role,spec.EnergyEffect), ...
                     spec.Scale,edited};
             end
         end
@@ -275,4 +291,12 @@ end
 function rows=structRows(value)
 names=fieldnames(value);rows=cell(numel(names),2);
 for index=1:numel(names),rows(index,:)={names{index},displayValue(value.(names{index}))};end
+end
+function rows=fixedRows(prefix,values)
+values=values(:);rows=cell(numel(values),7);
+for index=1:numel(values)
+    name=sprintf('%s_%d',prefix,index);
+    rows(index,:)={name,strrep(name,'_',' '),values(index),'', ...
+        'fixed / locked / physical / invariant',1,false};
+end
 end

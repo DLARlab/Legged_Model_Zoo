@@ -35,9 +35,14 @@ if ~created
 end
 exampleOutputCleanup019f=onCleanup( ...
     @()removeExampleOutput(exampleOutputDirectory019f));
-roadmapOutputDirectory=fullfile(exampleOutputDirectory019f,'roadmap');
-slipQuadLoadOutputDirectory=fullfile(exampleOutputDirectory019f,'load');
-desktopOutputDirectory=fullfile(exampleOutputDirectory019f,'desktop');
+roadmapOutputDirectory=fullfile( ...
+    exampleOutputDirectory019f,'roadmap'); %#ok<NASGU>
+slipQuadLoadOutputDirectory=fullfile( ...
+    exampleOutputDirectory019f,'load'); %#ok<NASGU>
+desktopOutputDirectory=fullfile( ...
+    exampleOutputDirectory019f,'desktop'); %#ok<NASGU>
+round9OutputDirectory=fullfile( ...
+    exampleOutputDirectory019f,'round9'); %#ok<NASGU>
 exampleRunnerCleanup019f=onCleanup(@()closeAllFigures());
 run(path);clear exampleRunnerCleanup019f
 clear exampleOutputCleanup019f

@@ -36,6 +36,31 @@ classdef TestArtifactCompatibility < matlab.unittest.TestCase
             lmz.io.ArtifactStore.validate(artifact);
         end
 
+        function legacyVariableMetadataUsesConservativeDefaults(testCase)
+            model=lmzmodels.tutorial_hopper.Model();
+            problem=model.createProblem('periodic_hop',struct());
+            solution=problem.makeSolution( ...
+                problem.getDecisionSchema().defaults(),[],[]);
+            artifact=solution.toArtifact();
+            schemas={'DecisionSchema','ParameterSchema'};
+            for schemaIndex=1:numel(schemas)
+                schemaName=schemas{schemaIndex};
+                variables=artifact.solution.(schemaName).variables;
+                for variableIndex=1:numel(variables)
+                    variables{variableIndex}=rmfield(variables{variableIndex}, ...
+                        {'Role','EnergyEffect'});
+                end
+                artifact.solution.(schemaName).variables=variables;
+            end
+
+            restored=lmz.data.Solution.fromArtifact(artifact);
+            allSpecs=[restored.DecisionSchema.Specs; ...
+                restored.ParameterSchema.Specs];
+            testCase.verifyTrue(all(strcmp({allSpecs.Role},'physical')));
+            testCase.verifyTrue(all(strcmp( ...
+                {allSpecs.EnergyEffect},'unknown')));
+        end
+
         function partialNewMetadataIsRejected(testCase)
             artifact=TestArtifactCompatibility.makeTestArtifact();
             artifact.frameworkVersion='1.0.0-rc.1';

@@ -1,5 +1,5 @@
 function [result, report] = reproduceRun(source, options)
-%REPRODUCERUN Reconstruct a recorded solve, continuation, or optimization.
+%REPRODUCERUN Reconstruct a recorded numerical or workflow run.
 %   RESULT = lmz.services.reproduceRun(ARTIFACT) verifies versions and
 %   recorded built-in hashes, reconstructs the original options and source
 %   seed/pair, and executes the recorded public service again.
@@ -49,8 +49,27 @@ if isfield(artifact, 'problemMetadata') && ...
         isfield(artifact.problemMetadata, 'configuration')
     configuration = artifact.problemMetadata.configuration;
 end
-problem = model.createProblem(artifact.problemId, configuration);
-if ~strcmp(problem.Version, artifact.problemVersion)
+if strcmp(artifact.artifactType,'n-stride-periodic-run')
+    requireField(artifact,'stridePlan');
+    configuration.StridePlan=lmz.multistride.StridePlan.fromStruct( ...
+        artifact.stridePlan);
+end
+problem = [];
+if strcmp(artifact.artifactType,'contact-timing-run')
+    storedTiming=lmz.data.ContactTimingResult.fromStruct( ...
+        artifact.contactTimingResult);
+    configuration=struct('InitialState',storedTiming.FixedInitialState, ...
+        'PhysicalParameters',storedTiming.FixedPhysicalParameters, ...
+        'EventSchedule',storedTiming.InputSchedule, ...
+        'StartSectionId',storedTiming.InputSchedule.StartSectionId, ...
+        'StopSectionId',storedTiming.InputSchedule.StopSectionId);
+    problem=model.createProblem(artifact.problemId,configuration);
+elseif ~any(strcmp(artifact.artifactType, ...
+        {'section-transfer-run','stride-plan-completion-run', ...
+        'n-stride-simulation-run'}))
+    problem = model.createProblem(artifact.problemId, configuration);
+end
+if ~isempty(problem)&&~strcmp(problem.Version, artifact.problemVersion)
     error('lmz:Reproduce:ProblemVersion', ...
         'Problem version %s does not match artifact version %s.', ...
         problem.Version, artifact.problemVersion);
@@ -81,6 +100,25 @@ switch artifact.artifactType
         seed = restoreSeed(artifact.sourceSeed);
         result = lmz.services.OptimizationService().run( ...
             problem, seed, runOptions, context);
+    case 'contact-timing-run'
+        result=lmz.services.ContactTimingService().solve( ...
+            problem,storedTiming.InputSchedule,runOptions,context);
+    case 'section-transfer-run'
+        requireField(artifact,'sourceSeed');
+        sourceSolution=restoreSeed(artifact.sourceSeed);
+        result=lmz.services.SectionTransferService().transfer( ...
+            model,sourceSolution,artifact.targetSectionId,context);
+    case {'stride-plan-completion-run','n-stride-simulation-run'}
+        requireField(artifact,'request');
+        request=lmz.multistride.MultiStrideRequest.fromStruct( ...
+            artifact.request);
+        result=lmz.services.MultiStrideSimulationService().simulate( ...
+            model,request,context);
+    case 'n-stride-periodic-run'
+        requireField(artifact,'sourceSeed');
+        seed=restoreSeed(artifact.sourceSeed);
+        result=lmz.services.SolveService().solve( ...
+            problem,seed,runOptions,context);
     otherwise
         error('lmz:Reproduce:ArtifactType', ...
             'Artifact type %s is not a reproducible run.', artifact.artifactType);
