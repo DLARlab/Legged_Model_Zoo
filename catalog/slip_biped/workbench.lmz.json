@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "scientific_workbench",
+  "label": "SLIP Biped Scientific Workbench",
+  "layoutProfileId": "scientific_workbench",
+  "centralViews": ["branch_state", "hildebrand_footfall", "run_overlay"],
+  "sidebarPanels": ["info_selection", "visualization", "solve_seeds", "continuation", "optimization", "oscillator_analysis", "advanced_shooting_horizon"],
+  "axisPresets": [
+    {
+      "id": "gaitmap_top",
+      "label": "GaitMap top view",
+      "x": "dx",
+      "y": "alphaL",
+      "z": "y",
+      "dimension": "2-D",
+      "azimuth": 0,
+      "elevation": 90,
+      "xLimits": [],
+      "yLimits": [],
+      "zLimits": []
+    }
+  ],
+  "directionLabels": {
+    "backward": "decreasing dx",
+    "forward": "increasing dx"
+  },
+  "defaultSolveOptions": {
+    "FunctionTolerance": 1e-10,
+    "StepTolerance": 1e-10,
+    "MaxIterations": 200,
+    "MaxFunctionEvaluations": 2000,
+    "Display": "off"
+  },
+  "defaultContinuationOptions": {
+    "InitialStep": 0.02,
+    "MinimumStep": 0.0001,
+    "MaximumStep": 0.1,
+    "MaximumPoints": 20,
+    "CorrectorTolerance": 1e-9,
+    "BothDirections": true,
+    "RequireFeasible": true
+  }
+}

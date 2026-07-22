@@ -37,6 +37,22 @@ classdef (Abstract) LeggedModel < handle
             % Provisional generic scene/plot extension point.
             value = [];
         end
+
+        function value = getMultiStrideProvider(~)
+            % Provisional model-owned multi-stride runtime extension point.
+            value = [];
+        end
+
+        function value = getShootingInitializerDescriptors(~,~)
+            % Optional model-owned choices for shooting seed construction.
+            value = struct('Id','schema_defaults', ...
+                'Label','Schema defaults','IsDefault',true);
+        end
+
+        function rendered = renderOptimizationDiagnostics(~,~,~,~)
+            % Optional model-owned optimization presentation hook.
+            rendered = false;
+        end
     end
     methods (Abstract)
         value=getManifest(obj); value=getCapabilities(obj); value=getPhysicalStateSchema(obj)

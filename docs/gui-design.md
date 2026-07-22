@@ -3,9 +3,9 @@
 ## Ownership
 
 `LeggedModelZooApp` is the composition root. It owns application lifecycle, the
-top-level figure, model/problem/example selectors, capability summary, palette
-and preference reset controls, timestamped status aggregation, tab composition,
-and close/cancel coordination. It does not build tab contents, render model
+top-level figure, model/problem/workflow/example selectors, capability summary,
+layout/palette and preference reset controls, timestamped status aggregation,
+shell composition, and close/cancel coordination. It does not build tab contents, render model
 results, or execute tab-specific callbacks.
 
 The six complete handle components are:
@@ -26,6 +26,15 @@ composition. Widget handles are private to their tab; read-only aliases on the
 main app temporarily preserve the Round 6 test-facing interface.
 `RoadMapBranchTab` is an internal compatibility name for `BranchTab`.
 
+Round 11 hosts the same six components through two placement profiles.
+`classic_tabs` retains the established top-level tab group.
+`scientific_workbench` uses workspace adapters and a host-mode branch component
+to place Data Info, a persistent branch/workspace canvas, a scrollable task
+sidebar, and status/progress in the source-inspired hierarchy. Layout classes
+own placement only; they do not own model data or numerical state. Switching a
+profile disposes the old component roots/subscriptions before constructing the
+new host.
+
 Tabs delegate scientific actions to `AppController`. The controller invokes
 services and owns state transitions; it stores no graphics handles and no
 callbacks that capture tabs or figures. Model-specific renderers and plot
@@ -36,10 +45,11 @@ hard-codes a scientific renderer class in model-selection logic.
 
 ## State and synchronization
 
-`AppState` carries the active model/problem, catalogs and datasets, hover and
+`AppState` carries the active model/problem/workflow/data source/workbench and
+layout profile, catalogs and datasets, hover and
 locked selections, working/solved solutions, simulation, seed pair,
-continuation preview/result, optimization result, run/recording state, and
-status. Observable state changes are mapped to validated topics by
+solve progress, continuation direction/preview/result, shared overlay state,
+optimization result, run/recording state, and status. Observable state changes are mapped to validated topics by
 `PresentationEventBus`.
 
 Controller transactions coalesce repeated topics and deliver one ordered batch
@@ -49,6 +59,62 @@ from the final state. Run-state events update control enablement without forcing
 scientific redraws. Continuation progress is published as prediction, accepted,
 rejected, and completed presentation state; numerical callbacks no longer hold
 references to UI objects.
+
+## Registered workflows and layout profiles
+
+`AppController` constructs `WorkflowRegistry` from the active model registry.
+The header lists descriptors for the selected model. Selecting one initializes
+a `WorkflowSession`, loads its registered dataset/default point, configures its
+problem and axis preset, stores the workbench contribution, selects its layout
+profile/visualization defaults, and sets its continuation direction. Generic
+GUI code never imports a built-in model package or switches on a canonical
+model ID to make that choice.
+
+The two profile IDs are `scientific_workbench` and `classic_tabs`. The
+scientific profile uses a three-row/two-column grid with left/right weights
+`3.35:1.85`: Data Info above an expanding workspace, status/progress below,
+and a sidebar spanning all three rows. The central workspace exposes
+`branch_state`, `hildebrand_footfall`, and `run_overlay` views where registered.
+The persistent branch axes remain valid while Info / Selection, Visualization,
+Solve / Seeds, Continuation, Optimization, Oscillator / Analysis, and Advanced
+Shooting / Horizon tasks change.
+
+`CentralAnalysisWorkspace` owns controller-state interpretation and renders
+the footfall/classification and run-diagnostics views. The layout class only
+creates and places their axes, then delegates refresh; it does not read
+scientific state or implement plotting equations.
+
+The entire workbench and each dense sidebar panel have scrollable content.
+Automated contracts target `900 x 650`, `1120 x 740`, `1460 x 900`, and
+`1920 x 1080`; setting a minimum window alone does not satisfy the clipping
+contract. Layout, sidebar/central selections, and sidebar ratio are stored in
+versioned preferences. See
+[scientific-workbench-layout.md](scientific-workbench-layout.md) and
+[gui-layout-profiles.md](gui-layout-profiles.md).
+
+## Shared overlays and solve progress
+
+`BranchOverlayController` owns independent selection, seed/noise, prediction,
+corrected solution, seed-pair, live predictor, rejected, and accepted-
+continuation layers on the persistent axes. Accepted solutions update their
+layer incrementally, and the terminal result replaces that same layer with the
+final or stopped partial branch. `BranchCoordinateMapper`
+maps typed solutions/snapshots through the active named axis preset. Sidebar
+components publish overlay state; they do not recompute branch coordinates or
+own a private scientific copy.
+
+`SolveService` emits GUI-independent `SolveIterationSnapshot` values through
+`SolveCallbacks` and retains them in `SolveProgress`/`SolveResult`. The
+controller updates status and overlay state from those typed values. An
+already-valid seed records a zero-iteration lifecycle. A numerical `fsolve`
+composes the user's output callback with the typed callback without adding a
+scientific residual evaluation merely for presentation.
+
+Continuation retains its existing prediction/accepted/rejected snapshots and
+adds a visible direction choice: `forward`, `backward`, or `both`. Registered
+workbench/workflow labels explain orientation; the quadruped reference defaults
+to `both`. Pause/resume/stop/checkpoint remain service/run-context operations,
+not UI-owned numerical loops.
 
 Subscriptions are explicit disposable handles. Application close cancels work,
 removes the application subscription, disposes every tab subscription and
@@ -221,6 +287,13 @@ per-model/problem preference round trips, trusted factory dispatch, profile
 switch rebuilds, renderer lifecycle, and recording metadata. Numeric geometry
 tests are separate from GUI tests and remain the primary scientific graphics
 fidelity gate.
+
+Round 11 automated tests additionally cover workflow-driven construction,
+the three-row/two-column workbench hierarchy, persistent branch axes and locked
+selection, shared overlays, scrollable minimum-size layouts, expanded-window
+behavior, live solve/continuation progress, host lifecycle, layout preference
+round trips, and the unchanged classic-tabs fallback. These checks validate
+state and geometry contracts; they do not constitute human visual approval.
 
 OS-native dialogs, human hover ergonomics, actual keyboard focus traversal,
 playback timing, cancellation timing, codecs, and side-by-side graphics review

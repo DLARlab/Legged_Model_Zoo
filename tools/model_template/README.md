@@ -20,6 +20,19 @@ end
 report = new_model('example_hopper', pluginRoot);
 ```
 
+This default `minimal_simulation` route preserves the compact generated model
+and its generic-workbench fallback. To generate the registered periodic-branch
+authoring route instead, opt in explicitly:
+
+```matlab
+report = new_model('example_hopper', pluginRoot, ...
+    'AuthoringRoute', 'scientific_periodic_branch');
+```
+
+The scientific route adds an inert data-source catalog, an inert workbench
+contribution, an inert workflow preset, and trusted model-package provider
+templates. It still does not edit or activate the core catalog.
+
 The model ID must be a new lowercase MATLAB-safe identifier matching
 `^[a-z][a-z0-9_]*$`. The output root must already exist. The generator refuses
 reserved/core IDs, traversal, collisions, and accidental production-catalog
@@ -61,6 +74,32 @@ examples/demo_<model-id>.m
 The generated project contains one analytic simulation/periodic problem, named
 schemas, an executable example/test, a generic plot plugin, and declarative
 graphics. It contains no research-fidelity claim or source-derived geometry.
+
+The optional `scientific_periodic_branch` route also generates:
+
+```text
+models/+lmzmodels/+<model-id>/
+  BranchCatalogProvider.m
+  LegacyAdapterProvider.m
+catalog/<model-id>/
+  data_sources.lmz.json
+  workbench.lmz.json
+  workflows/periodic_branch_workflow.json
+tests/generated/<model-id>/TestGeneratedScientificWorkflow.m
+examples/demo_<model-id>_registered_workflow.m
+```
+
+`manifest.json` binds these optional catalogs only for that route. Registry
+discovery contains every relative catalog path within the model catalog,
+freezes its SHA-256 hash, and resolves each provider only inside the explicitly
+trusted plugin code root and model namespace. JSON remains declarative: place
+algorithms, branch construction, and legacy conversion in the generated
+provider classes, not in catalog values.
+
+The starter branch is deterministic and explicitly carries no scientific
+claim. Replace it with reviewed branch provenance, hash checks, validated
+root/seed/continuation settings, visualization, and model-specific tests before
+describing a generated model as a scientific periodic-branch implementation.
 
 ## Generated visual profiles
 
@@ -209,6 +248,11 @@ assert(~any([results.Incomplete]));
 
 run(fullfile(pluginRoot, 'examples', 'demo_example_hopper.m'));
 ```
+
+For the scientific route, also run
+`demo_example_hopper_registered_workflow.m`. The generated scientific test
+checks registration, branch loading, root residual, both-direction
+continuation, and an exact legacy-adapter round trip.
 
 Also test:
 

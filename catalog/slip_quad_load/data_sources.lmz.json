@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0.0",
+  "dataSources": [
+    {
+      "id": "scientific_load",
+      "label": "Scientific load-pulling datasets",
+      "modelId": "slip_quad_load",
+      "problemId": "multi_stride_fit",
+      "kind": "scientific_dataset",
+      "providerClass": "lmzmodels.slip_quad_load.ScientificDataSourceProvider",
+      "defaultDatasetId": "individual_1_tr_to_rl",
+      "metadata": {
+        "axisPresetId": "scientific_load",
+        "datasetIds": ["individual_1_tr_to_rl"],
+        "recommendedPointIndex": 1,
+        "sourceVariable": "X_accum",
+        "readOnly": true
+      }
+    },
+    {
+      "id": "scientific_load_single",
+      "label": "Scientific single-stride load-pulling dataset",
+      "modelId": "slip_quad_load",
+      "problemId": "single_stride",
+      "kind": "scientific_dataset",
+      "providerClass": "lmzmodels.slip_quad_load.ScientificDataSourceProvider",
+      "defaultDatasetId": "individual_1_tr_single",
+      "metadata": {
+        "axisPresetId": "scientific_load",
+        "datasetIds": ["individual_1_tr_single"],
+        "recommendedPointIndex": 1,
+        "sourceVariable": "X_accum",
+        "readOnly": true
+      }
+    }
+  ]
+}

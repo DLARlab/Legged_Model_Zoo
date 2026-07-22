@@ -1,10 +1,10 @@
 # Manual MATLAB desktop QA
 
-## Round 8 environment
+## Round 11 verification environment
 
 | Field | Recorded value |
 |---|---|
-| Date | 2026-07-19 status refresh |
+| Date | 2026-07-21 status refresh |
 | MATLAB | R2025b Update 5, Apple silicon |
 | Operating system | macOS 26.5.2 (build 25F84), arm64 |
 | Desktop session | Unavailable to the automated run (`usejava('desktop')` is false) |
@@ -15,9 +15,14 @@
 The human walkthrough is **blocked by display availability**. Automated
 `uifigure` construction, callbacks, renderers, exports, and headless image
 metrics are useful regression evidence but are not human usability or visual
-approval. No source-derived or golden raster is committed. A release owner must
-complete the checklist below in a real MATLAB desktop before a public
-desktop-usability or research-fidelity claim is made.
+approval. A release owner must complete the checklist below in a real MATLAB
+desktop before a public desktop-usability or research-fidelity claim is made.
+
+Eight automated quadruped-workbench captures are committed under
+`docs/images/round11/`. They are deterministic batch evidence, are classified
+as scientific quadruped derivatives, and are not human screenshots or visual
+approval. No human comparison, source recapture, golden, or difference raster
+is committed.
 
 ## Required human walkthrough
 
@@ -35,9 +40,16 @@ desktop-usability or research-fidelity claim is made.
 - Switch `research` to `high-contrast` and back on the same frame. Confirm the
   body geometry, camera, current frame, silhouette, and z-order remain stable,
   and confirm recording/export uses the selected profile consistently.
-- Resize the window across common desktop sizes. Confirm that every tab remains
-  usable at the documented 1100-by-700 minimum, that controls do not overlap or
-  disappear, and that compact layouts recover when the window is enlarged.
+- Exercise both `scientific_workbench` and `classic_tabs`. Compare the
+  workbench with the source `SLIP_Quadruped_GUI`; confirm the persistent branch
+  canvas remains visible while Info, Visualization, Solve, Continuation, and
+  Oscillator/Analysis sidebar tabs change, and confirm the classic six-tab
+  shell remains functional.
+- Resize the workbench through `900 x 650`, `1120 x 740`, `1460 x 900`, and
+  `1920 x 1080`. Confirm that every enabled control remains reachable, dense
+  sidebar and top-level content scroll vertically when needed, controls and
+  labels do not overlap, tables retain useful height, scroll position is stable
+  across ordinary refreshes, and the two-column layout expands when enlarged.
 - Traverse the header and every tab using only the keyboard. Confirm a logical
   focus and tab order, visible focus indication, reachable primary and cancel
   actions, and no keyboard traps.
@@ -63,16 +75,32 @@ desktop-usability or research-fidelity claim is made.
 
 ### SLIP quadruped
 
-- Load every built-in RoadMap branch; verify hover and click-to-lock.
+- Select the registered `roadmap_root_continuation` workflow. Confirm it loads
+  `PK_20_2`, point 267, `dx / dphi / y` axes, the research profile, and the
+  both-direction default without manually reconstructing those settings.
+- Load the selected and all built-in RoadMap branches. Exercise provider-based
+  fixed/varying parameter filtering, hover preview, and click-to-lock. Confirm
+  hover never replaces the locked point and that selection synchronizes Info,
+  Visualization, Solve, Continuation, and Oscillator/Analysis.
 - In the `research` profile, compare at least three representative frames with
   the pinned source. Check the compound torso, four legs, springs, COM marker,
   ground and phase displays, force overlays, color/width hierarchy, z-order,
   and source camera framing.
-- Edit and restore a solution; run physical simulation and Play/Pause/Stop.
+- Edit and restore a solution, apply reproducible noise, and confirm locked,
+  edited, and noise overlays remain distinct; run physical simulation and
+  Play/Pause/Stop.
 - Record GIF/MP4/keyframes and export plots.
-- Refine a solution; create adjacent and generated seeds.
-- Run, pause, resume, stop, checkpoint, and resume continuation.
-- Run an active-parameter homotopy and branch-family scan.
+- Refine a solution; inspect live iteration/residual history and exact
+  diagnostics; create both adjacent and generated/corrected seed pairs and
+  confirm their predictor/correction overlays share the branch canvas.
+- Run decreasing-`dx`, increasing-`dx`, and both-direction continuation. Inspect
+  live predictor, accepted, optional rejected, and partial-branch overlays;
+  pause, resume, controlled-stop, checkpoint, and file-resume the run.
+- Run an active-parameter homotopy and branch-family scan. Confirm their result
+  datasets remain separate and can be added to the workspace without calling
+  the family scan two-dimensional continuation.
+- Record an animation, then close during idle and during a controlled run.
+  Confirm resources are released and reopening does not duplicate callbacks.
 
 ### SLIP biped
 

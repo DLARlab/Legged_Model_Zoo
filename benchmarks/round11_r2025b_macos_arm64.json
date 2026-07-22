@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "1.0.0",
+  "frameworkVersion": "1.0.0-rc.3",
+  "matlabRelease": "2025b",
+  "matlabVersion": "25.2.0.3177638 (R2025b) Update 5",
+  "architecture": "maca64",
+  "repetitions": 3,
+  "measuredAt": "2026-07-21T23:28:51.409Z",
+  "records": [
+    {
+      "Name": "workbench_construction",
+      "MedianSeconds": 9.615917791666666,
+      "SpreadSeconds": 0.0725577916666662,
+      "Samples": [
+        10.364590458333334,
+        9.54336,
+        9.615917791666666
+      ],
+      "BudgetSeconds": 30,
+      "Fixture": "hidden scientific_workbench at 1120 x 740",
+      "WithinBudget": true
+    },
+    {
+      "Name": "model_workflow_switch",
+      "MedianSeconds": 15.948671041666667,
+      "SpreadSeconds": 0.13775933333333334,
+      "Samples": [
+        17.625454833333333,
+        15.948671041666667,
+        15.810911708333334
+      ],
+      "BudgetSeconds": 20,
+      "Fixture": "biped model to registered quadruped RoadMap workflow",
+      "WithinBudget": true
+    },
+    {
+      "Name": "roadmap_all_branches_registered_load",
+      "MedianSeconds": 0.69277716666666667,
+      "SpreadSeconds": 0.017523291666666663,
+      "Samples": [
+        0.738942875,
+        0.69277716666666667,
+        0.675253875
+      ],
+      "BudgetSeconds": 60,
+      "Fixture": "registered RoadMap branch_catalog provider",
+      "WithinBudget": true
+    },
+    {
+      "Name": "branch_axis_change_with_overlays_20",
+      "MedianSeconds": 0.062638458333333327,
+      "SpreadSeconds": 0.001218083333333328,
+      "Samples": [
+        0.067401833333333327,
+        0.062638458333333327,
+        0.061420375
+      ],
+      "BudgetSeconds": 20,
+      "Fixture": "persistent source, locked, and edited overlay layers",
+      "WithinBudget": true
+    },
+    {
+      "Name": "branch_hover_updates_100",
+      "MedianSeconds": 0.36856391666666666,
+      "SpreadSeconds": 0.015187291666666658,
+      "Samples": [
+        0.44597995833333332,
+        0.36856391666666666,
+        0.353376625
+      ],
+      "BudgetSeconds": 15,
+      "Fixture": "nearest-point updates on the registered RoadMap",
+      "WithinBudget": true
+    },
+    {
+      "Name": "sidebar_tab_switching_50",
+      "MedianSeconds": 0.33101308333333335,
+      "SpreadSeconds": 0.041214000000000028,
+      "Samples": [
+        2.3249267916666665,
+        0.33101308333333335,
+        0.28979908333333332
+      ],
+      "BudgetSeconds": 20,
+      "Fixture": "scrollable capability sidebar with persistent central axes",
+      "WithinBudget": true
+    },
+    {
+      "Name": "solve_progress_updates_100",
+      "MedianSeconds": 3.093587875,
+      "SpreadSeconds": 0.012361499999999914,
+      "Samples": [
+        3.71374775,
+        3.081226375,
+        3.093587875
+      ],
+      "BudgetSeconds": 20,
+      "Fixture": "typed snapshots delivered through presentation events",
+      "WithinBudget": true
+    },
+    {
+      "Name": "accepted_continuation_overlay_updates_20",
+      "MedianSeconds": 0.25389333333333336,
+      "SpreadSeconds": 0.00062833333333334185,
+      "Samples": [
+        0.26705704166666666,
+        0.25389333333333336,
+        0.253265
+      ],
+      "BudgetSeconds": 20,
+      "Fixture": "incremental accepted-solution overlay updates",
+      "WithinBudget": true
+    },
+    {
+      "Name": "minimum_size_resize_scroll_refresh_20",
+      "MedianSeconds": 0.987596,
+      "SpreadSeconds": 0.0018934166666666474,
+      "Samples": [
+        2.948796125,
+        0.987596,
+        0.98570258333333338
+      ],
+      "BudgetSeconds": 20,
+      "Fixture": "900 x 650 and preferred-size viewport refresh",
+      "WithinBudget": true
+    },
+    {
+      "Name": "classic_workbench_layout_switch_10",
+      "MedianSeconds": 81.694518125,
+      "SpreadSeconds": 1.5262424166666619,
+      "Samples": [
+        86.69516625,
+        81.694518125,
+        80.16827570833334
+      ],
+      "BudgetSeconds": 120,
+      "Fixture": "host-neutral component teardown and reconstruction",
+      "WithinBudget": true
+    }
+  ],
+  "notes": "Warm hidden-GUI timings. Budgets are conservative regression ceilings, not latency targets."
+}

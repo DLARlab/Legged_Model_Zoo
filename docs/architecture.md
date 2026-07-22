@@ -1,6 +1,6 @@
 # Architecture
 
-Dependencies point from GUI to application services to model-independent algorithms and problem/model contracts. Persistence consumes plain data objects, while visualization consumes named simulation output. Model-specific layouts are restricted to adapters under `models/+lmzmodels`.
+Dependencies point from GUI to application services to model-independent algorithms and problem/model contracts. Persistence consumes plain data objects, while visualization consumes named simulation output. Model-specific scientific logic and legacy data layouts are restricted to adapters/providers under `models/+lmzmodels`; registered workbench metadata selects only generic placement profiles and components.
 
 Manifests bind only classes in the approved `lmzmodels.*` namespace. JSON contains no executable expressions. `startup.m` adds only `src` and `models`.
 
@@ -9,6 +9,7 @@ The introductory path delegates GUI simulation to `AppController`, then `Simulat
 ```text
 LeggedModelZooApp
   -> AppController
+  -> WorkflowRegistry / registered data + workbench + workflow descriptors
   -> Branch / Evaluation / Solution / Solve / Seed / Continuation services
   -> slip_quadruped.PeriodicApexProblem
      | slip_biped.PeriodicApexProblem / TrajectoryFitProblem
@@ -31,9 +32,11 @@ named render/plot providers. The scientific packages are
 GUI controls call `AppController`, which owns invalidation and synchronization
 and delegates to services. Six handle-based components under
 `+lmz/+gui/+tabs` own their widgets, callbacks, refresh, busy/capability state,
-selection, test hooks, and disposal. `LeggedModelZooApp` is limited to lifecycle,
-header/model/problem selection, status aggregation, tab composition, and
-close/cancel coordination. A transactional presentation event bus coalesces a
+selection, test hooks, and disposal; host-neutral workspace adapters reuse
+those components in either `scientific_workbench` or `classic_tabs`.
+`LeggedModelZooApp` is limited to lifecycle,
+header/model/problem/workflow/layout selection, status aggregation, shell
+composition, and close/cancel coordination. A transactional presentation event bus coalesces a
 logical state transition and refreshes each subscriber once; subscription
 handles make listener disposal and leak tests explicit. No scientific logic is
 moved into widgets. Dedicated solver/projector adapters own calls to `fsolve`
@@ -57,6 +60,9 @@ ModelRegistry --> trusted LeggedModel implementation
         |                +--> PlotPlugin / KinematicsFrame / pure geometry
         |                +--> trusted Renderer implementation
         +--> GraphicsConfig / VisualizationProfileRegistry
+        +--> WorkflowRegistry
+             +--> contained DataSourceProvider / legacy adapter
+             +--> inert WorkbenchContribution / WorkflowDescriptor
         v
 services --> solver / continuation / optimization algorithms
         |
@@ -69,6 +75,41 @@ External code never becomes a dependency of `src/+lmz`; it implements the
 contracts. Scientific compatibility evaluators remain at the model edge and
 are not routed through the new generic hybrid engine during the release
 candidate round.
+
+## Registered workflow boundary
+
+Round 11 extends model discovery with three optional, additive manifest
+references: `dataSources`, `workbench`, and `workflows`. `ModelRegistry`
+contains and hashes their catalog paths; `WorkflowRegistry` validates schema,
+identity, provider trust, problem capabilities, axis/layout/graphics
+references, and frozen digests. A data-source provider is trusted model/plugin
+code and must resolve inside its registered package and code root. Workbench and
+workflow JSON are inert configuration and cannot contain callbacks.
+
+`WorkflowRunner` creates one `WorkflowSession` from a registry-bound
+descriptor and `RunContext`. The session owns runtime selection and delegates
+root solve, seed construction, continuation, checkpoint/resume, homotopy, and
+family scan to existing generic services. It neither imports a built-in
+scientific package directly nor reimplements an algorithm. A model without
+optional contributions receives an empty workflow list and generic
+`classic_tabs` workbench.
+
+The quadruped RoadMap provider and exact Results29 adapter remain in
+`lmzmodels.slip_quadruped`; biped/load/tutorial equivalents remain in their
+model packages. Generic code under `src/+lmz/+gui`, `+services`, and
+`+workflow` consumes descriptors/providers and does not switch on canonical
+built-in model IDs. The external analytic-hopper fixture crosses the same
+boundary and proves scoped removal.
+
+The presentation side has a separate placement boundary. `WorkbenchShell`
+chooses a layout profile and hosts the same six components. The scientific
+layout adds a persistent `BranchCanvas`, shared overlay controller, scrollable
+task sidebar, workspace views, and status/progress dock; classic tabs retain
+the established placement. The host-neutral `CentralAnalysisWorkspace`, not
+the layout, interprets controller state for footfall/classification and live
+run diagnostics. Controller state owns datasets, selection, results, progress,
+and overlays, so switching layout does not alter scientific state or recompute
+a branch.
 
 ## Registry and external plugins
 

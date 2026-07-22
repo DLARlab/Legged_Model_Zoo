@@ -3,7 +3,7 @@ classdef Version
     %   Version values follow Semantic Versioning 2.0.0. Build metadata is
     %   intentionally ignored for precedence comparisons. The framework
     %   version is read from root VERSION; artifact and catalog schemas are
-    %   versioned independently and remain 1.0.0 for the rc.2 migration.
+    %   versioned independently and remain 1.0.0 for the rc.3 migration.
     methods (Static)
         function value = current()
             persistent frameworkVersion

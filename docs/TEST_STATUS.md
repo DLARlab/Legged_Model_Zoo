@@ -2,8 +2,14 @@
 
 ## Environment
 
-- Latest locally closed run: 2026-07-21 Round 10 worktree verification
-- Latest committed closing baseline: 2026-07-20 Round 9 closing verification
+- Latest public committed HEAD: Round 10 closing commit
+  `5c6a6c100f752ea6ed1fd20114f84800f9b52070` (2026-07-21)
+- Latest locally executed closing gates: authoritative sequential Round 11
+  R2025b suite (`631/631`, 0 failed/incomplete), enforced coverage over the
+  same 631 tests, and final quality/architecture/R2019b static scans
+- Current worktree: Round 11 implementation on that committed HEAD, framework
+  candidate `1.0.0-rc.3`; artifact/catalog/workflow/data-source/workbench
+  schemas remain `1.0.0`
 - MATLAB: `25.2.0.3177638 (R2025b) Update 5`, Apple silicon
 - License: Student License
 - Operating system: macOS 26.5.2 (build 25F84), arm64
@@ -15,20 +21,57 @@ MATLAB R2019b is the compatibility target, but no R2019b installation is
 available. Runtime verification is therefore R2025b-only; the R2019b result
 below is a static audit and is not described as execution evidence.
 
+## Round 11 worktree validation status
+
+Round 11 is an uncommitted worktree on the latest public committed Round 10
+HEAD `5c6a6c100f752ea6ed1fd20114f84800f9b52070`. Before Round 11 edits, the
+unchanged R2025b suite passed 544/544 with 0 failed and 0 incomplete in
+`1011.673424917` seconds. That is a pre-edit non-regression baseline, not the
+Round 11 closing result.
+
+Local closing marker: `ROUND11_LOCAL_AUTOMATION_PASSED`. This records the
+current uncommitted Round 11 worktree, not a new public commit or release.
+
+| Round 11 gate | Current evidence / status |
+|---|---|
+| Workflow/data/workbench registration | **PASS** — built-in providers, manifests, descriptor hashes, generic fallback, external plugin trust/removal, GUI use, and workflow/catalog validation are included in the 631-test suite. |
+| Quadruped reference workflow | **PASS** — `PK_20_2` point 267, accepted solve, adjacent/generated seeds, forward/backward/both continuation, callbacks, checkpoint/resume, artifact round trip, and touchdown transfer passed. The public example reported residual `2.91e-11` and 20 points. |
+| Solve progress | **PASS** — accepted seeds, composed numerical callbacks, projection lifecycle, controlled-stop artifact reasons, typed snapshots, live overlays, and persisted `SolveProgress`/`SolveResult` state passed. |
+| Provider refactors/model independence | **PASS** — final quality checked 377 files with zero unallowlisted violations; architecture found zero violations; the canonical built-in-ID guard passed. |
+| Scientific workbench/classic layout | **PASS (automated)** — hierarchy, persistent canvas, central state ownership, retained homotopy/family results, scroll/clipping, expansion, preferences, lifecycle/subscriptions, status/progress, and classic fallback passed. Eight inspected automated PNGs cover the required states; they are not human desktop evidence. |
+| Workbench/full performance | **PASS** — 10 focused workbench and 29 full-matrix records, each over three repetitions, have zero median budget overruns. Focused medians include construction `9.615918` s, model/workflow switch `15.948671` s, scroll refresh `0.987596` s, and ten classic/workbench switches `81.694518` s. |
+| Complete non-instrumented suite | **PASS** — 631/631, 0 failed, 0 incomplete, `2887.735954750` seconds. |
+| Public examples and clean-copy isolation | **PASS** — 55/55 examples in `579.852970708` seconds; clean-copy 1/1 in `51.230211833` seconds. |
+| Coverage, quality, architecture, R2019b static audit | **PASS** — coverage 631/631 and `23,614/29,755` statements (79.3614518568308%) across 375 files/34 packages with all five floors; quality 377/0; architecture 0; R2019b static 807 files/0. No R2019b runtime is available. |
+| README/workflow/catalog validation and technical ZIP/toolbox clean install | **PASS technically / authority open** — documentation and catalogs passed; core source ZIP/toolbox selected 680/383 files and scientific source ZIP/toolbox selected 1,065/660 files. All four clean-install paths passed while every artifact remained unauthorized and unretained. |
+| Redistribution inventory | **STRUCTURALLY PASS / AUTHORITY BLOCKED** — 1,080 files, 1,065 selected blockers, zero structural/stale/missing/unlisted findings, project decision unresolved. |
+
+The enforced stable-package coverage rates/floors were `lmz.api`
+0.847059/0.735714, `lmz.data` 0.835022/0.775397, `lmz.io`
+0.851574/0.809504, `lmz.registry` 0.834802/0.784356, and `lmz.services`
+0.788079/0.694932. No runtime source file was excluded.
+
+Remote CI has not run, the batch process has no interactive MATLAB desktop,
+R2019b runtime has not run, and redistribution authority remains unresolved.
+Automated layout checks or screenshots are not human desktop evidence. No
+local result above is remote-CI, human-desktop, R2019b-runtime,
+redistribution-authority, or public-release evidence.
+
 ## Round 10 verification status
 
 - Round 8 closing HEAD:
   `c2616735354a354fa432bac549f81861f8ddd9a5` (committed)
 - Round 9 closing HEAD:
   `c0d87860b59cfbdffe96e165cd01c68e2de7d948` (committed)
-- Round 10 worktree base/current committed HEAD:
-  `c0d87860b59cfbdffe96e165cd01c68e2de7d948`
+- Round 10 closing HEAD:
+  `5c6a6c100f752ea6ed1fd20114f84800f9b52070` (committed)
 - Framework version: `1.0.0-rc.2`; artifact/catalog schemas: `1.0.0`
 
-Round 10 implementation and its local validation gates are complete in the
-current uncommitted worktree. The committed HEAD remains the Round 9 closing
-commit above; the Round 10 changes and the evidence below are not a commit or
-a public release.
+Round 10 implementation and documentation are committed at the closing HEAD
+above. The evidence below records locally executed R2025b commands on the
+content now committed there; it is not evidence of remote CI, a human desktop
+walkthrough, R2019b runtime execution, redistribution authority, or a public
+release.
 
 Local automation marker: `ROUND10_LOCAL_AUTOMATION_PASSED`.
 
@@ -201,8 +244,8 @@ cases, and six load cases:
 These are automated batch-image metrics, not human approval. Geometry tests
 remain the primary cross-platform fidelity gate. Only numeric metric JSON and
 geometry fixtures are committed under `docs/graphics-comparison/` and
-`tests/fixtures/graphics/`; no source, LMZ, golden, or difference raster is
-committed.
+`tests/fixtures/graphics/`; no Round 8 source/LMZ comparison, golden, or
+difference raster is committed.
 
 ### Research renderer performance
 
@@ -231,7 +274,8 @@ graphics backends.
   claimed.
 - No redistribution conclusion changed. Adapted geometry, fixtures, and any
   potential rasters remain subject to unresolved framework/scientific-source
-  authority, and no raster is committed.
+  authority, and no Round 8 source/LMZ/golden/difference comparison raster is
+  committed.
 - Public release remains blocked by the framework and scientific-source
   authority decisions recorded below; a technically green internal candidate
   is not a redistribution grant.
@@ -275,8 +319,9 @@ Redistribution inventory: 628 files, 613 selected scientific blockers, project d
 `missingHelp` and `complexity` remain visible informational findings. The
 R2019b number is a static syntax/API scan on R2025b, not runtime execution.
 All 18 source-versus-LMZ comparison cases passed in three separate MATLAB
-processes; their scalar reports record `humanApproved: false` and no raster is
-retained.
+processes; their scalar reports record `humanApproved: false` and no Round 8
+comparison raster was retained. Separate Round 11 automated GUI captures are
+classified and qualified above.
 
 The closing programmatic-coverage run used the same frozen tree, instrumented
 every runtime MATLAB file below `src/+lmz` and `models/+lmzmodels`, enforced the

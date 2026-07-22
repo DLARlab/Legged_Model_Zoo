@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "scientific_workbench",
+  "label": "Generated periodic-branch workbench",
+  "modelId": "{{MODEL_ID}}",
+  "layoutProfileId": "scientific_workbench",
+  "centralViews": ["branch_state", "run_overlay"],
+  "sidebarPanels": ["info_selection", "visualization", "solve_seeds", "continuation"],
+  "axisPresets": [
+    {
+      "id": "periodic_branch",
+      "label": "Periodic branch",
+      "x": "speed",
+      "y": "periodicity_error",
+      "z": "",
+      "dimension": "2-D",
+      "azimuth": 0,
+      "elevation": 90,
+      "xLimits": [0.75, 1.25],
+      "yLimits": [-0.1, 0.1],
+      "zLimits": []
+    }
+  ],
+  "parameterFilters": {},
+  "analysisPlugins": [],
+  "directionLabels": {
+    "backward": "decreasing speed",
+    "forward": "increasing speed"
+  },
+  "defaultSolveOptions": {
+    "FunctionTolerance": 1e-10,
+    "StepTolerance": 1e-10,
+    "MaxIterations": 100,
+    "MaxFunctionEvaluations": 500,
+    "Display": "off"
+  },
+  "defaultContinuationOptions": {
+    "InitialStep": 0.05,
+    "MinimumStep": 0.0001,
+    "MaximumStep": 0.1,
+    "MaximumPoints": 6,
+    "CorrectorTolerance": 1e-9,
+    "BothDirections": true,
+    "RequireFeasible": true
+  }
+}

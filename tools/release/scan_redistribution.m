@@ -57,7 +57,12 @@ for index=1:numel(files)
         fullfile(root,strrep(relative,'/',filesep)));
     if ~isempty(old)
         oldPaths={old.relativePath};match=find(strcmp(relative,oldPaths),1);
-        if ~isempty(match),entry=preserveDecision(entry,old(match));end
+        if ~isempty(match)
+            categoryChanged=isRound11Capture(relative)&& ...
+                (~isfield(old(match),'category')|| ...
+                ~strcmp(old(match).category,entry.category));
+            if ~categoryChanged,entry=preserveDecision(entry,old(match));end
+        end
     end
     entries(index)=entry;
 end
@@ -133,6 +138,9 @@ end
 
 function family=scientificFamily(relative,lowerPath)
 family='';
+if isRound11Capture(relative)
+    family='quadruped';return
+end
 roundEightMixed={ ...
     'docs/legacy-graphics-audit.md', ...
     'docs/graphics-fidelity-map.csv', ...
@@ -198,9 +206,15 @@ end
 if strcmp(relative,'tests/fixtures/baselines/slip_quad_load/source_baselines.mat')
     sources={'examples/data/slip_quad_load/Scientific/dataset_manifest.json'};return
 end
-if strncmp(relative,'docs/screenshots/',17)&&~isempty(family)
+if (strncmp(relative,'docs/screenshots/',17)||isRound11Capture(relative))&& ...
+        ~isempty(family)
     sources={'examples/data/slip_quadruped/RoadMap/roadmap_manifest.json'};
 end
+end
+
+function value=isRound11Capture(relative)
+value=strncmp(relative,'docs/images/round11/',20)&& ...
+    ~isempty(regexp(relative,'\.png$','once'));
 end
 
 function entry=preserveDecision(entry,old)

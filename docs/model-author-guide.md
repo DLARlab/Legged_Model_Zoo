@@ -24,6 +24,23 @@ registry = lmz.registry.ModelRegistry.discoverWithPlugins( ...
 model = registry.createModel('example_hopper');
 ```
 
+The default `AuthoringRoute` is `minimal_simulation`. It generates the compact
+model/problem/schema/scene route and relies on the generic classic-workbench
+fallback. For a branch-capable scientific scaffold, request the exact route
+`scientific_periodic_branch`:
+
+```matlab
+report = new_model('example_hopper', outputRoot, ...
+    'AuthoringRoute', 'scientific_periodic_branch');
+```
+
+That route adds `data_sources.lmz.json`, `workbench.lmz.json`,
+`workflows/periodic_branch_workflow.json`, branch-catalog and legacy-adapter
+provider templates, a registered-workflow example, and a workflow test. The
+generated periodic branch is analytic tutorial data; replace it with reviewed,
+hashed scientific data and evidence before changing maturity or validation
+status.
+
 The generator creates `models/+lmzmodels/+example_hopper`,
 `catalog/example_hopper`, `tests/generated/example_hopper`, an executable
 example, and `plugin.json`. It rejects IDs already owned by the built-in
@@ -166,7 +183,7 @@ explicit interface defects, and exactly one final periodic closure, transition
 target, or feasibility target. Registered adapters must have an inert
 `toStruct` identity so artifacts and `reproduceRun` can verify the problem and
 horizon hashes. Runtime callbacks remain non-serializable experiments. The new
-shooting, timing-family, and horizon APIs are provisional in rc.2; see
+shooting, timing-family, and horizon APIs remain provisional in rc.3; see
 [API_STABILITY.md](API_STABILITY.md),
 [multiple-shooting.md](multiple-shooting.md), and
 [horizon-feasibility.md](horizon-feasibility.md).
@@ -202,12 +219,62 @@ inside the manifest root. If a legacy format is required, isolate raw indexing
 and import/export in one adapter and retain a native artifact round-trip test.
 Never put legacy indexing into GUI or generic service code.
 
+## Registered data, workbench, and workflows
+
+The `minimal_simulation` route stops at the ordinary model/problem/scene
+contract. Use `scientific_periodic_branch` only when the model has a meaningful
+branch source, root problem, seed-pair policy, and continuation evidence.
+
+The scientific route adds three optional manifest bindings:
+
+```json
+"dataSources": "data_sources.lmz.json",
+"workbench": "workbench.lmz.json",
+"workflows": ["workflows/periodic_branch_workflow.json"]
+```
+
+Implement a model-owned `DataSourceProvider` that lists datasets, returns
+`BranchDataset`, and recommends an interior point. A `BranchCatalogProvider`
+may own scientific branch records/style. A `LegacyDataAdapterProvider` owns
+exact legacy import/export. All provider classes must stay inside the model or
+explicitly trusted plugin package; generic `src/+lmz` code must not import
+them directly.
+
+The workbench contribution selects `scientific_workbench` or `classic_tabs`,
+declares central views/sidebar panels, and supplies named axis presets,
+direction labels, and presentation defaults. It cannot enable a capability the
+problem does not have. The workflow descriptor binds the provider dataset,
+problem/configuration, default point, axis/graphics/layout profiles, allowed
+steps, seed policy, solve/continuation defaults, optional homotopy/family scan,
+analysis views, maturity/validation, and immutable provenance.
+
+Verify the complete route through `WorkflowRegistry` and `WorkflowRunner`:
+
+```matlab
+workflows = lmz.workflow.WorkflowRegistry.fromModelRegistry(registry);
+descriptor = workflows.get(modelId, 'periodic_branch_workflow');
+session = lmz.workflow.WorkflowRunner().initialize( ...
+    descriptor, lmz.api.RunContext.synchronous(42));
+solved = session.solve(struct());
+pair = session.makeAdjacentSeedPair(+1, struct());
+continued = session.continueBranch(struct( ...
+    'DirectionMode','both','MaximumPoints',4, ...
+    'InitialStep',pair.AchievedRadius));
+```
+
+For an external plugin, also test provider namespace/root containment, digest
+changes after discovery, optional-resource fallback, duplicate registration,
+and registry deletion/path removal. See
+[registered-workflows.md](registered-workflows.md) for every descriptor field
+and the quadruped/external reference paths.
+
 ## Artifacts and GUI integration
 
 Use `Solution.toArtifact`, result `toArtifact` methods, and `ArtifactStore`.
 Do not serialize model objects or callbacks. Registry-bound problems propagate
 their descriptors into solutions. Generic GUI integration comes from problem
-capabilities and `getVisualizationPlugin`; no model-ID branch is required.
+capabilities, `getVisualizationPlugin`, and optional registered data/workbench/
+workflow contributions; no model-ID branch is required.
 
 ## Required tests
 
@@ -218,6 +285,9 @@ short continuation where advertised, shooting decision round trip, one
 integration per segment evaluation, interface defects, rank/feasibility
 classification, horizon checkpoint/dimension embedding where advertised,
 stride completion/energy policies, scene construction, artifact round trip,
-malformed inputs, absence of core prompts, and clean removal of an external registration. Follow
+malformed inputs, absence of core prompts, registered provider/workflow
+discovery and execution where advertised, both continuation directions where
+advertised, layout fallback/contribution, digest and trust rejection, and clean
+removal of an external registration. Follow
 [testing-a-model.md](testing-a-model.md) and the executable sequence in
 [getting-started-build-a-model.md](getting-started-build-a-model.md).

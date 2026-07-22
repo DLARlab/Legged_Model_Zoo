@@ -1,7 +1,7 @@
 # API stability
 
 Legged Model Zoo uses Semantic Versioning. The framework release candidate is
-`1.0.0-rc.2`; prerelease status means the documented contract is being frozen,
+`1.0.0-rc.3`; prerelease status means the documented contract is being frozen,
 not that public redistribution has been authorized.
 
 ## Stability classes
@@ -70,6 +70,26 @@ the final 1.0 release:
 - native stride-plan, section-local codec/adapter, horizon-template, and
   shooting/horizon GUI configuration added in Rounds 9 and 10.
 
+Round 11 adds these **provisional** public surfaces:
+
+- `lmz.workflow.WorkflowRegistry`, `WorkflowDescriptor`, `WorkflowRunner`,
+  `WorkflowSession`, `WorkflowResult`, `WorkflowStep`, `WorkflowPreset`,
+  `DataSourceDescriptor`, `DataSourceProvider`, `BranchCatalogProvider`,
+  `LegacyDataAdapterProvider`, `WorkbenchContribution`, `AxisPreset`,
+  `SeedPreset`, and `ContinuationPreset`;
+- optional model-manifest `dataSources`, `workbench`, and `workflows`
+  registrations and their schema-1.0 declarative documents;
+- `lmz.data.SolveIterationSnapshot`, `SolveProgress`, and
+  `lmz.solvers.SolveCallbacks`; and
+- the `scientific_workbench` and `classic_tabs` layout-profile IDs and their
+  `AppController.setLayoutProfile`/`layoutProfileId` selection route.
+
+GUI layout/widget classes, concrete overlay/controller implementations, and
+model-owned provider implementation classes remain internal. The provisional
+contracts are the inert descriptors, provider base interfaces, result values,
+registered IDs, and controller selection route—not the location or handle
+type of an individual widget.
+
 Four model-owned Round 10 facades are explicit exceptions because the public
 quad-load evidence examples instantiate them directly: `lmzmodels.slip_quad_load.StrideTemplateLibrary`,
 `QuadLoadFeasibilityEvidence`, `QuadLoadMultipleShootingProblem`, and
@@ -86,13 +106,14 @@ model IDs are legacy-import-only. They are not model-authoring APIs.
 
 ## Artifact compatibility
 
-Artifacts written by framework 1.x, including rc.2, retain
+Artifacts written by framework 1.x, including rc.2 and rc.3, retain
 `schemaVersion = 1.0.0`. New
 artifacts also record `artifactSchemaVersion`, `frameworkVersion`,
 `modelVersion`, `problemVersion`, and `minimumMatlabRelease`. Round 5 and Round
 6 schema-1.0 artifacts remain readable. Round 9/10 timing, shooting,
-feasibility, and continuation payloads use additive artifact types and fields;
-they do not change the schema version. Extra fields are additive; required
+feasibility, and continuation payloads and Round 11 solve-progress/workflow
+metadata use additive artifact types and fields; they do not change the schema
+version. Extra fields are additive; required
 field meaning and array orientation cannot change within schema 1.0.
 
 Readers reject unknown future schema versions instead of guessing. A future
@@ -102,6 +123,8 @@ Build metadata does not affect Semantic Version precedence.
 ## Catalog compatibility
 
 Catalog schema 1.0 fixes manifest identity, implementation binding, problem
-descriptor, maturity, provenance, validation, and capability semantics. A
-reader rejects an unsupported catalog schema. JSON never contains executable
-expressions.
+descriptor, maturity, provenance, validation, and capability semantics. Its
+Round 11 data-source, workbench, and workflow references are optional additive
+fields; each referenced document also declares schema `1.0.0` and is
+hash-frozen during discovery. A reader rejects an unsupported catalog schema.
+JSON never contains executable expressions.

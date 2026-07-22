@@ -59,5 +59,37 @@ classdef TestRedistributionInventory < matlab.unittest.TestCase
                 testCase.verifyTrue(any(strcmp(coreFiles,expected{index})));
             end
         end
+
+        function roundElevenCapturesRemainScientificOnly(testCase)
+            [~,manifest]=scan_redistribution();entries=manifest.files;
+            paths={entries.relativePath};
+            indices=find(strncmp(paths,'docs/images/round11/',20)& ...
+                endsWith(paths,'.png'));
+            testCase.verifyNumElements(indices,8);
+            for index=indices
+                testCase.verifyEqual(entries(index).category, ...
+                    'scientific-quadruped-derived');
+                testCase.verifyEqual(entries(index).profiles,{'scientific'});
+                testCase.verifyEqual(entries(index).generatedFrom, ...
+                    {'examples/data/slip_quadruped/RoadMap/roadmap_manifest.json'});
+                testCase.verifyEqual(entries(index).sourceRepository, ...
+                    'https://github.com/DLARlab/SLIP_Model_Zoo.git');
+                testCase.verifyEqual(entries(index).sourceCommit, ...
+                    '2c106101383ecee1b2a9d695efe09fbd72d5718a');
+                testCase.verifyEqual(entries(index).licenseId,'NOASSERTION');
+                testCase.verifyEqual(entries(index).requiredNotice, ...
+                    'Quadruped owner redistribution decision required.');
+                testCase.verifyEqual(entries(index).decisionStatus,'unresolved');
+                testCase.verifyFalse(entries(index).redistributable);
+            end
+            [coreFiles,~]=release_file_list('core','source-zip');
+            coreCaptures=strncmp(coreFiles, ...
+                'docs/images/round11/',20)&endsWith(coreFiles,'.png');
+            testCase.verifyFalse(any(coreCaptures));
+            [coreToolboxFiles,~]=release_file_list('core','toolbox');
+            coreToolboxCaptures=strncmp(coreToolboxFiles, ...
+                'docs/images/round11/',20)&endsWith(coreToolboxFiles,'.png');
+            testCase.verifyFalse(any(coreToolboxCaptures));
+        end
     end
 end

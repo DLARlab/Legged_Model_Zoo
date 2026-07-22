@@ -50,6 +50,96 @@ loads any optional profile configuration. When `graphics.lmz.json` is absent,
 provided, otherwise it infers `frames` from the base scene and uses an empty
 parameter list.
 
+Round 11 adds three optional manifest fields without changing catalog schema
+`1.0.0`:
+
+| Field | Contract |
+|---|---|
+| `dataSources` | One contained relative path to a data-source catalog. |
+| `workbench` | One contained relative path to a workbench contribution. |
+| `workflows` | A list of unique contained relative workflow-descriptor paths. |
+
+The registry resolves each path inside the model catalog and records its
+SHA-256 digest. `WorkflowRegistry` rejects a digest change after discovery.
+Omitting all three fields is valid and produces no registered workflows, no
+registered datasets, and a generic `classic_tabs` workbench contribution.
+
+## Registered data-source catalog
+
+`data_sources.lmz.json` is an object with `schemaVersion` equal to `1.0.0` and
+a `dataSources` object list. Each record requires:
+
+```text
+id, label, modelId, problemId, kind, providerClass
+```
+
+Optional fields are `defaultDatasetId` and inert `metadata`. IDs are lowercase
+identifiers. `kind` is one of `branch_catalog`, `single_branch`,
+`scientific_dataset`, `native_artifact`, `legacy_mat`, or
+`generated_tutorial`. `providerClass` is a trusted MATLAB class name and must
+resolve through the model registry inside the registered model/plugin package
+and code root as an `lmz.workflow.DataSourceProvider`. JSON cannot name an
+unregistered core or foreign provider.
+
+The provider lists inert records and loads `lmz.data.BranchDataset` values. It
+may recommend a point, return an axis-preset ID/style, and expose a model-owned
+legacy adapter. Paths/hashes and legacy row layouts remain provider/model
+responsibilities, not generic GUI configuration.
+
+## Workbench contribution
+
+`workbench.lmz.json` uses schema `1.0.0`. Its fields are:
+
+| Field | Contract |
+|---|---|
+| `id`, `label` | Lowercase contribution ID and nonempty user label. |
+| `modelId` | Optional; when omitted it is bound to the containing model. |
+| `layoutProfileId` | `scientific_workbench` or `classic_tabs`. |
+| `centralViews` | Text IDs such as `branch_state`, `hildebrand_footfall`, and `run_overlay`. |
+| `sidebarPanels` | Text IDs for information/selection, visualization, solve/seeds, continuation, optimization/analysis, or advanced shooting tasks. |
+| `axisPresets` | Unique named coordinate/camera/limit objects. |
+| `parameterFilters`, `analysisPlugins` | Inert filter metadata and contribution IDs. |
+| `directionLabels` | Human-readable `backward`/`forward` and optional `both` labels. |
+| `defaultSolveOptions`, `defaultContinuationOptions` | Presentation/run defaults; problem capability and service validation remain authoritative. |
+
+An axis preset has `id`, `label`, `x`, `y`, optional `z`, `dimension`, finite
+`azimuth`/`elevation`, and optional increasing finite `xLimits`, `yLimits`, and
+`zLimits`. Coordinate names are resolved against the loaded branch. A
+workbench is inert and cannot contain a callback or enable an unsupported
+problem capability.
+
+## Workflow descriptor
+
+Each workflow JSON uses schema `1.0.0` and requires:
+
+```text
+id, label, modelId, problemId
+maturity, validationStatus
+dataSourceId, defaultDatasetId, defaultPointIndex
+axisPresetId, visualizationProfileId, layoutProfileId
+allowedSteps
+seedPreset, solveOptions, continuationPreset
+homotopyPreset, familyScanPreset
+analysisViews, provenance
+```
+
+`problemConfiguration` is an optional inert object. `maturity` is `tutorial`,
+`compatibility`, `validated`, or `experimental`; `validationStatus` is
+`untested`, `tested`, or `source-equivalent`. The default point is a positive
+integer. `allowedSteps` is a nonempty unique text list and must agree with the
+registered problem capabilities.
+
+`seedPreset` contains `firstSeed`, `secondSeedOptions`,
+`defaultSecondSeed`, positive finite `generatedRadius`, and inert `options`.
+`continuationPreset` contains `directionMode` (`forward`, `backward`, or
+`both`), direction labels, logical `checkpointEnabled`, and inert service
+options. Homotopy/family presets are inert IDs/labels/value objects. Registry
+construction also verifies the data source, axis preset, layout profile, and
+visualization profile before returning a descriptor.
+
+See [registered-workflows.md](registered-workflows.md) for provider methods,
+the runtime session, and complete built-in/external examples.
+
 ## Problem descriptor
 
 Required fields are:

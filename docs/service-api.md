@@ -38,6 +38,28 @@ adapter calls `fsolve`. The service returns `SolveResult` containing the solved
 solution, final evaluation, exit flag/output, exact options, seed, seed value,
 and provenance.
 
+Round 11 adds GUI-independent lifecycle progress. Supply a `SolveProgress`
+handle and optional `SolveCallbacks` through the options:
+
+```matlab
+progress = lmz.data.SolveProgress();
+callbacks = lmz.solvers.SolveCallbacks(struct( ...
+    'IterationFcn', @(eventName,snapshot) false));
+result = lmz.services.SolveService().solve(problem, seed, struct( ...
+    'Progress',progress,'Callbacks',callbacks), context);
+```
+
+Events are `seed_selected`, `seed_evaluated`, `projection_started`,
+`projection_completed`, `solve_started`, `iteration`, `step_accepted`,
+`solve_completed`, `solve_failed`, and `controlled_stop` as applicable. Every
+event carries an immutable `SolveIterationSnapshot` with stage, iteration,
+function count, decision, scaled residual, step norm, first-order optimality,
+acceptance, message, and timestamp. `SolveResult.Progress` and its artifact
+retain the ordered snapshots; callbacks remain runtime-only. An accepted
+existing seed records zero numerical iterations. `FsolveSolver` composes the
+typed callback with a supplied `OutputFcn` and does not add a scientific
+residual evaluation merely for presentation.
+
 For rectangular residuals and explicit feasibility modes, use a workflow
 service that delegates to `RankAwareNonlinearSolver`. Its public low-level
 entry points are:
@@ -281,6 +303,44 @@ the two measured strides also requires the explicit synthetic policy
 `repeat_final_reference`. The validated `multi_stride_fit` problem is a
 separate legacy-compatibility oracle and reports its preserved source timing
 projection as `HiddenTimingSolve=true`.
+
+## Registered workflow and branch services
+
+Discover optional model-owned data, workbench, and workflow contributions from
+an existing registry:
+
+```matlab
+models = lmz.registry.ModelRegistry.discover();
+workflows = lmz.workflow.WorkflowRegistry.fromModelRegistry(models);
+ids = workflows.list('slip_quadruped');
+descriptor = workflows.get( ...
+    'slip_quadruped','roadmap_root_continuation');
+session = lmz.workflow.WorkflowRunner().initialize(descriptor,context);
+```
+
+`WorkflowSession` initializes the registered dataset/default point and exposes
+`solve`, `makeAdjacentSeedPair`, `makeGeneratedSeedPair`/`makeSecondSeed`,
+`continueBranch`, `resumeCheckpoint`, `parameterHomotopy`,
+`branchFamilyScan`, and `result`. Every operation is restricted by the
+descriptor's `allowedSteps` and delegates an existing generic service.
+`continueBranch` accepts a `DirectionMode` of `forward`, `backward`, or `both`;
+the remainder of the options are ordinary continuation options.
+
+Provider-driven branch loading is available without a model-specific service
+case:
+
+```matlab
+dataset = lmz.services.BranchService().loadDataSource( ...
+    workflows,modelId,dataSourceId,datasetId);
+datasets = lmz.services.BranchService().loadAllDataSource( ...
+    workflows,modelId,dataSourceId);
+```
+
+The service validates returned `BranchDataset` model/problem identity. Native
+save/load remains generic. Legacy import/export searches a registered
+model-owned `LegacyDataAdapterProvider`; compatibility method names route
+through the same providers. See
+[registered-workflows.md](registered-workflows.md).
 
 ## Data and artifact services
 

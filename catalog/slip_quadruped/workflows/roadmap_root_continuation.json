@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "roadmap_root_continuation",
+  "label": "RoadMap apex-root continuation",
+  "modelId": "slip_quadruped",
+  "problemId": "periodic_apex",
+  "maturity": "validated",
+  "validationStatus": "source-equivalent",
+  "dataSourceId": "roadmap",
+  "defaultDatasetId": "PK_20_2",
+  "defaultPointIndex": 267,
+  "axisPresetId": "roadmap_top",
+  "visualizationProfileId": "research_legacy",
+  "layoutProfileId": "scientific_workbench",
+  "allowedSteps": ["load_data", "select_point", "simulate", "solve", "seed_pair", "continuation", "parameter_homotopy", "branch_family", "analysis"],
+  "seedPreset": {
+    "firstSeed": "locked_roadmap_point",
+    "secondSeedOptions": ["adjacent_next", "adjacent_previous", "generated_corrected"],
+    "defaultSecondSeed": "adjacent_next",
+    "generatedRadius": 0.005,
+    "options": {
+      "sourceDatasetId": "PK_20_2",
+      "sourcePointIndex": 267,
+      "lockFirstSeed": true,
+      "requireCorrectedGeneratedSeed": true
+    }
+  },
+  "solveOptions": {
+    "FunctionTolerance": 1e-10,
+    "StepTolerance": 1e-10,
+    "MaxIterations": 200,
+    "MaxFunctionEvaluations": 2000,
+    "Display": "off"
+  },
+  "continuationPreset": {
+    "directionMode": "both",
+    "directionLabels": {
+      "backward": "decreasing dx",
+      "forward": "increasing dx"
+    },
+    "checkpointEnabled": true,
+    "options": {
+      "InitialStep": 0.02,
+      "MinimumStep": 0.0001,
+      "MaximumStep": 0.1,
+      "MaximumPoints": 20,
+      "CorrectorTolerance": 1e-9,
+      "RequireFeasible": true
+    }
+  },
+  "homotopyPreset": {
+    "id": "active_parameter_homotopy",
+    "label": "Active-parameter homotopy",
+    "values": {
+      "enabled": true,
+      "parameterName": "k_leg",
+      "targetValue": 10.1,
+      "maximumPoints": 6
+    }
+  },
+  "familyScanPreset": {
+    "id": "roadmap_family_scan",
+    "label": "RoadMap family scan",
+    "values": {
+      "enabled": true,
+      "parameterName": "k_leg",
+      "targetValues": [9.9, 10, 10.1]
+    }
+  },
+  "analysisViews": ["physical_simulation", "torso_trajectory", "back_leg_trajectories", "front_leg_trajectories", "ground_reaction_forces", "oscillator"],
+  "provenance": {
+    "sourceRepository": "https://github.com/DLARlab/SLIP_Model_Zoo.git",
+    "sourceCommit": "2c106101383ecee1b2a9d695efe09fbd72d5718a",
+    "sourceDataset": "PK_20_2.mat",
+    "sourceSHA256": "45835bb5024b1dc9b875c7b8f7b205769f537a4ff4144c763058537f44dbf401",
+    "adapter": "Results29Adapter-v2",
+    "firstSeedPolicy": "locked published RoadMap point"
+  }
+}

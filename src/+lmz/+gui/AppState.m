@@ -2,6 +2,11 @@ classdef AppState < handle
     %APPSTATE Mutable presentation state, independent of UI widgets.
     properties (SetObservable)
         ModelId = ''
+        WorkflowId = ''
+        WorkflowSession = []
+        DataSourceId = ''
+        LayoutProfileId = 'classic_tabs'
+        WorkbenchContribution = []
         ProblemId = ''
         ProblemConfiguration = struct()
         SolveMode = 'Periodic orbit'
@@ -18,12 +23,17 @@ classdef AppState < handle
         WorkingEvaluation = []
         SolvedSolution = []
         SolveResult = []
+        SolveProgress = []
         ShootingResult = []
         TimingResult = []
         SectionTransferResult = []
         SeedPair = []
         ContinuationPreview = []
         ContinuationResult = []
+        HomotopyResult = []
+        FamilyScanResult = []
+        ContinuationDirectionMode = 'both'
+        OverlayState = struct()
         OptimizationResult = []
         RequestedStrideCount = 1
         StridePlan = []

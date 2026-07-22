@@ -1,0 +1,56 @@
+classdef LegacyAdapterProvider < lmz.workflow.LegacyDataAdapterProvider
+    %LEGACYADAPTERPROVIDER Example two-row legacy branch boundary.
+    methods
+        function valid = canLoad(~, path)
+            valid = false;
+            if ~ischar(path) || exist(path, 'file') ~= 2
+                return
+            end
+            try
+                variables = whos('-file', path);
+                index = find(strcmp({variables.name}, 'legacyBranch'), 1);
+                valid = ~isempty(index) && ...
+                    strcmp(variables(index).class, 'double') && ...
+                    numel(variables(index).size) == 2 && ...
+                    variables(index).size(1) == 2 && ...
+                    variables(index).size(2) >= 1;
+            catch
+                valid = false;
+            end
+        end
+
+        function branch = importBranch(obj, path, problem)
+            if ~obj.canLoad(path)
+                error('{{MODEL_ID}}:LegacyFormat', ...
+                    ['Expected a MAT file containing a finite two-row ' ...
+                    'legacyBranch matrix.']);
+            end
+            source = load(path, 'legacyBranch');
+            values = source.legacyBranch;
+            if any(~isfinite(values(:))) || ...
+                    problem.getDecisionSchema().count() ~= size(values, 1)
+                error('{{MODEL_ID}}:LegacyFormat', ...
+                    'legacyBranch values do not match the periodic problem.');
+            end
+            parameters = problem.getParameterSchema().defaults();
+            solutions = lmz.data.Solution.empty(0, size(values, 2));
+            for index = 1:size(values, 2)
+                solutions(index) = problem.makeSolution( ...
+                    values(:, index), parameters, []);
+            end
+            branch = lmz.data.SolutionBranch.fromSolutions(solutions);
+        end
+
+        function exportBranch(~, path, branch)
+            if ~isa(branch, 'lmz.data.SolutionBranch') || ...
+                    ~strcmp(branch.ModelId, '{{MODEL_ID}}') || ...
+                    ~strcmp(branch.ProblemId, 'periodic_orbit') || ...
+                    size(branch.DecisionValues, 1) ~= 2
+                error('lmz:Workflow:LegacyUnsupported', ...
+                    'The branch is incompatible with this legacy adapter.');
+            end
+            legacyBranch = branch.DecisionValues;
+            save(path, 'legacyBranch');
+        end
+    end
+end

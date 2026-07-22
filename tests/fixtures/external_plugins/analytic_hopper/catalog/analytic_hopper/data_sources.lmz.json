@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0.0",
+  "dataSources": [
+    {
+      "id": "analytic_branch",
+      "label": "Exact analytic plugin branch",
+      "modelId": "analytic_hopper",
+      "problemId": "periodic_hop",
+      "kind": "generated_tutorial",
+      "providerClass": "lmzplugins.analytic_hopper.AnalyticBranchDataSourceProvider",
+      "defaultDatasetId": "exact_hop_family",
+      "metadata": {
+        "axisPresetId": "analytic_branch",
+        "recommendedPointIndex": 2,
+        "readOnly": true
+      }
+    }
+  ]
+}

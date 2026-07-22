@@ -44,6 +44,27 @@ classdef Graphics
             clear cleanup
         end
 
+        function exportFigure(figureHandle,path,forceFallback)
+            %EXPORTFIGURE Capture a complete UIFigure with a legacy fallback.
+            if nargin<3,forceFallback=false;end
+            if isempty(figureHandle)||~isgraphics(figureHandle,'figure')
+                error('lmz:Compatibility:Figure', ...
+                    'A valid figure is required.');
+            end
+            [~,~,extension]=fileparts(path);
+            if ~strcmpi(extension,'.png')
+                error('lmz:Compatibility:FigureType', ...
+                    'Complete application captures currently require PNG.');
+            end
+            modernExporter='exportapp';
+            if ~forceFallback&&exist(modernExporter,'file')==2
+                exporter=str2func(modernExporter);
+                exporter(figureHandle,path);return
+            end
+            drawnow;frame=getframe(figureHandle);
+            imwrite(frame.cdata,path);
+        end
+
         function tf = preferredExporterAvailable(forceFallback)
             if nargin < 1
                 forceFallback = false;

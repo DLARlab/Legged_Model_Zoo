@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Legged Model Zoo is a standalone MATLAB framework and non-technical GUI for exploring legged-model simulation, solving, continuation, fitting, and visualization through common registry, service, schema, and artifact boundaries. Version `1.0.0-rc.2` contains three validated scientific workflows: the nine-branch SLIP quadruped RoadMap, the six-branch jerboa biped GaitMap and trajectory fit, and single-/multi-stride quadruped-with-load simulation and fitting. It also contains `tutorial_hopper`, a small analytic hybrid model that demonstrates solving, continuation, event/reset records, generic scenes, multiple shooting, and model-zoo extensibility without making a scientific reproduction claim.
+Legged Model Zoo is a standalone MATLAB framework and non-technical GUI for exploring legged-model simulation, solving, continuation, fitting, and visualization through common registry, service, schema, and artifact boundaries. Version `1.0.0-rc.3` adds declaratively registered scientific workflows and an adaptive source-inspired workbench while retaining the three validated scientific routes: the nine-branch SLIP quadruped RoadMap, the six-branch jerboa biped GaitMap and trajectory fit, and single-/multi-stride quadruped-with-load simulation and fitting. It also contains `tutorial_hopper`, a small analytic hybrid model that demonstrates solving, continuation, event/reset records, generic scenes, multiple shooting, and model-zoo extensibility without making a scientific reproduction claim.
 
 This is an internally testable release candidate, not a public binary release. The source tree is the supported way to evaluate it while redistribution authority remains unresolved. Problem badges and catalog metadata distinguish `validated • source-equivalent` scientific problems from `tutorial • tested` examples.
 
@@ -16,6 +16,9 @@ This is an internally testable release candidate, not a public binary release. T
 - Named state schemas and validated simulation results
 - A multi-dataset RoadMap explorer with named decision, timing, parameter, and observable axes
 - Locked/hover branch selection synchronized with solution, simulation, solve, continuation, and oscillator state
+- Declaratively registered model-owned data sources, workbench contributions, and complete workflows, including the quadruped RoadMap root/seed/both-direction continuation reference
+- Selectable `scientific_workbench` and `classic_tabs` layouts with a persistent branch canvas, scrollable task sidebar, adaptive sizing, and always-visible status/progress
+- GUI-independent typed solve-iteration snapshots and shared seed/prediction/solution/continuation overlay layers
 - Scientific quadruped animation, torso/leg trajectories, GRFs, oscillator plots, and recording/export services
 - Cooperative progress, pause, and cancellation context
 - Versioned plain-struct artifact validation and atomic MAT persistence
@@ -98,26 +101,69 @@ cleanup = onCleanup(@() delete(app));
 
 ## GUI walkthrough
 
-The application opens on the SLIP quadruped RoadMap. A reliable first session is:
+The application opens on the registered SLIP quadruped RoadMap workflow in the scientific workbench when that contribution is available. A reliable first session is:
 
-1. Use the header to choose a model and problem. Read the badge before interpreting a result: `validated • source-equivalent` has immutable numerical evidence, while `tutorial • tested` is an explanatory analytic workflow. **Run demo** runs only the selected built-in demonstration.
-2. In **Branches / Data**, load a built-in RoadMap, GaitMap, or load dataset. Choose one or all datasets, then click a curve or use the index/percentage controls to lock a point. Hover previews never replace the locked selection.
-3. In **Solution**, inspect named state, event-time, parameter, observable, residual/objective, diagnostics, and provenance groups. Edits create an isolated working copy. **Restore locked point** discards those edits; a read-only built-in source branch is never modified in place.
-4. In **Physical Simulation**, choose the visual profile, evaluate the working point, scrub normalized time, play/pause/stop, inspect model plots, and export supported frames, plots, GIF, or MP4. Validated scientific problems default to **Research legacy**; tutorial problems default to **Clean generic**. Export uses the selected renderer, writes profile metadata beside the output, uses a temporary file, and restores the displayed frame on success, cancellation, or error.
-5. Use **Solve / Seeds** only when the problem advertises `solve`. Accept or refine the current point, form an adjacent/manual pair, or generate a reproducible nearby second seed.
-6. Use **Continuation** only after a valid pair exists. Pause/resume/controlled-stop retain accepted points; checkpoint paths support atomic save and later resume. Homotopy/family controls list active parameters only.
-7. Use **Optimization** for `slip_biped/trajectory_fit` or `slip_quad_load/multi_stride_fit`. A bounded demonstration run is evidence that the pipeline and objective work, not proof of a global optimum.
+1. Use the header to choose a model, problem, or complete registered **Workflow**. Read the badge before interpreting a result: `validated • source-equivalent` has immutable numerical evidence, while `tutorial • tested` is an explanatory analytic workflow. **Run demo** runs only the selected built-in demonstration.
+2. Choose **Scientific workbench** or **Classic tabs** in **Layout**. The workbench keeps the branch/data canvas visible while task panels change; classic tabs retain the established six-tab shell. Both use the same controller and numerical services.
+3. In the data/branch controls, load one registered RoadMap, GaitMap, or load dataset, or load all registered datasets. Click a curve or use the index/percentage controls to lock a point. Hover previews never replace the locked selection.
+4. In **Info / Selection** (or **Solution** in classic tabs), inspect named state, event-time, parameter, observable, residual/objective, diagnostics, and provenance groups. Edits create an isolated working copy. **Restore locked point** discards those edits; a read-only built-in source branch is never modified in place.
+5. In **Visualization** (or **Physical Simulation** in classic tabs), choose the visual profile, evaluate the working point, scrub normalized time, play/pause/stop, inspect model plots, and export supported frames, plots, GIF, or MP4. Validated scientific problems default to **Research legacy**; tutorial problems default to **Clean generic**. Export uses the selected renderer, writes profile metadata beside the output, uses a temporary file, and restores the displayed frame on success, cancellation, or error.
+6. Use **Solve / Seeds** only when the problem advertises `solve`. Accept or refine the current point, form an adjacent/manual pair, or generate a reproducible nearby second seed. Live stages and typed iterations appear in the persistent status/progress dock; seed, prediction, and corrected-solution markers use the same branch axes.
+7. Use **Continuation** only after a valid pair exists. Choose forward, backward, or both directions; the quadruped reference defaults to both. Prediction and rejected-point markers share the persistent canvas, while one accepted-continuation layer grows during the run and is replaced in place by the final or stopped partial branch. Pause/resume/controlled-stop retain accepted points; checkpoint paths support atomic save and later resume. Homotopy/family controls list active parameters only.
+8. Use **Optimization** for `slip_biped/trajectory_fit` or `slip_quad_load/multi_stride_fit`. A bounded demonstration run is evidence that the pipeline and objective work, not proof of a global optimum.
 
-Each of the six tabs owns its controls and callbacks and delegates numerical work to `AppController` and the service layer. Model/problem/selection changes propagate through one presentation event bus, so incompatible downstream state is invalidated consistently.
+The six primary components own their controls and callbacks and delegate numerical work to `AppController` and the service layer. The workbench and classic shells only place those components. Model/problem/workflow/selection changes propagate through one presentation event bus, so incompatible downstream state is invalidated consistently.
 
 For accessibility and diagnostics, every non-obvious control has a tooltip, layouts resize to a minimum usable window size, busy operations disable incompatible controls while preserving the applicable cancel/stop action, and branch markers use shape as well as color. Choose **high-contrast** from the header palette control when needed. The status panel keeps bounded, timestamped, selectable history and has **Copy diagnostics**; errors show a short summary with expandable/copyable technical details when desktop dialogs are available.
 
-Window position, palette, and user-selected recent data/output folders persist under the versioned MATLAB preference namespace `LeggedModelZoo_GUI_v1`. Built-in repository paths are not stored as recent folders. Use **Reset preferences** in the header, or call `app.resetPreferences()`, to return to defaults. Keyboard traversal, focus order, DPI scaling, clipboard behavior, and real dialog interaction still require the pending human desktop checklist in [docs/MANUAL_DESKTOP_QA.md](docs/MANUAL_DESKTOP_QA.md); automated GUI evidence is not a substitute for that walkthrough.
+Window position, palette, layout profile, sidebar/central-view selection, sidebar-width ratio, and user-selected recent data/output folders persist under the versioned MATLAB preference namespace `LeggedModelZoo_GUI_v1`. Built-in repository paths are not stored as recent folders. Use **Reset preferences** in the header, or call `app.resetPreferences()`, to return to defaults. Keyboard traversal, focus order, DPI scaling, clipboard behavior, and real dialog interaction still require the pending human desktop checklist in [docs/MANUAL_DESKTOP_QA.md](docs/MANUAL_DESKTOP_QA.md); automated GUI evidence is not a substitute for that walkthrough.
+
+## Registered workflows and layout profiles
+
+List and run registered workflows without knowing a model-specific catalog class:
+
+```matlab
+startup;
+registry = lmz.registry.ModelRegistry.discover();
+workflows = lmz.workflow.WorkflowRegistry.fromModelRegistry(registry);
+disp(workflows.list('slip_quadruped'));
+
+descriptor = workflows.get( ...
+    'slip_quadruped', 'roadmap_root_continuation');
+session = lmz.workflow.WorkflowRunner().initialize( ...
+    descriptor, lmz.api.RunContext.synchronous(1401));
+solved = session.solve(struct());
+pair = session.makeAdjacentSeedPair(+1, struct());
+continued = session.continueBranch(struct( ...
+    'MaximumPoints', 20, ...
+    'DirectionMode', 'both', ...
+    'InitialStep', pair.AchievedRadius));
+```
+
+The quadruped descriptor binds `PK_20_2`, point 267, the `periodic_apex` problem, the source-style `roadmap_top` axes, `research_legacy` graphics, `scientific_workbench`, accepted-existing-seed solve options, adjacent/generated seed policies, checkpoints, and both-direction continuation labels. Run the public artifact round-trip example with:
+
+```matlab
+run('examples/demo_registered_slip_quadruped_workflow.m')
+```
+
+In the GUI, choose **RoadMap apex-root continuation** from **Workflow**. The locked branch point is one controller selection: it feeds Info / Selection, Visualization, Solve / Seeds, Continuation, and analysis. Typed `SolveIterationSnapshot` values update the always-visible progress/status dock. Continuation exposes **Forward**, **Backward**, and **Both directions**; registered defaults and labels are model-owned presentation data, while the generic continuation service owns the algorithm.
+
+Choose a layout in the header or through the controller:
+
+```matlab
+controller = lmz.gui.AppController();
+controller.setLayoutProfile('scientific_workbench');
+controller.setLayoutProfile('classic_tabs');
+```
+
+A new branch-capable model contributes `data_sources.lmz.json`, a model-owned `DataSourceProvider`, optional legacy/catalog providers, `workbench.lmz.json`, and one or more workflow JSON files referenced by its manifest. External plugins use the same contracts inside an explicitly trusted plugin root. Generic GUI/services discover them through the registry; adding a model does not require a built-in model-ID case or edit to `src/+lmz`. A minimal model may omit all optional contributions and receives the clean classic-tabs fallback.
+
+See [registered workflows](docs/registered-workflows.md), the [quadruped reference workflow](docs/quadruped-reference-workflow.md), the [scientific workbench layout](docs/scientific-workbench-layout.md), [layout profiles](docs/gui-layout-profiles.md), and the source [workflow](docs/quadruped-workflow-parity.md)/[layout](docs/quadruped-gui-layout-map.md) parity maps.
 
 ## SLIP Quadruped RoadMap Tutorial
 
-1. Launch with `app = legged_model_zoo;`. The GUI defaults to `slip_quadruped/periodic_apex` and loads the built-in `PK_20_2` RoadMap branch at interior seed index 267.
-2. In **RoadMap Branches**, use the **Built-in RoadMap** selector and press **Load selected**, or press **Load all** for all nine branches. **Open folder…** and **Open MAT/artifact…** add user data; source branches remain read-only references.
+1. Launch with `app = legged_model_zoo;`. Select **RoadMap apex-root continuation** in **Workflow** and **Scientific workbench** in **Layout**. The registered descriptor selects `slip_quadruped/periodic_apex` and loads `PK_20_2` at interior seed index 267.
+2. In the **Built-in RoadMap** data controls, press **Load selected**, or **Load all** for all nine branches. **Open folder…** and **Open MAT/artifact…** add user data; source branches remain read-only references.
 3. Choose named X, Y, and optional Z axes. The documented RoadMap preset is X=`dx`, Y=`dphi`, Z=`y`, top view, with X `[0,10]`, Y `[-0.05,0.15]`, and Z `[0.6,1.2]`. This comes from the source GUI and copied reference figures; MAT data remains authoritative where an old FIG curve differs.
 4. Move the pointer near a visible branch to preview its nearest point and a dataset/index/coordinate/parameter/gait/residual data tip. Hover never changes the locked point. Click a curve, use arrow keys, enter an index, or move the percentage control to lock a point across every tab.
 5. Open **Solution Inspector** to review the 13 initial-state values, nine event timings, seven physical parameters, derived observables, residual blocks, diagnostics, and source provenance. Edit the Value column, validate it, save it, or add it as a writable dataset. **Restore locked point** discards working edits; source RoadMap matrices are never mutated.
@@ -126,13 +172,14 @@ Window position, palette, and user-selected recent data/output folders persist u
 8. In **Solve / Seeds**, evaluate and press **Solve/refine**. A RoadMap point already below tolerance is accepted unchanged; otherwise the generic service refines it and reports algorithm, exit flag, iterations, residual, gait, and chart-aware change. Optional schema-scaled noise records its random seed.
 9. Select next/previous and press **Adjacent pair**, or enter two manual indices. Endpoint selection moves inward. The service checks branch identity, parameter compatibility, finite values, residuals, gait policy, and chart-aware separation; the pair and predictor are overlaid on the RoadMap.
 10. **Generated second seed** uses the generic second-seed solver at the numeric requested radius and reports achieved radius and residual. The edited or last-solved working candidate can be sent directly to this path.
-11. In **Continuation**, choose a total point count and run. Prediction, accepted, and rejected callbacks update a live source-RoadMap overlay with residual, step, direction, and gait status.
+11. In **Continuation**, choose forward, backward, or both directions and a total point count, then run. The registered quadruped default is both. Prediction, accepted, and rejected callbacks update the persistent source-RoadMap overlay with residual, step, direction, and gait status.
 12. Pause, resume, or request a controlled stop; accepted points remain available. Enter or choose a checkpoint path for atomic updates, then use **Resume file**. The same operations are available through `ContinuationService.resumeCheckpoint` and `AppController.resumeCheckpoint`.
 13. The Continuation tab exposes homotopy/family scans only for active parameters. Use nearby `k_leg` targets for a dynamics-changing workflow; `phi_neutral` is visible as an inactive Results29 compatibility field and is disabled for transport. A family scan repeats one-dimensional continuation at targets; it is not two-dimensional continuation.
 14. Use **Save native…**, **Export legacy…**, **Save solution…**, or **Save result…** as appropriate. An unchanged imported branch reconstructs the source 29-row `results` matrix exactly. The Physical Simulation tab exposes GIF, MP4 where supported, PNG/PDF keyframes, five plot exports, and oscillator GIF; exports are temporary-file based, cancellation-aware, and restore the displayed animation frame.
 
-The complete command-line equivalent is
-[examples/demo_slip_quadruped_roadmap_workflow.m](examples/demo_slip_quadruped_roadmap_workflow.m).
+The complete service-oriented command-line equivalent is
+[examples/demo_slip_quadruped_roadmap_workflow.m](examples/demo_slip_quadruped_roadmap_workflow.m); the registered equivalent is
+[examples/demo_registered_slip_quadruped_workflow.m](examples/demo_registered_slip_quadruped_workflow.m).
 The model-level scientific and research-graphics guide is
 [models/+lmzmodels/+slip_quadruped/README.md](models/+lmzmodels/+slip_quadruped/README.md).
 
@@ -1231,6 +1278,15 @@ end
 report = new_model('example_hopper', pluginRoot);
 ```
 
+`new_model` defaults to `AuthoringRoute='minimal_simulation'`. To scaffold the
+optional registered periodic-branch resources as well, use the exact scientific
+route ID:
+
+```matlab
+report = new_model('example_hopper', pluginRoot, ...
+    'AuthoringRoute', 'scientific_periodic_branch');
+```
+
 The generated project contains a model package, model/problem manifests, state/parameter/decision schemas, an analytic periodic problem, a plot plugin and scene, a test, an executable example, and `plugin.json`. It is not automatically added to the built-in registry. Review the generated executable MATLAB code, then register exactly that trusted root:
 
 ```matlab
@@ -1245,7 +1301,9 @@ delete(pluginRegistry);  % releases the temporary plugin path lease
 
 For a maintained built-in model, add a package below `models/+lmzmodels`, implement `lmz.api.LeggedModel`, and add `catalog/<model-id>/manifest.json`, one descriptor per problem, and a scene only when visualization is enabled. The catalog ID/directory, implementation identity/version, maturity, validation status, and capabilities must agree. Numerical problems expose named schemas and `ProblemEvaluation`/objective terms; model code never calls GUI widgets or generic solvers directly. Legacy matrix indexing belongs in one adapter, and scientific claims require immutable source provenance, hashes, baselines, and separate source-equivalence tests.
 
-Start with [the model-author guide](docs/model-author-guide.md), then use the [configuration reference](docs/configuration-reference.md), [service API](docs/service-api.md), [visualization guide](docs/visualization-authoring.md), [artifact reference](docs/artifact-reference.md), and [model testing checklist](docs/testing-a-model.md). The built-in `tutorial_hopper` and the isolated `tests/fixtures/external_plugins/analytic_hopper` fixture are executable examples of generic hybrid, event/reset, solve, continuation, scene, artifact, GUI-capability, discovery, and clean-removal integration without any `src/+lmz` modification.
+There are two exact authoring routes. `minimal_simulation` needs only the model/problem/schema/scene contracts above and receives the generic classic-tabs presentation. `scientific_periodic_branch` additionally provides a model-owned branch `DataSourceProvider`, branch-catalog and legacy-adapter provider templates, `data_sources.lmz.json`, `workbench.lmz.json`, a registered workflow preset/example/test, and the manifest bindings for branch source, root problem, second-seed policy, continuation defaults, provenance, and visualization/analysis views. The external analytic-hopper fixture proves that a complete provider/workflow appears through the scoped plugin registry and disappears when that registry is deleted, with no core edit.
+
+Start with [the model-author guide](docs/model-author-guide.md), then use the [registered-workflow guide](docs/registered-workflows.md), [configuration reference](docs/configuration-reference.md), [service API](docs/service-api.md), [visualization guide](docs/visualization-authoring.md), [artifact reference](docs/artifact-reference.md), and [model testing checklist](docs/testing-a-model.md). The built-in `tutorial_hopper` and the isolated `tests/fixtures/external_plugins/analytic_hopper` fixture are executable examples of generic hybrid, event/reset, solve, continuation, registered data/workbench/workflow, scene, artifact, GUI-capability, discovery, and clean-removal integration without any `src/+lmz` modification.
 
 ## Testing
 
@@ -1264,14 +1322,18 @@ Its unattended batch equivalent is:
 matlab -batch "cd('/path/to/Legged_Model_Zoo'); results=run_tests; assert(~any([results.Failed]));"
 ```
 
-Run every top-level public example and the clean-copy all-scientific-model isolation workflow separately because they are release gates as well as test fixtures:
+Run every top-level public example separately. The clean-copy all-scientific-model gate is the integration test below; it copies the repository and launches an unrelated child MATLAB process rather than merely rerunning the current checkout:
 
 ```matlab
 startup;
 toolsPath = fullfile(lmz.util.ProjectPaths.root(), 'tools');
 addpath(toolsPath);
 exampleReport = run_public_examples;
-isolationReport = run_standalone_all_scientific_models;
+isolationResults = runtests(fullfile( ...
+    lmz.util.ProjectPaths.tests(), 'integration', ...
+    'TestStandaloneAllScientificModels.m'));
+assert(~any([isolationResults.Failed]));
+assert(~any([isolationResults.Incomplete]));
 ```
 
 Documentation, architecture, static R2019b-target, redistribution, and code-quality checks are available independently for faster feedback:
@@ -1306,7 +1368,15 @@ quickPerformance = run_benchmarks(struct( ...
 fullPerformance = run_benchmarks(struct( ...
     'Repetitions', 3, ...
     'OutputPath', fullfile(tempdir, 'lmz-benchmarks.json')));
+round11Performance = run_round11_workbench_benchmarks(struct( ...
+    'Repetitions', 3, ...
+    'OutputPath', fullfile(tempdir, 'lmz-round11-workbench.json')));
 ```
+
+The retained Round 11 reports are
+`benchmarks/round11_full_matrix_r2025b_macos_arm64.json` and
+`benchmarks/round11_r2025b_macos_arm64.json`. Their 29 and 10 records each use
+three repetitions and have zero median budget overruns.
 
 On MATLAB R2023a or newer, collect statement coverage for every runtime MATLAB file below `src/+lmz` and `models/+lmzmodels`, and enforce the measured stable-package policy when it is present:
 
@@ -1333,6 +1403,8 @@ scan = scan_redistribution;
 coreDryRun = build_release('core', struct('DryRun', true));
 scientificDryRun = build_release('scientific', struct('DryRun', true));
 coreToolboxDryRun = build_toolbox('core', struct('DryRun', true));
+scientificToolboxDryRun = build_toolbox( ...
+    'scientific', struct('DryRun', true));
 ```
 
 Maintainers may exercise deterministic ZIP or `.mltbx` construction with `Mode='technical-validation'` and `RunInstallTest=true`. That mode labels the package `NOT_FOR_REDISTRIBUTION`, tests registry discovery, the permitted tutorial workflow, hidden GUI construction, artifact round trip, and path removal in an unrelated temporary MATLAB process, and deletes the package before returning. Only `Mode='public'` can retain output, and it fails before writing when the profile or project decision is unresolved. Do not edit decision fields or add a root license without owner-supplied authority. See [release/README.md](release/README.md), [docs/CI.md](docs/CI.md), [the benchmark guide](benchmarks/README.md), [the coverage policy](docs/COVERAGE.md), and [docs/TEST_STATUS.md](docs/TEST_STATUS.md).
@@ -1416,20 +1488,43 @@ overruns. Full evidence is recorded in
 
 Round 8 closes at committed HEAD
 `c2616735354a354fa432bac549f81861f8ddd9a5`, and Round 9 closes at committed
-HEAD `c0d87860b59cfbdffe96e165cd01c68e2de7d948`. Round 10 is the current
-`1.0.0-rc.2` worktree: it adds rank-aware rectangular timing, timing families,
-generic multiple shooting/horizon feasibility, section-local scientific
-adapters, heterogeneous plans, quad-load horizon infrastructure, artifacts,
-GUI controls, guides, and examples. `ROUND10_LOCAL_AUTOMATION_PASSED`: the final
-R2025b suite passed `544/544` in `1153.233186` seconds; all 54 public examples
-passed in `424.166055` seconds; and clean-copy isolation passed 1/1 in
-`52.852335` seconds. Instrumented coverage passed all five stable-package
+HEAD `c0d87860b59cfbdffe96e165cd01c68e2de7d948`. Round 10 closes at the latest
+public committed HEAD `5c6a6c100f752ea6ed1fd20114f84800f9b52070`
+with framework version `1.0.0-rc.2`. It adds rank-aware rectangular timing,
+timing families, generic multiple shooting/horizon feasibility, section-local
+scientific adapters, heterogeneous plans, quad-load horizon infrastructure,
+artifacts, GUI controls, guides, and examples.
+`ROUND10_LOCAL_AUTOMATION_PASSED`: the locally executed final R2025b suite
+passed `544/544` in `1153.233186` seconds; all 54 public examples passed in
+`424.166055` seconds; and clean-copy isolation passed 1/1 in `52.852335`
+seconds. Instrumented coverage passed all five stable-package
 floors at `19,973/25,363` statements (78.74857075267121%) across 317 runtime
 files and 29 packages. Code quality checked 319 files with zero violations,
 architecture checks were clean, and the R2019b static audit found zero known
 violations across 699 MATLAB files. The 29-workflow, three-repetition
 performance matrix completed in `113.18738520833334` seconds with no budget
 overrun.
+
+Round 11 is the current uncommitted Round 11 worktree on that committed Round 10 HEAD
+and advances the framework candidate to `1.0.0-rc.3` while keeping artifact,
+catalog, workflow, data-source, and workbench schemas at `1.0.0`. It adds
+registered model-owned data/workbench/workflow contributions, a complete
+quadruped RoadMap root/seed/both-direction workflow, external workflow-plugin
+proof, GUI-independent solve progress, and selectable scientific-workbench and
+classic layouts with shared branch overlays and scrollable adaptive content.
+The unchanged 544-test Round 10 suite passed as the pre-edit baseline.
+`ROUND11_LOCAL_AUTOMATION_PASSED`: the authoritative sequential R2025b suite
+passed `631/631` in `2887.735954750` seconds; all 55 public examples passed in
+`579.852970708` seconds; and clean-copy isolation passed 1/1 in
+`51.230211833` seconds. Enforced coverage passed all five stable-package floors
+at `23,614/29,755` statements (79.3614518568308%) across 375 runtime files and
+34 packages. Code quality checked 377 files with zero unallowlisted
+violations, architecture reported zero violations, and the R2019b static audit
+reported zero violations across 807 MATLAB files. The 29-workflow and
+10-workbench performance reports each completed three repetitions with zero
+median budget overruns. Automated package-install tests passed while retaining
+no unauthorized artifact; core source ZIP/toolbox selected 680/383 files and
+scientific source ZIP/toolbox selected 1,065/660 files.
 
 Focused section-local evidence passes its 12/12 exact tests; the quadruped
 touchdown timing root is deliberately labeled rank deficient and non-unique.
@@ -1460,9 +1555,12 @@ round trip, unload, and path-removal checks. Every selector remained
 `Authorized=false`, every build remained `Retained=false`, and the final
 installed LMZ toolbox count was zero. These checks did not authorize
 publication.
-Release qualifications remain explicit: the human MATLAB desktop walkthrough
+The Round 11 redistribution inventory covers 1,080 files with 1,065 selected
+release-profile blockers and zero structural, stale, missing, or unlisted
+finding. Release qualifications remain explicit: the human MATLAB desktop walkthrough
 is not executed; R2019b runtime is not executed; GitHub Actions workflows have
 not run remotely; and public core/scientific packaging is blocked by the
 missing project license and unresolved owner decisions. The present
 recommendation is an internal, numerically testable release candidate—not a
-public release.
+public release. The local Round 10 and Round 11 commands above are not remote-CI,
+human-desktop, R2019b-runtime, or redistribution-authority evidence.

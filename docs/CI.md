@@ -48,7 +48,10 @@ assert(~any([results.Failed]));
 assert(~any([results.Incomplete]));
 addpath(fullfile(pwd, 'tools'));
 run_public_examples;
-run_standalone_all_scientific_models;
+isolationResults = runtests(fullfile(pwd, 'tests', 'integration', ...
+    'TestStandaloneAllScientificModels.m'));
+assert(~any([isolationResults.Failed]));
+assert(~any([isolationResults.Incomplete]));
 ```
 
 For the release audit, add `tools/release` to the MATLAB path, scan the

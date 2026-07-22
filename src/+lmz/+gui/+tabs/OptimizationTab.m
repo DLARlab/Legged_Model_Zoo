@@ -12,8 +12,12 @@ classdef OptimizationTab < lmz.gui.tabs.BaseTab
 
     methods
         function obj=OptimizationTab(parent,controller,eventBus,preferences,varargin)
-            tab=uitab(parent,'Title','Optimization','Tag','lmz-tab-optimization');
-            obj@lmz.gui.tabs.BaseTab(tab,controller,eventBus,preferences,varargin{:});
+            [root,hostOptions,baseArguments]= ...
+                lmz.gui.layout.ComponentHost.create(parent, ...
+                'Optimization','lmz-tab-optimization',varargin{:});
+            obj@lmz.gui.tabs.BaseTab(root,controller,eventBus,preferences, ...
+                baseArguments{:});
+            obj.HostMode=hostOptions.HostMode;
             obj.Id='optimization';obj.CapabilityName='optimize';obj.build();
             obj.subscribe({lmz.gui.PresentationEvents.ModelChanged, ...
                 lmz.gui.PresentationEvents.ProblemChanged, ...
@@ -92,6 +96,7 @@ classdef OptimizationTab < lmz.gui.tabs.BaseTab
         function onPresentationEvents(obj,batch)
             names={batch.Name};
             if any(ismember(names,{lmz.gui.PresentationEvents.ModelChanged, ...
+                    lmz.gui.PresentationEvents.WorkflowChanged, ...
                     lmz.gui.PresentationEvents.ProblemChanged, ...
                     lmz.gui.PresentationEvents.OptimizationChanged, ...
                     lmz.gui.PresentationEvents.StridePlanChanged}))
@@ -136,19 +141,19 @@ classdef OptimizationTab < lmz.gui.tabs.BaseTab
             history=result.History;if isempty(history),history=result.Objective;end
             semilogy(obj.ObjectiveAxes,max(history,eps),'o-');grid(obj.ObjectiveAxes,'on');
             xlabel(obj.ObjectiveAxes,'Iteration');ylabel(obj.ObjectiveAxes,'Objective');
-            if strcmp(obj.Controller.State.ModelId,'slip_quad_load')
-                problem=obj.Controller.Registry.createModel('slip_quad_load').createProblem( ...
-                    'multi_stride_fit',struct());
-                lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotSensitivity( ...
-                    obj.SensitivityAxes,problem.Dataset.SensitivityStudyData);
-                diagnostics=result.Provenance.diagnostics;
-                lmzmodels.slip_quad_load.QuadLoadPlotProvider.plotR2( ...
-                    obj.R2Axes,diagnostics.R2);
-            else
+            rendered=false;
+            if ismethod(obj.Controller,'renderOptimizationDiagnostics')
+                try
+                    rendered=obj.Controller.renderOptimizationDiagnostics( ...
+                        obj.SensitivityAxes,obj.R2Axes,result);
+                    if isempty(rendered),rendered=true;end
+                catch
+                    rendered=false;
+                end
+            end
+            if ~rendered
                 plotTerms(obj.SensitivityAxes,result.Terms);
-                cla(obj.R2Axes);text(obj.R2Axes,.5,.5, ...
-                    'R-squared is not defined for this fit','HorizontalAlignment','center');
-                axis(obj.R2Axes,'off');
+                plotFitQuality(obj.R2Axes,result);
             end
         end
     end
@@ -171,4 +176,20 @@ end
 cla(axesHandle);bar(axesHandle,values);grid(axesHandle,'on');
 axesHandle.XTick=1:numel(names);axesHandle.XTickLabel=strrep(names,'_',' ');
 axesHandle.XTickLabelRotation=25;ylabel(axesHandle,'Weighted contribution');
+end
+
+function plotFitQuality(axesHandle,result)
+value=[];
+try
+    diagnostics=result.Provenance.diagnostics;
+    if isfield(diagnostics,'R2'),value=diagnostics.R2;end
+catch
+end
+cla(axesHandle);
+if isnumeric(value)&&~isempty(value)
+    bar(axesHandle,value);grid(axesHandle,'on');ylabel(axesHandle,'R-squared');
+else
+    text(axesHandle,.5,.5,'R-squared is not defined for this fit', ...
+        'HorizontalAlignment','center');axis(axesHandle,'off');
+end
 end

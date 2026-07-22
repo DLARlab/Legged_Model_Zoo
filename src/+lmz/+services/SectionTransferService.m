@@ -117,17 +117,17 @@ value=struct('StartSectionId',target.Id, ...
     'StartStateSide',target.StateSide, ...
     'StopStateSide',target.StateSide, ...
     'StrideCount',1,'SymmetryId',symmetry.Id);
-names=canonicalEventNames(source.ModelId);
-if isempty(names),return,end
-value.InitialSectionState=simulation.States(1,:).';
-value.InitialEventNames=names;
-value.InitialEventTimes=eventTimes(simulation.EventRecords,names);
-value.InitialReturnTime=simulation.Time(end);
 value.SourceParameterValues=source.ParameterValues(:);
 sourceDecision=sourceApexDecision(source);
 if ~isempty(sourceDecision)
     value.SourceDecisionValues=sourceDecision(:);
 end
+names=canonicalEventNames(source);
+if isempty(names),return,end
+value.InitialSectionState=simulation.States(1,:).';
+value.InitialEventNames=names;
+value.InitialEventTimes=eventTimes(simulation.EventRecords,names);
+value.InitialReturnTime=simulation.Time(end);
 end
 
 function [solution,verified,errorValue,tolerance,status,actualSimulation]= ...
@@ -135,7 +135,7 @@ function [solution,verified,errorValue,tolerance,status,actualSimulation]= ...
         model,source,configuration,expected,context)
 solution=source;verified=false;errorValue=NaN;tolerance=NaN;
 status='unsupported-model-codec';actualSimulation=[];
-if ~supportsBuiltinCodec(model,source),return,end
+if ~supportsRegisteredCodec(model,source),return,end
 problem=model.createProblem('periodic_orbit',configuration);
 if ~compatibleSchema(source.ParameterSchema,problem.getParameterSchema(), ...
         source.ParameterValues)
@@ -143,11 +143,12 @@ if ~compatibleSchema(source.ParameterSchema,problem.getParameterSchema(), ...
     return
 end
 sectionLocal=isprop(problem,'SectionCodec')&&~isempty(problem.SectionCodec);
-scientificApex=isScientificApexTarget(model,configuration);
+scientificApex=isScientificApexTarget(problem,configuration);
 if sectionLocal
     decision=problem.getDecisionSchema().defaults();
 elseif scientificApex
-    decision=apexSeedDecision(source,configuration,expected);
+    decision=apexSeedDecision(source,configuration,expected, ...
+        problem.getDecisionSchema());
 else
     if ~compatibleSchema(source.DecisionSchema,problem.getDecisionSchema(), ...
             source.DecisionValues)
@@ -195,30 +196,42 @@ else
 end
 end
 
-function valid=isScientificApexTarget(model,configuration)
-valid=any(strcmp(model.getManifest().id, ...
-    {'slip_quadruped','slip_biped'}))&& ...
+function valid=isScientificApexTarget(problem,configuration)
+valid=hasCyclicSchedule(problem.getDecisionSchema())&& ...
     strcmp(configuration.StartSectionId,'apex')&& ...
     strcmp(configuration.StopSectionId,'apex');
 end
 
-function value=apexDecisionFromSimulation(modelId,simulation)
-names=canonicalEventNames(modelId);
-times=eventTimes(simulation.EventRecords,names);
-value=[simulation.States(1,2:end).';times;simulation.Time(end)];
-end
-
-function value=apexSeedDecision(source,configuration,simulation)
-expectedCount=12;
-if strcmp(source.ModelId,'slip_quadruped'),expectedCount=22;end
+function value=apexSeedDecision(~,configuration,simulation,schema)
+expectedCount=schema.count();
 if isfield(configuration,'SourceDecisionValues')&& ...
         isnumeric(configuration.SourceDecisionValues)&& ...
         numel(configuration.SourceDecisionValues)==expectedCount&& ...
-        all(isfinite(configuration.SourceDecisionValues(:)))
+    all(isfinite(configuration.SourceDecisionValues(:)))
     value=configuration.SourceDecisionValues(:);
 else
-    value=apexDecisionFromSimulation(source.ModelId,simulation);
+    value=apexDecisionFromSimulation(schema,simulation);
 end
+end
+
+function value=apexDecisionFromSimulation(schema,simulation)
+value=schema.defaults();stateNames=simulation.StateSchema.names();
+eventNames={simulation.EventRecords.Name};
+for index=1:schema.count()
+    spec=schema.Specs(index);
+    stateIndex=find(strcmp(spec.Name,stateNames),1);
+    if strcmp(spec.Group,'initial_state')&&~isempty(stateIndex)
+        value(index)=simulation.States(1,stateIndex);
+    elseif strcmp(spec.Topology,'cyclic_time')
+        eventName=eventNameForSpec(spec.Name,eventNames);
+        value(index)=eventTimes(simulation.EventRecords,{eventName});
+    elseif strcmp(spec.Group,'event_timing')&& ...
+            any(arrayfun(@(candidate)strcmp(candidate.PeriodSource, ...
+            spec.Name),schema.Specs))
+        value(index)=simulation.Time(end);
+    end
+end
+schema.validateVector(value);
 end
 
 function [valid,errorValue,tolerance]=sameApexSeed(expected,actual)
@@ -254,15 +267,36 @@ errorValue=max([0;abs(expected.Time(1)-actual.Time(1)); ...
 valid=isfinite(errorValue)&&errorValue<=tolerance;
 end
 
-function names=canonicalEventNames(modelId)
-switch modelId
-    case 'slip_quadruped'
-        names={'BL_TD','BL_LO','FL_TD','FL_LO', ...
-            'BR_TD','BR_LO','FR_TD','FR_LO'};
-    case 'slip_biped'
-        names={'L_TD','L_LO','R_TD','R_LO'};
-    otherwise
-        names={};
+function names=canonicalEventNames(source)
+names={};
+schema=source.DecisionSchema;
+if ~isa(schema,'lmz.schema.VariableSchema'),return,end
+for index=1:schema.count()
+    spec=schema.Specs(index);
+    if strcmp(spec.Topology,'cyclic_time')
+        names{end+1}=eventNameForSpec(spec.Name,{}); %#ok<AGROW>
+    end
+end
+if ~isempty(names),return,end
+lineage=source.Lineage;
+if isstruct(lineage)&&isscalar(lineage)&& ...
+        isfield(lineage,'Configuration')&& ...
+        isstruct(lineage.Configuration)&& ...
+        isfield(lineage.Configuration,'InitialEventNames')
+    names=lineage.Configuration.InitialEventNames;
+    if ischar(names),names={names};end
+    if ~iscell(names)||~all(cellfun(@ischar,names)),names={};end
+end
+end
+
+function value=eventNameForSpec(name,available)
+value=name;
+if ~isempty(available)&&any(strcmp(value,available)),return,end
+if numel(name)>1&&name(1)=='t'
+    candidate=name(2:end);
+    if isempty(available)||any(strcmp(candidate,available))
+        value=candidate;
+    end
 end
 end
 
@@ -289,28 +323,22 @@ if isstruct(lineage)&&isscalar(lineage)&& ...
     value=lineage.Configuration.SourceDecisionValues;
     return
 end
-counts=struct('slip_quadruped',22,'slip_biped',12);
-if isfield(counts,source.ModelId)&& ...
-        numel(source.DecisionValues)==counts.(source.ModelId)
+if hasCyclicSchedule(source.DecisionSchema)
     value=source.DecisionValues;
 end
 end
 
-function valid=supportsBuiltinCodec(model,source)
+function valid=supportsRegisteredCodec(model,source)
 modelId=model.getManifest().id;
-valid=false;
-switch modelId
-    case 'tutorial_hopper'
-        valid=isa(model,'lmzmodels.tutorial_hopper.Model')&& ...
-            any(strcmp(source.ProblemId,{'periodic_hop','periodic_orbit'}));
-    case 'slip_quadruped'
-        valid=isa(model,'lmzmodels.slip_quadruped.Model')&& ...
-            any(strcmp(source.ProblemId,{'periodic_apex','periodic_orbit'}));
-    case 'slip_biped'
-        valid=isa(model,'lmzmodels.slip_biped.Model')&& ...
-            any(strcmp(source.ProblemId,{'periodic_apex','periodic_orbit'}));
+problems=model.listProblems();
+valid=strcmp(source.ModelId,modelId)&& ...
+    any(strcmp('periodic_orbit',problems))&& ...
+    any(strcmp(source.ProblemId,problems));
 end
-valid=valid&&strcmp(source.ModelId,modelId);
+
+function valid=hasCyclicSchedule(schema)
+valid=isa(schema,'lmz.schema.VariableSchema')&& ...
+    any(arrayfun(@(spec)strcmp(spec.Topology,'cyclic_time'),schema.Specs));
 end
 
 function valid=compatibleSchema(source,target,values)

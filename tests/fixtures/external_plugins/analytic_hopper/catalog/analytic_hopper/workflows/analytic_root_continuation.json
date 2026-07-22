@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "analytic_root_continuation",
+  "label": "Analytic plugin root continuation",
+  "modelId": "analytic_hopper",
+  "problemId": "periodic_hop",
+  "maturity": "experimental",
+  "validationStatus": "tested",
+  "dataSourceId": "analytic_branch",
+  "defaultDatasetId": "exact_hop_family",
+  "defaultPointIndex": 2,
+  "axisPresetId": "analytic_branch",
+  "visualizationProfileId": "clean_generic",
+  "layoutProfileId": "classic_tabs",
+  "allowedSteps": ["load_data", "select_point", "simulate", "solve", "seed_pair", "continuation", "analysis"],
+  "seedPreset": {
+    "firstSeed": "locked_exact_branch_point",
+    "secondSeedOptions": ["adjacent_next", "adjacent_previous", "generated_corrected"],
+    "defaultSecondSeed": "adjacent_next",
+    "generatedRadius": 0.02,
+    "options": {
+      "sourceDatasetId": "exact_hop_family",
+      "sourcePointIndex": 2,
+      "lockFirstSeed": true
+    }
+  },
+  "solveOptions": {
+    "FunctionTolerance": 1e-10,
+    "StepTolerance": 1e-10,
+    "MaxIterations": 100,
+    "MaxFunctionEvaluations": 500,
+    "Display": "off"
+  },
+  "continuationPreset": {
+    "directionMode": "both",
+    "directionLabels": {
+      "backward": "decreasing horizontal speed",
+      "forward": "increasing horizontal speed"
+    },
+    "checkpointEnabled": true,
+    "options": {
+      "InitialStep": 0.02,
+      "MinimumStep": 0.0001,
+      "MaximumStep": 0.05,
+      "MaximumPoints": 6,
+      "CorrectorTolerance": 1e-9,
+      "RequireFeasible": true
+    }
+  },
+  "homotopyPreset": {
+    "id": "disabled_homotopy",
+    "label": "Homotopy unavailable",
+    "values": {
+      "enabled": false
+    }
+  },
+  "familyScanPreset": {
+    "id": "disabled_family_scan",
+    "label": "Family scan unavailable",
+    "values": {
+      "enabled": false
+    }
+  },
+  "analysisViews": ["physical_simulation", "trajectory", "states"],
+  "provenance": {
+    "source": "generated analytic plugin fixture",
+    "construction": "closed-form periodic hopper family",
+    "scientificClaim": false
+  }
+}

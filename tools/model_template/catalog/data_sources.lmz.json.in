@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "dataSources": [
+    {
+      "id": "generated_branch",
+      "label": "Generated periodic branch",
+      "modelId": "{{MODEL_ID}}",
+      "problemId": "periodic_orbit",
+      "kind": "branch_catalog",
+      "providerClass": "lmzmodels.{{MODEL_ID}}.BranchCatalogProvider",
+      "defaultDatasetId": "generated_periodic_family",
+      "metadata": {
+        "axisPresetId": "periodic_branch",
+        "recommendedPointIndex": 2,
+        "readOnly": true,
+        "scientificClaim": false
+      }
+    }
+  ]
+}

@@ -5,7 +5,7 @@ classdef PreferencesStore < handle
         ProjectRoot
     end
     properties (Constant)
-        SchemaVersion = 3
+        SchemaVersion = 4
     end
 
     methods
@@ -48,6 +48,71 @@ classdef PreferencesStore < handle
                 error('lmz:GUI:WindowPosition','Window position must contain four finite values.');
             end
             obj.set('WindowPosition',reshape(value,1,4));
+        end
+
+        function value=layoutProfile(obj,fallback)
+            %LAYOUTPROFILE Selected application-shell layout identifier.
+            if nargin<2,fallback='classic_tabs';end
+            fallback=validIdentifierFallback(fallback,'classic_tabs');
+            value=obj.get('LayoutProfile',fallback);
+            if ~isLowerIdentifier(value),value=fallback;else,value=char(value);end
+        end
+
+        function setLayoutProfile(obj,value)
+            if ~isLowerIdentifier(value)
+                error('lmz:GUI:LayoutProfilePreference', ...
+                    'Layout profile must be a lowercase identifier.');
+            end
+            obj.set('LayoutProfile',char(value));
+        end
+
+        function value=sidebarTab(obj,fallback)
+            %SIDEBARTAB Persistent selected sidebar tab ID or title.
+            if nargin<2,fallback='info_selection';end
+            fallback=validTabFallback(fallback,'info_selection');
+            value=obj.get('SidebarTab',fallback);
+            if ~isTabValue(value),value=fallback;else,value=char(value);end
+        end
+
+        function setSidebarTab(obj,value)
+            if ~isTabValue(value)
+                error('lmz:GUI:SidebarTabPreference', ...
+                    'Sidebar tab must be nonempty scalar text.');
+            end
+            obj.set('SidebarTab',char(value));
+        end
+
+        function value=centralViewTab(obj,fallback)
+            %CENTRALVIEWTAB Persistent selected central-workspace view.
+            if nargin<2,fallback='branch_state';end
+            fallback=validTabFallback(fallback,'branch_state');
+            value=obj.get('CentralViewTab',fallback);
+            if ~isTabValue(value),value=fallback;else,value=char(value);end
+        end
+
+        function setCentralViewTab(obj,value)
+            if ~isTabValue(value)
+                error('lmz:GUI:CentralViewTabPreference', ...
+                    'Central view tab must be nonempty scalar text.');
+            end
+            obj.set('CentralViewTab',char(value));
+        end
+
+        function value=sidebarWidthRatio(obj,fallback)
+            %SIDEBARWIDTHRATIO Fraction of workbench width used by sidebar.
+            if nargin<2,fallback=1.85/(3.35+1.85);end
+            if ~isSidebarRatio(fallback),fallback=1.85/(3.35+1.85);end
+            value=obj.get('SidebarWidthRatio',fallback);
+            if ~isSidebarRatio(value),value=fallback;end
+            value=double(value);
+        end
+
+        function setSidebarWidthRatio(obj,value)
+            if ~isSidebarRatio(value)
+                error('lmz:GUI:SidebarWidthRatioPreference', ...
+                    'Sidebar width ratio must be a finite scalar between zero and one.');
+            end
+            obj.set('SidebarWidthRatio',double(value));
         end
 
         function value = recentDataFolder(obj,fallback)
@@ -157,6 +222,10 @@ classdef PreferencesStore < handle
             value = struct('SchemaVersion',obj.SchemaVersion, ...
                 'Palette',obj.palette(), ...
                 'WindowPosition',obj.windowPosition([40 40 1460 900]), ...
+                'LayoutProfile',obj.layoutProfile(), ...
+                'SidebarTab',obj.sidebarTab(), ...
+                'CentralViewTab',obj.centralViewTab(), ...
+                'SidebarWidthRatio',obj.sidebarWidthRatio(), ...
                 'RecentDataFolder',obj.recentDataFolder(''), ...
                 'RecentOutputFolder',obj.recentOutputFolder(''), ...
                 'VisualizationProfiles',obj.visualizationProfiles(), ...
@@ -256,6 +325,35 @@ try
 catch
     value = char(value);
 end
+end
+
+function value=isLowerIdentifier(source)
+value=(ischar(source)&&isrow(source))|| ...
+    (isstring(source)&&isscalar(source));
+if ~value,return,end
+value=~isempty(regexp(char(source),'^[a-z][a-z0-9_]*$','once'));
+end
+
+function value=validIdentifierFallback(source,defaultValue)
+if isLowerIdentifier(source),value=char(source);else,value=defaultValue;end
+end
+
+function value=isTabValue(source)
+value=(ischar(source)&&isrow(source))|| ...
+    (isstring(source)&&isscalar(source));
+if ~value,return,end
+source=char(source);
+value=~isempty(strtrim(source))&&numel(source)<=256&& ...
+    isempty(regexp(source,'[\x00-\x1F\x7F]','once'));
+end
+
+function value=validTabFallback(source,defaultValue)
+if isTabValue(source),value=char(source);else,value=defaultValue;end
+end
+
+function value=isSidebarRatio(source)
+value=isnumeric(source)&&isreal(source)&&isscalar(source)&& ...
+    isfinite(source)&&source>0&&source<1;
 end
 
 function result = isInside(pathValue,root)

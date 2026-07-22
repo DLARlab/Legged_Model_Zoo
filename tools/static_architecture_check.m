@@ -29,6 +29,21 @@ for k=1:numel(restricted)
         if ~isempty(regexpi(text,restrictedPatterns{j},'once')),violations{end+1}=sprintf('%s: %s',path,restrictedPatterns{j});end %#ok<AGROW>
     end
 end
+providerDriven=[restricted; ...
+    dir(fullfile(root,'src','+lmz','+workflow','**','*.m'))];
+modelSpecificTokens={'slip_quadruped','slip_biped','slip_quad_load', ...
+    'tutorial_hopper','lmzmodels\.'};
+for k=1:numel(providerDriven)
+    path=fullfile(providerDriven(k).folder,providerDriven(k).name);
+    text=fileread(path);
+    for j=1:numel(modelSpecificTokens)
+        if ~isempty(regexpi(text,modelSpecificTokens{j},'once'))
+            violations{end+1}=sprintf( ... %#ok<AGROW>
+                '%s: canonical model dependency %s', ...
+                path,modelSpecificTokens{j});
+        end
+    end
+end
 quadrupedProblem=fullfile(root,'models','+lmzmodels','+slip_quadruped','PeriodicApexProblem.m');
 if exist(quadrupedProblem,'file')==2
     problemText=fileread(quadrupedProblem);
@@ -71,7 +86,7 @@ if exist(recorderPath,'file')==2
     recorderText=fileread(recorderPath);
     requiredRecorderTokens={'onCleanup','commitTemporary','safeClose','safeRestore'};
     for tokenIndex=1:numel(requiredRecorderTokens)
-        if isempty(strfind(recorderText,requiredRecorderTokens{tokenIndex})) %#ok<STREMP>
+        if ~contains(recorderText,requiredRecorderTokens{tokenIndex})
             violations{end+1}=sprintf('RecorderService is missing resource-safety token %s',requiredRecorderTokens{tokenIndex}); %#ok<AGROW>
         end
     end
@@ -145,7 +160,7 @@ for packageIndex=1:numel(scientificPackages)
     for profileIndex=1:numel(profiles)
         profile=profiles(profileIndex);
         if any(strcmp(profile.id,{'research_legacy','high_contrast'}))&& ...
-                isempty(strfind(profile.rendererClass,'.ResearchRenderer')) %#ok<STREMP>
+                ~contains(profile.rendererClass,'.ResearchRenderer')
             violations{end+1}=sprintf( ... %#ok<AGROW>
                 '%s/%s does not use compound ResearchRenderer geometry', ...
                 modelId,profile.id);

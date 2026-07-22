@@ -38,15 +38,23 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
         TemplateInitializerDropDown
         ResidualClassificationLabel
         ShootingDiagnosticsTable
+        IterationTable
         LastSectionPreferenceKey = ''
+        RegisteredSolveDefaultsKey = ''
+        OverlayController = []
     end
 
     methods
         function obj=SolveTab(parent,controller,eventBus,preferences,varargin)
-            tab=uitab(parent,'Title','Solve / Seeds','Tag','lmz-tab-solve');
-            obj@lmz.gui.tabs.BaseTab(tab,controller,eventBus,preferences,varargin{:});
+            [root,hostOptions,baseArguments]= ...
+                lmz.gui.layout.ComponentHost.create(parent, ...
+                'Solve / Seeds','lmz-tab-solve',varargin{:});
+            obj@lmz.gui.tabs.BaseTab(root,controller,eventBus,preferences, ...
+                baseArguments{:});
+            obj.HostMode=hostOptions.HostMode;
+            obj.OverlayController=hostOptions.OverlayController;
             obj.Id='solve';obj.CapabilityName='solve';obj.build();
-            obj.subscribe({lmz.gui.PresentationEvents.ModelChanged, ...
+            topics={lmz.gui.PresentationEvents.ModelChanged, ...
                 lmz.gui.PresentationEvents.ProblemChanged, ...
                 lmz.gui.PresentationEvents.ProblemConfigurationChanged, ...
                 lmz.gui.PresentationEvents.DatasetsChanged, ...
@@ -55,7 +63,12 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 lmz.gui.PresentationEvents.SolveResultChanged, ...
                 lmz.gui.PresentationEvents.SeedPairChanged, ...
                 lmz.gui.PresentationEvents.BranchViewChanged, ...
-                lmz.gui.PresentationEvents.RunStateChanged});
+                lmz.gui.PresentationEvents.RunStateChanged};
+            if any(strcmp('SolveProgressChanged', ...
+                    lmz.gui.PresentationEvents.all()))
+                topics{end+1}='SolveProgressChanged';
+            end
+            obj.subscribe(topics);
             obj.setCapabilities(controller.capabilities());obj.refresh();
         end
 
@@ -262,16 +275,22 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 obj.SecondSeedRadiusField obj.NoiseMagnitudeField obj.NoiseSeedSpinner};
             obj.StatusLabel=uilabel(grid,'Text','Ready','WordWrap','on', ...
                 'Tag','lmz-solve-status');place(obj.StatusLabel,5,1);
-            obj.SeedAxes=uiaxes(grid,'Tag','lmz-solve-seed-axes');
-            place(obj.SeedAxes,6,1);
+            diagnosticsHost=uigridlayout(grid,[1 2]);
+            diagnosticsHost.ColumnWidth={'1.15x','0.85x'};place(diagnosticsHost,6,1);
+            obj.SeedAxes=uiaxes(diagnosticsHost,'Tag','lmz-solve-seed-axes');
             title(obj.SeedAxes,'Branch seed-pair overlay');
             obj.SeedAxes.XGrid='on';obj.SeedAxes.YGrid='on';
+            obj.IterationTable=uitable(diagnosticsHost, ...
+                'ColumnName',{'Stage','Iteration','Functions','Residual', ...
+                'Step','Optimality'},'ColumnEditable',false(1,6), ...
+                'Tag','lmz-solve-iteration-table');
         end
 
         function refresh(obj,varargin)
             refresh@lmz.gui.tabs.BaseTab(obj);
             obj.refreshSectionControls();
             obj.refreshShootingControls();
+            obj.refreshRegisteredSolveDefaults();
             if isempty(obj.Controller.State.Datasets)
                 obj.FirstIndexSpinner.Limits=[1 Inf];obj.SecondIndexSpinner.Limits=[1 Inf];
             else
@@ -285,6 +304,7 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 obj.SecondIndexSpinner.Value=min(n,selected+1);
             end
             pair=obj.Controller.State.SeedPair;
+            obj.refreshCandidateOverlay();
             shootingResult=obj.Controller.State.ShootingResult;
             if ~isempty(shootingResult)
                 plotHorizonDiagnostics(obj.SeedAxes,shootingResult);
@@ -299,6 +319,10 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 obj.StatusLabel.Text=sprintf('%s • exit %d • residual %.3g', ...
                     outputField(result.Output,'algorithm','solver'),result.ExitFlag, ...
                     result.Evaluation.ScaledResidualNorm);
+                if ~isempty(obj.OverlayController)
+                    obj.OverlayController.clearLayer('current_solver_iterate');
+                    obj.OverlayController.setSolution('solved_point',result.Solution);
+                end
             end
             timing=obj.Controller.State.TimingResult;
             if ~isempty(timing)
@@ -310,6 +334,7 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                     yesNo(timing.SolverDiagnostics. ...
                     PhysicalParametersBitwiseUnchanged));
             end
+            obj.refreshSolveProgress();
             obj.applyControlState();
         end
 
@@ -326,6 +351,20 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
     end
 
     methods (Access=protected)
+        function onPresentationEvents(obj,batch)
+            names={batch.Name};
+            progressEvent=lmz.gui.PresentationEvents.SolveProgressChanged;
+            if ~isempty(names)&&all(strcmp(names,progressEvent))
+                % Iteration callbacks can arrive at solver frequency.  Keep
+                % this path incremental: rebuilding section/shooting editors
+                % here makes live diagnostics scale with the full workbench.
+                obj.refreshSolveProgress();
+                obj.applyControlState();
+                return
+            end
+            obj.refresh(batch);
+        end
+
         function applyControlState(obj)
             solve=false;continueCapability=false;simulate=false;
             if isfield(obj.Capabilities,'solve'),solve=obj.Capabilities.solve;end
@@ -394,6 +433,7 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
             controls.ResidualClassificationLabel= ...
                 obj.ResidualClassificationLabel;
             controls.ShootingDiagnosticsTable=obj.ShootingDiagnosticsTable;
+            controls.IterationTable=obj.IterationTable;
             controls.SectionSupportLabel=obj.SectionSupportLabel;
         end
     end
@@ -477,7 +517,7 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
         function refreshShootingControls(obj)
             value=obj.Controller.shootingEditorData();
             configuration=value.Configuration;
-            obj.configureInitializerItems();
+            defaultInitializer=obj.configureInitializerItems(value);
             obj.FormulationDropDown.Value=fieldOr(configuration, ...
                 'ShootingFormulation','multiple_shooting');
             obj.SolverDropDown.Value=fieldOr(configuration,'Solver','auto');
@@ -493,11 +533,10 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 'ResidualTolerance',1e-7);
             initializer=fieldOr(configuration,'TemplateInitializer', ...
                 'schema_defaults');
-            if strcmp(obj.Controller.State.ModelId,'slip_quad_load')&& ...
-                    any(strcmp(initializer,{ ...
-                    'schema_defaults','exact_source_horizon', ...
-                    'nearest_compatible_template'}))
-                initializer='individual_1_tr_to_rl';
+            if any(strcmp(initializer,{'schema_defaults', ...
+                    'exact_source_horizon','nearest_compatible_template'}))&& ...
+                    ~strcmp(defaultInitializer,'schema_defaults')
+                initializer=defaultInitializer;
             end
             if ~any(strcmp(initializer,obj.TemplateInitializerDropDown.ItemsData))
                 initializer=obj.TemplateInitializerDropDown.ItemsData{1};
@@ -512,21 +551,46 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
                 value,obj.Controller.State.ShootingResult);
         end
 
-        function configureInitializerItems(obj)
-            if strcmp(obj.Controller.State.ModelId,'slip_quad_load')
-                obj.TemplateInitializerDropDown.Items={ ...
-                    'TR to RL source','Identical TR to RL source', ...
-                    'TR to TL source','Single TR source', ...
-                    'Repeat previous compatible stride'};
-                obj.TemplateInitializerDropDown.ItemsData={ ...
-                    'individual_1_tr_to_rl', ...
-                    'individual_1_identical_tr_to_rl', ...
-                    'individual_1_tr_to_tl','individual_1_tr_single', ...
-                    'phase_compatible_repeat'};
-            else
-                obj.TemplateInitializerDropDown.Items={'Schema defaults'};
-                obj.TemplateInitializerDropDown.ItemsData={'schema_defaults'};
+        function refreshRegisteredSolveDefaults(obj)
+            key=[obj.Controller.State.ModelId '|' ...
+                obj.Controller.State.WorkflowId];
+            if strcmp(key,obj.RegisteredSolveDefaultsKey),return,end
+            obj.RegisteredSolveDefaultsKey=key;
+            if ismethod(obj.Controller,'generatedSeedRadius')
+                try
+                    radius=obj.Controller.generatedSeedRadius();
+                    if isnumeric(radius)&&isscalar(radius)&& ...
+                            isfinite(radius)&&radius>0
+                        obj.SecondSeedRadiusField.Value=radius;
+                    end
+                catch
+                end
             end
+            if ismethod(obj.Controller,'solveDefaultOptions')
+                try
+                    defaults=obj.Controller.solveDefaultOptions();
+                    obj.SolveButton.Tooltip=[ ...
+                        'Refine the working solution. Registered defaults: ' ...
+                        solveOptionsSummary(defaults)];
+                catch
+                end
+            end
+        end
+
+        function defaultId=configureInitializerItems(obj,editor)
+            descriptors=[];
+            if nargin>=2&&isstruct(editor)&& ...
+                    isfield(editor,'InitializerDescriptors')
+                descriptors=editor.InitializerDescriptors;
+            elseif ismethod(obj.Controller,'shootingInitializerDescriptors')
+                try
+                    descriptors=obj.Controller.shootingInitializerDescriptors();
+                catch
+                end
+            end
+            [ids,labels,defaultId]=initializerItems(descriptors);
+            obj.TemplateInitializerDropDown.Items=labels;
+            obj.TemplateInitializerDropDown.ItemsData=ids;
         end
 
         function refreshSectionSupport(obj,startId,stopId)
@@ -638,7 +702,13 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
         end
         function solve(obj)
             try
-                obj.Controller.solveWorkingSolution(struct());
+                result=obj.Controller.solveWorkingSolution(struct());
+                if ~isempty(obj.OverlayController)&& ...
+                        isa(result,'lmz.data.SolveResult')
+                    obj.OverlayController.clearLayer('current_solver_iterate');
+                    obj.OverlayController.setSolution('solved_point', ...
+                        result.Solution);
+                end
             catch exception
                 obj.reportError(exception);
             end
@@ -652,8 +722,12 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
         end
         function applyNoise(obj)
             try
-                obj.Controller.perturbWorkingSolution(obj.NoiseMagnitudeField.Value, ...
+                solution=obj.Controller.perturbWorkingSolution( ...
+                    obj.NoiseMagnitudeField.Value, ...
                     'schema-scaled',obj.NoiseSeedSpinner.Value);
+                if ~isempty(obj.OverlayController)
+                    obj.OverlayController.setSolution('noise_candidate',solution);
+                end
             catch exception
                 obj.reportError(exception);
             end
@@ -679,20 +753,65 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
         end
         function makeSecondSeed(obj)
             try
-                obj.Controller.makeSecondSeed(obj.SecondSeedRadiusField.Value);
+                obj.Controller.makeSecondSeed( ...
+                    obj.SecondSeedRadiusField.Value);
             catch exception
                 obj.reportError(exception);
             end
         end
         function describeSeedPair(obj,pair)
             indices=diagnosticField(pair.Diagnostics,'SourceIndices',[NaN NaN]);
-            residual=diagnosticField(pair.Diagnostics,'ResidualNorm',NaN);
-            obj.StatusLabel.Text=sprintf( ...
-                'Seed pair %g → %g • radius %.5g • generated residual %.3g', ...
-                indices(1),indices(2),pair.AchievedRadius,residual);
+            if isnumeric(indices)&&numel(indices)==2&&all(isfinite(indices))
+                if abs(diff(indices))==1
+                    source='Adjacent branch seed pair';
+                else
+                    source='Manual branch seed pair';
+                end
+                residuals=diagnosticField(pair.Diagnostics, ...
+                    'ResidualNorms',[]);
+                residuals=residuals(isfinite(residuals));
+                if isempty(residuals)
+                    obj.StatusLabel.Text=sprintf( ...
+                        '%s %g → %g • radius %.5g',source, ...
+                        indices(1),indices(2),pair.AchievedRadius);
+                else
+                    obj.StatusLabel.Text=sprintf( ...
+                        '%s %g → %g • radius %.5g • max source residual %.3g', ...
+                        source,indices(1),indices(2),pair.AchievedRadius, ...
+                        max(residuals));
+                end
+            else
+                residual=diagnosticField(pair.Diagnostics,'ResidualNorm',NaN);
+                if isfinite(residual)
+                    obj.StatusLabel.Text=sprintf( ...
+                        'Generated second seed • radius %.5g • residual %.3g', ...
+                        pair.AchievedRadius,residual);
+                else
+                    obj.StatusLabel.Text=sprintf( ...
+                        'Generated second seed • radius %.5g', ...
+                        pair.AchievedRadius);
+                end
+            end
             obj.plotSeedPair(pair);
         end
         function plotSeedPair(obj,pair)
+            if ~isempty(obj.OverlayController)
+                prediction=diagnosticField(pair.Diagnostics, ...
+                    'Prediction',[]);
+                if isempty(prediction)
+                    % An adjacent/manual pair supersedes a generated predictor.
+                    obj.OverlayController.clearLayer('predicted_seed');
+                else
+                    obj.OverlayController.setDecisions('predicted_seed', ...
+                        prediction,pair.Second);
+                end
+                obj.OverlayController.setPair(pair);
+            end
+            if strcmp(obj.HostMode,'workspace')
+                cla(obj.SeedAxes);title(obj.SeedAxes, ...
+                    'Seed pair shown on persistent Branch / State Plot');
+                return
+            end
             cla(obj.SeedAxes);
             if isempty(obj.Controller.State.Datasets),return,end
             hold(obj.SeedAxes,'on');names=obj.Controller.State.AxisVariables(1:2);
@@ -709,6 +828,77 @@ classdef SolveTab < lmz.gui.tabs.BaseTab
             xlabel(obj.SeedAxes,names{1},'Interpreter','none');
             ylabel(obj.SeedAxes,names{2},'Interpreter','none');
             legend(obj.SeedAxes,'show','Location','best');
+        end
+
+        function refreshSolveProgress(obj)
+            progress=[];
+            if isprop(obj.Controller.State,'SolveProgress')
+                progress=obj.Controller.State.SolveProgress;
+            end
+            if isempty(progress)&&~isempty(obj.Controller.State.SolveResult)&& ...
+                    isprop(obj.Controller.State.SolveResult,'Progress')
+                progress=obj.Controller.State.SolveResult.Progress;
+            end
+            if isempty(progress)||~isa(progress,'lmz.data.SolveProgress')
+                obj.IterationTable.Data=cell(0,6);return
+            end
+            snapshots=progress.Snapshots;rows=cell(numel(snapshots),6);
+            for index=1:numel(snapshots)
+                item=snapshots(index);
+                rows(index,:)={item.Stage,item.Iteration,item.FunctionCount, ...
+                    item.ScaledResidual,item.StepNorm,item.FirstOrderOptimality};
+            end
+            obj.IterationTable.Data=rows;
+            if isempty(snapshots),return,end
+            current=snapshots(end);
+            obj.StatusLabel.Text=sprintf('%s • iteration %g • residual %.3g', ...
+                strrep(current.Stage,'_',' '),current.Iteration, ...
+                current.ScaledResidual);
+            terminal=progress.Completed||any(strcmp(current.Stage,{ ...
+                'solve_completed','solve_failed','controlled_stop'}));
+            if terminal&&~isempty(obj.OverlayController)
+                obj.OverlayController.clearLayer('current_solver_iterate');
+            elseif ~isempty(obj.OverlayController)&& ...
+                    ~isempty(current.DecisionValues)&& ...
+                    ~isempty(obj.Controller.State.WorkingSolution)
+                obj.OverlayController.setDecisions('current_solver_iterate', ...
+                    current.DecisionValues,obj.Controller.State.WorkingSolution);
+            end
+            if strcmp(obj.HostMode,'workspace')&& ...
+                    isempty(obj.Controller.State.ShootingResult)
+                residuals=[snapshots.ScaledResidual];iterations=[snapshots.Iteration];
+                finite=isfinite(residuals)&isfinite(iterations);
+                cla(obj.SeedAxes);
+                if any(finite)
+                    semilogy(obj.SeedAxes,iterations(finite), ...
+                        max(residuals(finite),realmin),'-o','LineWidth',1.4);
+                end
+                grid(obj.SeedAxes,'on');xlabel(obj.SeedAxes,'Iteration');
+                ylabel(obj.SeedAxes,'Scaled residual');
+                title(obj.SeedAxes,'Residual history');
+            end
+        end
+
+        function refreshCandidateOverlay(obj)
+            if isempty(obj.OverlayController),return,end
+            working=obj.Controller.State.WorkingSolution;
+            locked=obj.Controller.State.LockedSelection;
+            if isempty(working)||isempty(locked)
+                obj.OverlayController.clearLayer('edited_candidate');return
+            end
+            try
+                source=obj.Controller.lockedSolution();
+                changed=~isequaln(source.DecisionValues,working.DecisionValues)|| ...
+                    ~isequaln(source.ParameterValues,working.ParameterValues);
+                if changed
+                    obj.OverlayController.setSolution('edited_candidate',working);
+                else
+                    obj.OverlayController.clearLayer('edited_candidate');
+                    obj.OverlayController.clearLayer('noise_candidate');
+                end
+            catch
+                obj.OverlayController.clearLayer('edited_candidate');
+            end
         end
     end
 end
@@ -729,6 +919,22 @@ if isstruct(source)&&isfield(source,name),value=source.(name);else,value=fallbac
 end
 function value=fieldOr(source,name,fallback)
 if isstruct(source)&&isfield(source,name),value=source.(name);else,value=fallback;end
+end
+function value=solveOptionsSummary(options)
+if ~isstruct(options)||isempty(fieldnames(options)),value='engine defaults';return,end
+preferred={'FunctionTolerance','StepTolerance','MaxIterations', ...
+    'MaxFunctionEvaluations'};
+parts={};
+for index=1:numel(preferred)
+    name=preferred{index};
+    if ~isfield(options,name),continue,end
+    item=options.(name);
+    if isnumeric(item)&&isscalar(item)
+        parts{end+1}=sprintf('%s=%.6g',name,item); %#ok<AGROW>
+    end
+end
+if isempty(parts),value='registered workflow options'; ...
+else,value=strjoin(parts,', ');end
 end
 function value=sectionPreferenceValue(configuration)
 names={'StartSectionId','StopSectionId','StartStateSide', ...
@@ -1152,4 +1358,32 @@ elseif isfield(solution.Observables,name)
 else
     value=NaN;
 end
+end
+
+function [ids,labels,defaultId]=initializerItems(descriptors)
+ids={'schema_defaults'};labels={'Schema defaults'};defaultId='schema_defaults';
+if isempty(descriptors),return,end
+if iscell(descriptors),values=descriptors;else,values=num2cell(descriptors(:));end
+candidateIds={};candidateLabels={};candidateDefault='';
+for index=1:numel(values)
+    value=values{index};
+    id=descriptorValue(value,'Id',descriptorValue(value,'id',''));
+    label=descriptorValue(value,'Label',descriptorValue(value,'label',id));
+    if isempty(id)||~ischar(id)||~ischar(label),continue,end
+    candidateIds{end+1}=id;candidateLabels{end+1}=label; %#ok<AGROW>
+    if descriptorValue(value,'IsDefault', ...
+            descriptorValue(value,'isDefault',false))
+        candidateDefault=id;
+    end
+end
+if isempty(candidateIds),return,end
+ids=candidateIds;labels=candidateLabels;
+if isempty(candidateDefault),defaultId=ids{1};else,defaultId=candidateDefault;end
+end
+
+function value=descriptorValue(source,name,fallback)
+value=fallback;
+if isstruct(source)&&isfield(source,name),value=source.(name);return,end
+if isobject(source)&&isprop(source,name),value=source.(name);end
+if isstring(value)&&isscalar(value),value=char(value);end
 end

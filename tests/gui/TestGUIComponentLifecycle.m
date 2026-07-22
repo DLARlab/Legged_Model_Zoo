@@ -18,14 +18,25 @@ classdef TestGUIComponentLifecycle < matlab.unittest.TestCase
             clear cleanup
         end
 
-        function modelChangeRefreshesEveryTabOnce(testCase)
+        function modelChangeRebuildsContributionTabsOnce(testCase)
             [app,cleanup]=makeApp();ids=fieldnames(app.TabComponents);
-            before=zeros(size(ids));
-            for index=1:numel(ids),before(index)=app.tab(ids{index}).testHooks().RefreshCount;end
+            previous=cell(size(ids));
+            for index=1:numel(ids)
+                previous{index}=app.tab(ids{index});
+            end
             app.Controller.selectModel('slip_biped');drawnow;
             for index=1:numel(ids)
-                after=app.tab(ids{index}).testHooks().RefreshCount;
-                testCase.verifyEqual(after-before(index),1,ids{index});
+                oldHooks=previous{index}.testHooks();
+                current=app.tab(ids{index});newHooks=current.testHooks();
+                testCase.verifyEqual(oldHooks.SubscriptionCount,0, ...
+                    [ids{index} ' old subscriptions']);
+                testCase.verifyEmpty(oldHooks.Root,[ids{index} ' old root']);
+                testCase.verifyFalse(current==previous{index}, ...
+                    [ids{index} ' replacement']);
+                testCase.verifyEqual(newHooks.RefreshCount,1, ...
+                    [ids{index} ' replacement refresh']);
+                testCase.verifyTrue(isgraphics(newHooks.Root), ...
+                    [ids{index} ' replacement root']);
             end
             testCase.verifyEqual(app.Controller.Events.LastDispatchErrors,{});
             clear cleanup

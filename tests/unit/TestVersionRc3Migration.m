@@ -1,38 +1,38 @@
-classdef TestVersionRc2Migration < matlab.unittest.TestCase
+classdef TestVersionRc3Migration < matlab.unittest.TestCase
     methods (Test)
         function frameworkVersionAdvancesWithoutSchemaChange(testCase)
-            testCase.verifyEqual(lmz.util.Version.current(),'1.0.0-rc.2');
+            testCase.verifyEqual(lmz.util.Version.current(),'1.0.0-rc.3');
             parsed=lmz.util.Version.parse(lmz.util.Version.current());
-            testCase.verifyEqual(parsed.Prerelease,{'rc','2'});
+            testCase.verifyEqual(parsed.Prerelease,{'rc','3'});
             testCase.verifyGreaterThan(lmz.util.Version.compare( ...
-                '1.0.0-rc.2','1.0.0-rc.1'),0);
+                '1.0.0-rc.3','1.0.0-rc.2'),0);
             testCase.verifyLessThan(lmz.util.Version.compare( ...
-                '1.0.0-rc.2','1.0.0'),0);
+                '1.0.0-rc.3','1.0.0'),0);
             testCase.verifyEqual( ...
                 lmz.util.Version.artifactSchemaVersion(),'1.0.0');
             testCase.verifyEqual( ...
                 lmz.util.Version.catalogSchemaVersion(),'1.0.0');
         end
 
-        function newArtifactMetadataCarriesRc2(testCase)
+        function newArtifactMetadataCarriesRc3(testCase)
             problem=lmztest.AnalyticModel().createProblem('line',struct());
             solution=problem.makeSolution( ...
                 problem.getDecisionSchema().defaults(),[],[]);
             artifact=solution.toArtifact();
-            testCase.verifyEqual(artifact.frameworkVersion,'1.0.0-rc.2');
+            testCase.verifyEqual(artifact.frameworkVersion,'1.0.0-rc.3');
             testCase.verifyEqual(artifact.schemaVersion,'1.0.0');
             testCase.verifyEqual(artifact.artifactSchemaVersion,'1.0.0');
             lmz.io.ArtifactStore.validate(artifact);
         end
 
-        function publicReleaseRecordsNameRc2(testCase)
+        function publicReleaseRecordsNameRc3(testCase)
             root=lmz.util.ProjectPaths.root();
             paths={'CITATION.cff','docs/API_STABILITY.md', ...
                 'docs/RELEASE_NOTES_1_0.md'};
             for index=1:numel(paths)
                 content=fileread(fullfile(root,paths{index}));
-                testCase.verifyNotEmpty(strfind(content,'1.0.0-rc.2'), ... %#ok<STREMP>
-                    sprintf('%s does not name rc.2.',paths{index}));
+                testCase.verifyNotEmpty(strfind(content,'1.0.0-rc.3'), ... %#ok<STREMP>
+                    sprintf('%s does not name rc.3.',paths{index}));
             end
         end
 

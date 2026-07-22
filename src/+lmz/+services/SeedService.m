@@ -1,7 +1,48 @@
 classdef SeedService
     methods
-        function [solution,diagnostics]=project(~,problem,solution,options,context)
-            [u,diagnostics]=problem.projectSeed(solution.DecisionValues,solution.ParameterValues,options,context); solution=solution.withDecisionValues(u);
+        function [solution,diagnostics,progress]=project( ...
+                ~,problem,solution,options,context)
+            if nargin<4||isempty(options),options=struct();end
+            if nargin<5||isempty(context)
+                context=lmz.api.RunContext.synchronous(0);
+            end
+            if ~isstruct(options)||~isscalar(options)
+                error('lmz:Seed:ProjectionOptions', ...
+                    'Projection options must be a scalar struct.');
+            end
+            callbacks=lmz.solvers.SolveCallbacks( ...
+                option(options,'Callbacks',[]));
+            progress=option(options,'Progress',[]);
+            if isempty(progress),progress=lmz.data.SolveProgress();end
+            if ~isa(progress,'lmz.data.SolveProgress')
+                error('lmz:Seed:ProjectionProgress', ...
+                    'Projection progress must be an lmz.data.SolveProgress.');
+            end
+            runtime={'Callbacks','Progress'};
+            for index=1:numel(runtime)
+                if isfield(options,runtime{index})
+                    options=rmfield(options,runtime{index});
+                end
+            end
+            started=lmz.data.SolveIterationSnapshot(struct( ...
+                'Stage','projection_started','Iteration',0, ...
+                'FunctionCount',0, ...
+                'DecisionValues',solution.DecisionValues, ...
+                'Message','Seed projection started.'));
+            publishProjection(callbacks,progress, ...
+                'projection_started',started);
+            context.check();
+            [u,diagnostics]=problem.projectSeed( ...
+                solution.DecisionValues,solution.ParameterValues, ...
+                options,context);
+            completed=lmz.data.SolveIterationSnapshot(struct( ...
+                'Stage','projection_completed','Iteration',0, ...
+                'FunctionCount',1,'DecisionValues',u, ...
+                'StepNorm',norm(u(:)-solution.DecisionValues(:)), ...
+                'Accepted',true,'Message','Seed projection completed.'));
+            publishProjection(callbacks,progress, ...
+                'projection_completed',completed);
+            solution=solution.withDecisionValues(u);
         end
         function solution=perturb(~,problem,solution,magnitude,mode,seed)
             stream=RandStream('mt19937ar','Seed',seed); noise=randn(stream,size(solution.DecisionValues));
@@ -25,6 +66,7 @@ classdef SeedService
             evaluation=problem.evaluate(u,first.ParameterValues,context,false); second=problem.makeSolution(u,first.ParameterValues,evaluation); achieved=metric.norm(problem.difference(second.DecisionValues,first.DecisionValues));
             diagnostics=struct('ExitFlag',exitFlag,'Output',output, ...
                 'ResidualNorm',residualNorm,'DistanceError',achieved-radius, ...
+                'Prediction',prediction, ...
                 'JacobianRank',rankValue,'LocalDimension',localDimension, ...
                 'RankTolerance',rankTolerance);
             pair=lmz.data.SolutionPair(first,second,radius,achieved,diagnostics);
@@ -105,6 +147,11 @@ classdef SeedService
             assertSectionConfigurationLocal(problem,lineage);
         end
     end
+end
+
+function publishProjection(callbacks,progress,eventName,snapshot)
+progress.record(eventName,snapshot);
+callbacks.notify(eventName,snapshot);
 end
 
 function value=option(options,name,fallback)

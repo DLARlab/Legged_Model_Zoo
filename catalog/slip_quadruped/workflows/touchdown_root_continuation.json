@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "touchdown_root_continuation",
+  "label": "Back-left-touchdown root continuation",
+  "modelId": "slip_quadruped",
+  "problemId": "periodic_orbit",
+  "problemConfiguration": {
+    "StartSectionId": "back_left_touchdown",
+    "StopSectionId": "back_left_touchdown",
+    "StartStateSide": "post",
+    "StopStateSide": "post",
+    "SymmetryId": "planar_translation"
+  },
+  "maturity": "experimental",
+  "validationStatus": "tested",
+  "dataSourceId": "roadmap",
+  "defaultDatasetId": "PK_20_2",
+  "defaultPointIndex": 267,
+  "axisPresetId": "roadmap_top",
+  "visualizationProfileId": "research_legacy",
+  "layoutProfileId": "scientific_workbench",
+  "allowedSteps": ["load_data", "select_point", "section_transfer", "simulate", "solve", "seed_pair", "continuation", "analysis"],
+  "seedPreset": {
+    "firstSeed": "locked_roadmap_point_transferred_to_touchdown",
+    "secondSeedOptions": ["adjacent_next", "adjacent_previous", "generated_corrected"],
+    "defaultSecondSeed": "adjacent_next",
+    "generatedRadius": 0.005,
+    "options": {
+      "sourceDatasetId": "PK_20_2",
+      "sourcePointIndex": 267,
+      "lockFirstSeed": true,
+      "transferToSectionId": "back_left_touchdown",
+      "requireCorrectedGeneratedSeed": true
+    }
+  },
+  "solveOptions": {
+    "FunctionTolerance": 1e-10,
+    "StepTolerance": 1e-10,
+    "MaxIterations": 200,
+    "MaxFunctionEvaluations": 2000,
+    "Display": "off"
+  },
+  "continuationPreset": {
+    "directionMode": "both",
+    "directionLabels": {
+      "backward": "decreasing dx",
+      "forward": "increasing dx"
+    },
+    "checkpointEnabled": true,
+    "options": {
+      "InitialStep": 0.01,
+      "MinimumStep": 0.0001,
+      "MaximumStep": 0.05,
+      "MaximumPoints": 12,
+      "CorrectorTolerance": 1e-9,
+      "RequireFeasible": true
+    }
+  },
+  "homotopyPreset": {
+    "id": "touchdown_homotopy",
+    "label": "Touchdown-section homotopy",
+    "values": {
+      "enabled": false,
+      "parameterName": "k_leg",
+      "targetValue": 10.1
+    }
+  },
+  "familyScanPreset": {
+    "id": "touchdown_family_scan",
+    "label": "Touchdown-section family scan",
+    "values": {
+      "enabled": false,
+      "parameterName": "k_leg",
+      "targetValues": [9.9, 10, 10.1]
+    }
+  },
+  "analysisViews": ["physical_simulation", "torso_trajectory", "back_leg_trajectories", "front_leg_trajectories", "ground_reaction_forces", "oscillator"],
+  "provenance": {
+    "sourceRepository": "https://github.com/DLARlab/SLIP_Model_Zoo.git",
+    "sourceCommit": "2c106101383ecee1b2a9d695efe09fbd72d5718a",
+    "sourceDataset": "PK_20_2.mat",
+    "sourceSHA256": "45835bb5024b1dc9b875c7b8f7b205769f537a4ff4144c763058537f44dbf401",
+    "sourceProblemId": "periodic_apex",
+    "targetSectionId": "back_left_touchdown",
+    "sectionValidationStatus": "tested"
+  }
+}

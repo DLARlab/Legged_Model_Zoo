@@ -2,6 +2,7 @@ classdef AppController < handle
     %APPCONTROLLER Headless coordinator for demo and RoadMap workflows.
     properties (SetAccess=private)
         Registry
+        Workflows
         State
         Context
         Events
@@ -14,16 +15,250 @@ classdef AppController < handle
             if nargin<1,registry=lmz.registry.ModelRegistry.discover();end
             if nargin<2,context=lmz.api.RunContext.synchronous(0);end
             if nargin<3||isempty(eventBus),eventBus=lmz.gui.PresentationEventBus();end
-            obj.Registry=registry;obj.Context=context;obj.Events=eventBus;
+            obj.Registry=registry;
+            obj.Workflows=lmz.workflow.WorkflowRegistry. ...
+                fromModelRegistry(registry);
+            obj.Context=context;obj.Events=eventBus;
             obj.State=lmz.gui.AppState();obj.observeState();
             ids=obj.Registry.listModels();obj.selectModel(ids{1});
         end
         function ids=modelIds(obj),ids=obj.Registry.listModels();end
+        function ids=workflowIds(obj)
+            ids=obj.Workflows.list(obj.State.ModelId);
+        end
+        function values=workflowDescriptors(obj)
+            ids=obj.workflowIds();
+            values=lmz.workflow.WorkflowDescriptor.empty(0,1);
+            for index=1:numel(ids)
+                values(index,1)=obj.Workflows.get( ...
+                    obj.State.ModelId,ids{index});
+            end
+        end
+        function contribution=workbenchContribution(obj)
+            contribution=obj.Workflows.getWorkbench(obj.State.ModelId);
+        end
+        function id=layoutProfileId(obj)
+            id=obj.State.LayoutProfileId;
+        end
+        function setLayoutProfile(obj,id)
+            profile=lmz.gui.layout.LayoutProfileRegistry.get(char(id));
+            obj.State.LayoutProfileId=profile.Id;
+        end
+        function session=selectWorkflow(obj,workflowId)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            descriptor=obj.Workflows.get(obj.State.ModelId,char(workflowId));
+            session=lmz.workflow.WorkflowRunner().initialize( ...
+                descriptor,obj.Context);
+            selection=lmz.services.BranchService().selectPoint( ...
+                session.Dataset,session.SeedIndex);
+            obj.invalidateDerived();
+            obj.State.WorkflowId=descriptor.Id;
+            obj.State.WorkflowSession=session;
+            obj.State.DataSourceId=descriptor.DataSourceId;
+            obj.State.WorkbenchContribution=descriptor.Workbench;
+            obj.State.LayoutProfileId=descriptor.LayoutProfileId;
+            obj.State.ProblemId=descriptor.ProblemId;
+            obj.State.ProblemConfiguration=descriptor.ProblemConfiguration;
+            obj.State.SolveMode=obj.solveModeForProblem(descriptor.ProblemId);
+            obj.State.Datasets={session.Dataset};
+            obj.State.ActiveDatasetId=session.Dataset.Id;
+            obj.State.Selection=selection;
+            obj.State.LockedSelection=selection;
+            obj.State.HoverSelection=[];
+            obj.State.WorkingSolution=session.WorkingSolution;
+            obj.State.WorkingEvaluation=session.InitialEvaluation;
+            obj.State.AxisVariables=completeAxisNames( ...
+                descriptor.AxisPreset.coordinateNames());
+            obj.State.ContinuationDirectionMode= ...
+                descriptor.ContinuationPreset.DirectionMode;
+            obj.State.OscillatorIndex=session.SeedIndex;
+            obj.State.Status=sprintf('Workflow %s initialized at point %d.', ...
+                descriptor.Label,session.SeedIndex);
+        end
+        function records=dataSourceDescriptors(obj)
+            sources=obj.Workflows.listDataSources(obj.State.ModelId);
+            template=struct('id','','label','','dataSourceId','', ...
+                'isDefault',false,'path','','sourceHash','', ...
+                'pointCount',NaN);
+            records=repmat(template,0,1);
+            for sourceIndex=1:numel(sources)
+                source=sources(sourceIndex);provider=source.createProvider();
+                listed=providerRecords(provider.list(source,obj.Registry));
+                for recordIndex=1:numel(listed)
+                    raw=listed{recordIndex};item=template;
+                    item.id=providerRecordField(raw,{'id','Id','name'},'');
+                    item.label=providerRecordField(raw, ...
+                        {'label','Label','name'},item.id);
+                    item.dataSourceId=source.Id;
+                    item.isDefault=strcmp(item.id,source.DefaultDatasetId);
+                    item.path=providerRecordField(raw, ...
+                        {'path','sourcePath','Path'},'');
+                    item.sourceHash=providerRecordField(raw, ...
+                        {'sourceHash','SourceHash'},'');
+                    item.pointCount=providerRecordField(raw, ...
+                        {'pointCount','PointCount'},NaN);
+                    records(end+1,1)=item; %#ok<AGROW>
+                end
+            end
+        end
+        function dataset=loadDataSource(obj,datasetId)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            [source,provider]=obj.registeredSourceForDataset(char(datasetId));
+            dataset=lmz.services.BranchService().loadDataSource( ...
+                obj.Workflows,obj.State.ModelId,source.Id,char(datasetId));
+            retained=obj.writableDatasets();
+            obj.State.WorkflowId='';obj.State.WorkflowSession=[];
+            obj.State.DataSourceId=source.Id;
+            obj.State.Datasets=[{dataset} retained];
+            obj.State.ActiveDatasetId=dataset.Id;
+            obj.applyRegisteredAxisPreset(source);
+            index=provider.recommendedPoint(source,dataset);
+            obj.lockBranchPoint(dataset.Id,index);
+            obj.State.Status=sprintf('Registered dataset loaded: %s (%d points).', ...
+                dataset.Name,dataset.Branch.pointCount());
+        end
+        function datasets=loadAllDataSources(obj)
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            sources=obj.Workflows.listDataSources(obj.State.ModelId);
+            datasets={};defaultDataset=[];defaultIndex=1;defaultSource=[];
+            for sourceIndex=1:numel(sources)
+                source=sources(sourceIndex);provider=source.createProvider();
+                loaded=lmz.services.BranchService().loadAllDataSource( ...
+                    obj.Workflows,obj.State.ModelId,source.Id);
+                for datasetIndex=1:numel(loaded)
+                    datasets{end+1}=loaded{datasetIndex}; %#ok<AGROW>
+                    if isempty(defaultDataset)
+                        defaultDataset=loaded{datasetIndex};
+                        defaultIndex=provider.recommendedPoint( ...
+                            source,loaded{datasetIndex});
+                        defaultSource=source;
+                    end
+                end
+            end
+            if isempty(datasets)
+                error('lmz:GUI:NoRegisteredData', ...
+                    'The selected model has no registered datasets.');
+            end
+            obj.State.WorkflowId='';obj.State.WorkflowSession=[];
+            obj.State.DataSourceId=defaultSource.Id;
+            obj.State.Datasets=[datasets obj.writableDatasets()];
+            obj.State.ActiveDatasetId=defaultDataset.Id;
+            obj.applyRegisteredAxisPreset(defaultSource);
+            obj.lockBranchPoint(defaultDataset.Id,defaultIndex);
+            obj.State.Status=sprintf('Loaded %d registered datasets.', ...
+                numel(datasets));
+        end
+        function preset=axisPreset(obj)
+            axisValue=[];
+            if ~isempty(obj.State.WorkflowId)
+                descriptor=obj.Workflows.get( ...
+                    obj.State.ModelId,obj.State.WorkflowId);
+                axisValue=descriptor.AxisPreset;
+            else
+                contribution=obj.workbenchContribution();
+                sourceId=obj.State.DataSourceId;
+                if ~isempty(sourceId)
+                    source=obj.Workflows.getDataSource( ...
+                        obj.State.ModelId,sourceId);
+                    id=fieldOr(source.Metadata,'axisPresetId','');
+                    if ~isempty(id)&&contribution.hasAxisPreset(id)
+                        axisValue=contribution.axisPreset(id);
+                    end
+                end
+                if isempty(axisValue)&&~isempty(contribution.AxisPresets)
+                    axisValue=contribution.AxisPresets(1);
+                end
+            end
+            if isempty(axisValue)
+                names=completeAxisNames(obj.State.AxisVariables);
+                limits={'auto','auto','auto'};
+            else
+                names=completeAxisNames(axisValue.coordinateNames());
+                limits={axisLimitText(axisValue.XLimits), ...
+                    axisLimitText(axisValue.YLimits), ...
+                    axisLimitText(axisValue.ZLimits)};
+            end
+            preset=struct('Coordinates',{names},'Limits',{limits});
+        end
+        function labels=continuationDirectionLabels(obj)
+            contribution=obj.workbenchContribution();
+            labels=contribution.DirectionLabels;
+            descriptor=obj.activeWorkflowDescriptor();
+            if ~isempty(descriptor)
+                labels=mergeOptions(labels, ...
+                    descriptor.ContinuationPreset.DirectionLabels);
+            end
+            if ~isfield(labels,'forward'),labels.forward='forward';end
+            if ~isfield(labels,'backward'),labels.backward='backward';end
+            if ~isfield(labels,'both'),labels.both='both directions';end
+        end
+        function options=solveDefaultOptions(obj)
+            options=obj.workbenchContribution().DefaultSolveOptions;
+            descriptor=obj.activeWorkflowDescriptor();
+            if ~isempty(descriptor)
+                options=mergeOptions(options,descriptor.SolveOptions);
+            end
+        end
+        function options=continuationDefaultOptions(obj)
+            options=obj.workbenchContribution().DefaultContinuationOptions;
+            descriptor=obj.activeWorkflowDescriptor();
+            if ~isempty(descriptor)
+                options=mergeOptions( ...
+                    options,descriptor.ContinuationPreset.Options);
+            end
+        end
+        function values=homotopyPreset(obj)
+            values=struct();descriptor=obj.activeWorkflowDescriptor();
+            if ~isempty(descriptor),values=descriptor.HomotopyPreset.Values;end
+        end
+        function values=familyScanPreset(obj)
+            values=struct();descriptor=obj.activeWorkflowDescriptor();
+            if ~isempty(descriptor),values=descriptor.FamilyScanPreset.Values;end
+        end
+        function value=generatedSeedRadius(obj)
+            value=0.01;
+            descriptor=obj.activeWorkflowDescriptor();
+            if ~isempty(descriptor)
+                value=descriptor.SeedPreset.GeneratedRadius;
+            end
+        end
+        function result=runContinuationDirection(obj,mode,options)
+            if nargin<3||isempty(options),options=struct();end
+            mode=char(mode);
+            if ~any(strcmp(mode,{'forward','backward','both'}))
+                error('lmz:GUI:ContinuationDirection', ...
+                    'Continuation direction must be forward, backward, or both.');
+            end
+            defaults=obj.continuationDefaultOptions();
+            options=mergeOptions(defaults,options);
+            if isfield(options,'DirectionMode')
+                options=rmfield(options,'DirectionMode');
+            end
+            obj.State.ContinuationDirectionMode=mode;
+            if isempty(obj.State.SeedPair)
+                obj.makeAdjacentSeedPair(+1,struct());
+            end
+            original=obj.State.SeedPair;
+            cleanup=onCleanup(@()restoreSeedPair(obj,original));
+            if strcmp(mode,'backward')
+                obj.State.SeedPair=reverseSolutionPair(original);
+                options.BothDirections=false;
+            else
+                options.BothDirections=strcmp(mode,'both');
+            end
+            result=obj.runContinuation(options);
+            clear cleanup
+        end
         function selectModel(obj,modelId)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if obj.Context.Cancellation.IsCancellationRequested,obj.Context=lmz.api.RunContext.synchronous(obj.Context.RandomSeed);else,obj.Context.Pause.resume();end
             model=obj.Registry.createModel(modelId);manifest=model.getManifest();problems=model.listProblems();
             obj.State.ModelId=manifest.id;obj.State.ProblemId=problems{1};
+            obj.State.WorkflowId='';obj.State.WorkflowSession=[];
+            obj.State.DataSourceId='';
+            contribution=obj.Workflows.getWorkbench(manifest.id);
+            obj.State.WorkbenchContribution=contribution;
+            obj.State.LayoutProfileId=contribution.LayoutProfileId;
             obj.State.ProblemConfiguration=obj.defaultProblemConfiguration( ...
                 manifest.id,problems{1});
             obj.State.SolveMode=obj.solveModeForProblem(problems{1});
@@ -38,10 +273,14 @@ classdef AppController < handle
             obj.State.LockedSelection=[];obj.State.HoverSelection=[];obj.State.WorkingSolution=[];
             obj.State.WorkingEvaluation=[];
             obj.State.SolvedSolution=[];obj.State.SolveResult=[];
+            obj.State.SolveProgress=[];
             obj.State.ShootingResult=[];obj.State.TimingResult=[];
             obj.State.SectionTransferResult=[];
             obj.State.SeedPair=[];
             obj.State.ContinuationPreview=[];obj.State.ContinuationResult=[];
+            obj.State.HomotopyResult=[];obj.State.FamilyScanResult=[];
+            obj.State.ContinuationDirectionMode='both';
+            obj.State.OverlayState=struct();
             obj.State.OptimizationResult=[];obj.State.RequestedStrideCount=1;
             obj.State.StridePlan=[];obj.State.MultiStrideResult=[];
             obj.State.CompletionPolicy='error_if_missing';
@@ -50,15 +289,13 @@ classdef AppController < handle
             obj.State.StrideParameterOverrides=struct();obj.State.DeclaredWork=0;
             obj.State.CurrentRun=[];obj.State.RecordingState=struct();
             obj.State.Status=['Selected ' manifest.id];
-            switch modelId
-                case 'slip_quadruped'
-                    obj.loadRoadMap();
-                case 'slip_biped'
-                    obj.loadGaitMap();
-                case 'slip_quad_load'
-                    obj.loadScientificLoadDataset();
-                otherwise
-                    obj.initializeGenericModel(model,problems{1});
+            sources=obj.Workflows.listDataSources(manifest.id);
+            if isempty(sources)
+                obj.initializeGenericModel(model,problems{1});
+            else
+                source=obj.Workflows.defaultDataSource(manifest.id);
+                obj.State.DataSourceId=source.Id;
+                obj.loadDataSource(source.DefaultDatasetId);
             end
         end
         function ids=problemIds(obj),ids=obj.Registry.createModel(obj.State.ModelId).listProblems();end
@@ -298,7 +535,9 @@ classdef AppController < handle
                 'NodeCount',0,'Diagnostics',struct(), ...
                 'NativeConfiguration',struct(), ...
                 'ResidualClassification','not-run','EventNames',{{}}, ...
-                'EventFreeMask',false(0,1),'ReturnTimeFree',false);
+                'EventFreeMask',false(0,1),'ReturnTimeFree',false, ...
+                'InitializerDescriptors', ...
+                    obj.shootingInitializerDescriptors());
             try
                 problem=obj.problem(obj.State.ProblemId);
             catch
@@ -322,6 +561,19 @@ classdef AppController < handle
                 value.ResidualClassification= ...
                     obj.State.ShootingResult.FeasibilityReport.Classification;
             end
+        end
+
+        function values=shootingInitializerDescriptors(obj)
+            model=obj.Registry.createModel(obj.State.ModelId);
+            values=model.getShootingInitializerDescriptors( ...
+                obj.State.ProblemId);
+        end
+
+        function rendered=renderOptimizationDiagnostics(obj, ...
+                sensitivityAxes,r2Axes,result)
+            model=obj.Registry.createModel(obj.State.ModelId);
+            rendered=model.renderOptimizationDiagnostics( ...
+                sensitivityAxes,r2Axes,result);
         end
 
         function rows=sectionCombinationData(obj)
@@ -348,13 +600,10 @@ classdef AppController < handle
                             'endpoints; select multiple_shooting for ' ...
                             'same-section periodic closure'];
                     elseif transitionProblem&& ...
-                            any(strcmp(obj.State.ModelId, ...
-                            {'slip_quadruped','slip_biped'}))&& ...
                             scientificTransitionKind(start.kind)&& ...
                             scientificTransitionKind(stop.kind)
                         [classification,qualification]= ...
-                            scientificTransitionSupport(obj.State.ModelId, ...
-                            ids{first},ids{second});
+                            scientificTransitionSupport(start,stop);
                         if strcmp(classification,'validated')
                             reason=['tested direct section_transition with an ' ...
                                 'explicit terminal target; ' qualification];
@@ -370,8 +619,7 @@ classdef AppController < handle
                             classification='experimental';
                             reason='catalog section is not yet source-validated';
                         end
-                    elseif strcmp(obj.State.ModelId,'slip_quad_load')&& ...
-                            strcmp(ids{first},'apex')&& ...
+                    elseif strcmp(ids{first},'apex')&& ...
                             strcmp(ids{second},'stride_boundary')
                         if strcmp(obj.State.ProblemId, ...
                                 'section_return_timing')
@@ -385,8 +633,7 @@ classdef AppController < handle
                                 'timings only for this direct return'];
                         end
                     elseif periodicShooting&& ...
-                            any(strcmp(obj.State.ModelId, ...
-                            {'slip_quadruped','slip_biped'}))
+                            any(strcmp('section_transition',obj.problemIds()))
                         reason=['multiple_shooting is same-section periodic ' ...
                             'closure; select section_transition for direct ' ...
                             'mixed endpoints'];
@@ -495,25 +742,14 @@ classdef AppController < handle
                 error('lmz:GUI:EventSeed', ...
                     'Stride index and event-time seed are invalid.');
             end
-            timing=timing(:);plan=obj.State.StridePlan;
-            if ~isempty(plan)&&plan.CompletedStrideCount>0
-                source=plan.StrideSpecs(min(index,plan.CompletedStrideCount)). ...
-                    EventSchedule;
-            elseif strcmp(obj.State.ModelId,'slip_quad_load')
-                names=lmzmodels.slip_quad_load.LaterStrideLayout.baseNames();
-                source=struct('Names',{names(:)},'Times',timing, ...
-                    'ReturnTime',timing(end),'Chart','legacy_named_cyclic', ...
-                    'MinimumGap',0);
-            else
+            model=obj.Registry.createModel(obj.State.ModelId);
+            provider=model.getMultiStrideProvider();
+            if isempty(provider)
                 error('lmz:GUI:EventSeed', ...
-                    'Create or load a plan before editing event-time seeds.');
+                    'The selected model has no registered schedule provider.');
             end
-            schedule=source;schedule.Times=timing;
-            schedule.ReturnTime=timing(end);
-            if isfield(schedule,'Names')
-                [~,order]=sort(schedule.Times);
-                schedule.OccurrenceOrder=schedule.Names(order);
-            end
+            schedule=provider.scheduleOverride( ...
+                obj.State.StridePlan,index,timing(:));
         end
 
         function result=completeStridePlan(obj)
@@ -547,42 +783,20 @@ classdef AppController < handle
         end
 
         function report=validateStrideEnergy(obj)
-            if ~strcmp(obj.State.ModelId,'slip_quad_load')|| ...
-                    isempty(obj.State.StridePlan)
+            if isempty(obj.State.StridePlan)
                 error('lmz:GUI:EnergyPreviewUnavailable', ...
-                    'Energy preview requires a loaded quad-load stride plan.');
+                    'Energy preview requires a loaded stride plan.');
             end
-            plan=obj.State.StridePlan.clone();
-            count=obj.State.RequestedStrideCount;
-            if count<plan.CompletedStrideCount
-                plan=plan.truncate(count);
-            elseif count>plan.CompletedStrideCount
-                plan=plan.withRequestedStrideCount(count);
+            model=obj.Registry.createModel(obj.State.ModelId);
+            provider=model.getMultiStrideProvider();
+            if isempty(provider)
+                error('lmz:GUI:EnergyPreviewUnavailable', ...
+                    'The selected model has no registered energy provider.');
             end
-            if obj.State.EnergyNeutralOnly
-                policy=lmz.multistride.EnergyConsistencyPolicy();
-            else
-                policy=lmz.multistride.EnergyConsistencyPolicy( ...
-                    'Id','allow_non_neutral');
-            end
-            plan=plan.withPolicies('carry_forward',policy,'error');
-            builder=lmzmodels.slip_quad_load.QuadLoadStridePlanBuilder();
-            diagnostics=cell(0,1);
-            options=struct('ParameterOverrides', ...
-                obj.State.StrideParameterOverrides, ...
-                'DeclaredWork',obj.State.DeclaredWork, ...
-                'TransitionState',plan.InitialState);
-            while plan.CompletedStrideCount<count
-                plan=builder.completeNext(plan,options,obj.Context);
-                diagnostics{end+1,1}= ...
-                    plan.StrideSpecs(end).Diagnostics.Energy; %#ok<AGROW>
-            end
-            report=struct('Valid',true,'Estimated',true, ...
-                'TransitionStateSource','plan_initial_state_preview', ...
-                'CompletedStrideCount',plan.CompletedStrideCount, ...
-                'RequestedStrideCount',count, ...
-                'EnergyDiagnostics',{diagnostics}, ...
-                'PreviewPlan',plan.toStruct());
+            report=provider.previewEnergy(obj.State.StridePlan, ...
+                obj.State.RequestedStrideCount,obj.State.EnergyNeutralOnly, ...
+                obj.State.StrideParameterOverrides,obj.State.DeclaredWork, ...
+                obj.Context);
             obj.State.PlanValidation=report;
             obj.State.Status=sprintf( ...
                 'Energy preview accepted %d pending transitions.', ...
@@ -639,6 +853,7 @@ classdef AppController < handle
             problem=model.createProblem(problemId, ...
                 obj.problemConfigurationForCreation(problemId,configuration));
             obj.invalidateDerived();
+            obj.State.WorkflowId='';obj.State.WorkflowSession=[];
             obj.State.ProblemId=problemId;
             obj.State.ProblemConfiguration=configuration;
             obj.State.SolveMode=obj.solveModeForProblem(problemId);
@@ -683,6 +898,7 @@ classdef AppController < handle
         end
         function result=simulate(obj,options)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.assertWorkflowAllows({'simulate','simulation'},'simulation');
             [problem,defaultOptions]=obj.demoProblem();
             if nargin<2||isempty(options)|| ...
                     (isstruct(options)&&isempty(fieldnames(options)))
@@ -695,6 +911,10 @@ classdef AppController < handle
         end
         function capabilities=capabilities(obj)
             capabilities=obj.problemCapabilities();
+            descriptor=obj.activeWorkflowDescriptor();
+            if isempty(descriptor),return,end
+            capabilities=restrictWorkflowCapabilities( ...
+                capabilities,descriptor);
         end
         function capabilities=problemCapabilities(obj,problemId)
             if nargin<2||isempty(problemId),problemId=obj.State.ProblemId;end
@@ -716,154 +936,79 @@ classdef AppController < handle
             obj.State.Datasets={dataset};obj.State.ActiveDatasetId=dataset.Id;obj.lockBranchPoint(dataset.Id,1);
         end
         function dataset=loadGaitMap(obj,file)
-            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
-            if ~strcmp(obj.State.ModelId,'slip_biped')
-                error('lmz:GUI:GaitMapModel','GaitMap is available for slip_biped.');
+            if nargin<2||isempty(file)
+                source=obj.Workflows.defaultDataSource(obj.State.ModelId);
+                file=source.DefaultDatasetId;
             end
-            catalog=lmzmodels.slip_biped.GaitMapCatalog.default();
-            obj.State.RoadMapCatalog=catalog;
-            if nargin<2||isempty(file),file=catalog.defaultBranchPath();end
-            problem=obj.problem('periodic_apex');
-            branch=lmz.services.BranchService().loadGaitMapBranch(problem,file);
-            record=catalog.record(file);index=catalog.recommendedSeedIndex(file);
-            gait=branch.Classifications{index};style=struct('Color',gait.Color, ...
-                'LineStyle',gait.LineStyle,'Marker','none');
-            metadata=struct('PointCount',branch.pointCount(), ...
-                'ParameterSummary','offset_left/offset_right', ...
-                'GaitSummary',record.gait,'SourceHash',record.sha256, ...
-                'NativePath',catalog.nativePath(file),'Status','built-in/read-only');
-            dataset=lmz.data.BranchDataset(record.name,branch,'SourcePath',file, ...
-                'ReadOnly',true,'DisplayStyle',style,'Metadata',metadata);
-            retained=obj.writableDatasets();obj.State.Datasets=[{dataset} retained];
-            obj.State.ActiveDatasetId=dataset.Id;obj.State.AxisVariables={'dx','alphaL','y'};
-            obj.lockBranchPoint(dataset.Id,index);
-            obj.State.Status=sprintf('Biped GaitMap loaded: %s (%d points)', ...
-                dataset.Name,branch.pointCount());
+            dataset=obj.loadDataSource(file);
         end
         function datasets=loadAllGaitMapBranches(obj)
-            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
-            if ~strcmp(obj.State.ModelId,'slip_biped')
-                error('lmz:GUI:GaitMapModel','GaitMap is available for slip_biped.');
-            end
-            datasets=lmz.services.BranchService().loadAllGaitMapBranches( ...
-                obj.problem('periodic_apex'));
-            obj.State.Datasets=[datasets obj.writableDatasets()];
-            obj.State.ActiveDatasetId=datasets{1}.Id;obj.State.AxisVariables={'dx','alphaL','y'};
-            catalog=lmzmodels.slip_biped.GaitMapCatalog.default();
-            obj.lockBranchPoint(datasets{1}.Id, ...
-                catalog.recommendedSeedIndex(datasets{1}.SourcePath));
-            obj.State.Status=sprintf('All %d biped GaitMap branches loaded.',numel(datasets));
+            datasets=obj.loadAllDataSources();
         end
         function dataset=loadScientificLoadDataset(obj,file)
-            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
-            if ~strcmp(obj.State.ModelId,'slip_quad_load')
-                error('lmz:GUI:LoadDatasetModel', ...
-                    'Scientific load datasets are available for slip_quad_load.');
+            if nargin<2||isempty(file)
+                source=obj.Workflows.defaultDataSource(obj.State.ModelId);
+                file=source.DefaultDatasetId;
             end
-            catalog=lmzmodels.slip_quad_load.ScientificDatasetCatalog.default();
-            obj.State.RoadMapCatalog=catalog;
-            if nargin<2||isempty(file),file=catalog.defaultMultiPath();end
-            problem=obj.problem('multi_stride_fit');
-            [branch,source]=lmz.services.BranchService().loadQuadLoadDataset(problem,file);
-            record=catalog.record(source.Name);style=struct('Color',[0.15 0.45 0.72], ...
-                'LineStyle','-','Marker','o');
-            metadata=struct('PointCount',1,'ParameterSummary', ...
-                sprintf('%d strides, 44+13(N-1) layout',source.StrideCount), ...
-                'GaitSummary',source.Kind,'SourceHash',record.sha256, ...
-                'NativePath',catalog.nativePath(record.id),'Status','built-in/read-only');
-            dataset=lmz.data.BranchDataset(source.Name,branch,'SourcePath',file, ...
-                'ReadOnly',true,'DisplayStyle',style,'Metadata',metadata);
-            retained=obj.writableDatasets();obj.State.Datasets=[{dataset} retained];
-            obj.State.ActiveDatasetId=dataset.Id;
-            obj.State.AxisVariables={'quad_dx','tAPEX','tugline_stiffness'};
-            obj.lockBranchPoint(dataset.Id,1);
-            obj.State.Status=sprintf('Scientific load dataset loaded: %s (%d strides)', ...
-                source.Name,source.StrideCount);
+            dataset=obj.loadDataSource(file);
         end
         function datasets=loadAllScientificLoadDatasets(obj)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
-            if ~strcmp(obj.State.ModelId,'slip_quad_load')
-                error('lmz:GUI:LoadDatasetModel', ...
-                    'Scientific load datasets are available for slip_quad_load.');
-            end
-            catalog=lmzmodels.slip_quad_load.ScientificDatasetCatalog.default();
-            records=catalog.records();datasets=cell(1,numel(records));
-            problem=obj.problem('multi_stride_fit');service=lmz.services.BranchService();
-            for index=1:numel(records)
-                file=catalog.pathFor(records(index).id);[branch,source]= ...
-                    service.loadQuadLoadDataset(problem,file);
-                style=struct('Color',linesColor(index),'LineStyle','-', ...
-                    'Marker','o');
-                metadata=struct('PointCount',1,'ParameterSummary', ...
-                    sprintf('%d strides, 44+13(N-1) layout',source.StrideCount), ...
-                    'GaitSummary',source.Kind,'SourceHash',records(index).sha256, ...
-                    'NativePath',catalog.nativePath(records(index).id), ...
-                    'Status','built-in/read-only');
-                datasets{index}=lmz.data.BranchDataset(source.Name,branch, ...
-                    'SourcePath',file,'ReadOnly',true,'DisplayStyle',style, ...
-                    'Metadata',metadata);
-            end
-            obj.State.Datasets=[datasets obj.writableDatasets()];
-            obj.State.ActiveDatasetId=datasets{1}.Id;
-            obj.State.AxisVariables={'quad_dx','tAPEX','tugline_stiffness'};
-            obj.lockBranchPoint(datasets{1}.Id,1);
-            obj.State.Status=sprintf('All %d scientific load datasets loaded.',numel(datasets));
+            datasets=obj.loadAllDataSources();
+            % Retain the historical wrapper contract: loading every
+            % load-pulling dataset leaves the first (single-stride) record
+            % selected.  The generic registered loader intentionally uses a
+            % descriptor's default dataset instead.
+            strideCounts=cellfun(@(item)fieldOr( ...
+                item.Metadata,'StrideCount',Inf),datasets);
+            [~,selected]=min(strideCounts);
+            dataset=datasets{selected};
+            datasetId=fieldOr(dataset.Metadata,'DatasetId','');
+            [source,provider]=obj.registeredSourceForDataset(datasetId);
+            obj.State.DataSourceId=source.Id;
+            obj.State.ActiveDatasetId=dataset.Id;
+            obj.applyRegisteredAxisPreset(source);
+            obj.lockBranchPoint(dataset.Id, ...
+                provider.recommendedPoint(source,dataset));
+            obj.State.Status=sprintf( ...
+                'Loaded %d scientific load datasets; selected %s.', ...
+                numel(datasets),dataset.Name);
         end
         function dataset=loadRoadMap(obj,file)
-            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
-            if ~strcmp(obj.State.ModelId,'slip_quadruped')
-                error('lmz:GUI:RoadMapModel','RoadMap is available for slip_quadruped.');
+            if nargin<2||isempty(file)
+                source=obj.Workflows.defaultDataSource(obj.State.ModelId);
+                file=source.DefaultDatasetId;
             end
-            catalog=lmzmodels.slip_quadruped.RoadMapCatalog.default();obj.State.RoadMapCatalog=catalog;
-            if nargin<2||isempty(file),file=catalog.defaultBranchPath();end
-            problem=obj.problem('periodic_apex');service=lmz.services.BranchService();
-            branch=service.loadRoadMapBranch(problem,file);record=catalog.record(file);
-            gait=branch.Classifications{catalog.recommendedSeedIndex(file)};
-            style=struct('Color',gait.Color,'LineStyle',gait.LineStyle,'Marker','none');
-            metadata=struct('PointCount',branch.pointCount(),'ParameterSummary',record.parameterSummary, ...
-                'GaitSummary',record.inferredGaitSummary,'SourceHash',record.sha256, ...
-                'NativePath',catalog.nativePath(file),'Status','built-in/read-only');
-            [~,name,extension]=fileparts(file);
-            dataset=lmz.data.BranchDataset([name extension],branch,'SourcePath',file, ...
-                'ReadOnly',true,'DisplayStyle',style,'Metadata',metadata);
-            retained=obj.writableDatasets();obj.State.Datasets=[{dataset} retained];obj.State.ActiveDatasetId=dataset.Id;
-            view=catalog.Manifest.defaultView;
-            obj.State.AxisVariables={view.x,view.y,view.z};
-            obj.lockBranchPoint(dataset.Id,catalog.recommendedSeedIndex(file));
-            obj.State.Status=sprintf('RoadMap loaded: %s (%d points)',dataset.Name,branch.pointCount());
+            dataset=obj.loadDataSource(file);
         end
         function datasets=loadAllRoadMapBranches(obj)
-            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
-            catalog=lmzmodels.slip_quadruped.RoadMapCatalog.default();obj.State.RoadMapCatalog=catalog;
-            datasets=lmz.services.BranchService().loadAllRoadMapBranches(obj.problem('periodic_apex'));
-            obj.State.Datasets=[datasets obj.writableDatasets()];obj.State.ActiveDatasetId=datasets{1}.Id;
-            obj.lockBranchPoint(datasets{1}.Id,catalog.recommendedSeedIndex(datasets{1}.SourcePath));
-            obj.State.Status=sprintf('All %d RoadMap branches loaded.',numel(datasets));
+            datasets=obj.loadAllDataSources();
         end
         function dataset=openBranch(obj,path)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             variables=whos('-file',path);names={variables.name};service=lmz.services.BranchService();
             if isscalar(names)&&strcmp(names{1},'artifact')
                 branch=service.loadNativeBranch(path);readOnly=false;
-            elseif any(strcmp(names,'results'))
-                resultInfo=variables(strcmp(names,'results'));
-                if resultInfo.size(1)==14&&strcmp(obj.State.ModelId,'slip_biped')
-                    branch=lmzmodels.slip_biped.Results14Adapter.loadBranch( ...
-                        path,obj.problem('periodic_apex'));readOnly=true;
-                elseif resultInfo.size(1)==29&&strcmp(obj.State.ModelId,'slip_quadruped')
-                    branch=lmzmodels.slip_quadruped.Results29Adapter.loadBranch( ...
-                        path,obj.problem('periodic_apex'));readOnly=true;
-                else
-                    error('lmz:GUI:BranchModel', ...
-                        'The Results matrix does not match the selected model.');
-                end
-            elseif any(strcmp(names,'X_accum'))&&strcmp(obj.State.ModelId,'slip_quad_load')
-                [branch,~]=service.loadQuadLoadDataset( ...
-                    obj.problem('multi_stride_fit'),path);readOnly=true;
             else
-                error('lmz:GUI:BranchFile', ...
-                    ['MAT file is not a native, Results14/29, or X_accum ' ...
-                    'dataset.']);
+                branch=[];sources=obj.Workflows.listDataSources( ...
+                    obj.State.ModelId);
+                for sourceIndex=1:numel(sources)
+                    source=sources(sourceIndex);provider=source.createProvider();
+                    adapter=provider.legacyAdapter(source,obj.Registry);
+                    if isa(adapter, ...
+                            'lmz.workflow.LegacyDataAdapterProvider')&& ...
+                            adapter.canLoad(path)
+                        model=obj.Registry.createModel(obj.State.ModelId);
+                        problem=model.createProblem(source.ProblemId,struct());
+                        branch=adapter.importBranch(path,problem);break
+                    end
+                end
+                if isempty(branch)
+                    error('lmz:GUI:BranchFile', ...
+                        ['No registered legacy adapter for the selected ' ...
+                        'model accepts this MAT file.']);
+                end
+                readOnly=true;
             end
             if ~strcmp(branch.ModelId,obj.State.ModelId)
                 error('lmz:GUI:BranchModel', ...
@@ -1079,6 +1224,7 @@ classdef AppController < handle
         end
         function simulation=simulateWorkingSolution(obj)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.assertWorkflowAllows({'simulate','simulation'},'simulation');
             solution=obj.State.WorkingSolution;
             if isempty(solution)||~strcmp(solution.ProblemId,obj.State.ProblemId)
                 error('lmz:GUI:WorkingProblemMismatch', ...
@@ -1107,11 +1253,25 @@ classdef AppController < handle
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             if nargin<2,options=struct();end
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
-            [solution,diagnostics]=lmz.services.SeedService().project(problem,obj.State.WorkingSolution,options,obj.Context);
+            userCallbacks=lmz.solvers.SolveCallbacks( ...
+                fieldOr(options,'Callbacks',[]));
+            progress=fieldOr(options,'Progress',[]);
+            if isempty(progress),progress=lmz.data.SolveProgress();end
+            options.Progress=progress;
+            options.Callbacks=lmz.solvers.SolveCallbacks( ...
+                @(eventName,snapshot)obj.solveProgressUpdate( ...
+                eventName,snapshot,userCallbacks));
+            obj.State.SolveProgress=progress;
+            [solution,diagnostics]=lmz.services.SeedService().project( ...
+                problem,obj.State.WorkingSolution,options,obj.Context);
             obj.invalidateDerived();obj.State.WorkingSolution=solution.withoutDerivedData();
+            obj.State.SolveProgress=progress;
         end
         function result=solveWorkingSolution(obj,options)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.assertWorkflowAllows({'solve','root_solve'},'root solve');
+            if nargin<2||isempty(options),options=struct();end
+            options=mergeOptions(obj.solveDefaultOptions(),options);
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
             obj.State.SeedPair=[];obj.State.ContinuationPreview=[];obj.State.ContinuationResult=[];
             if isa(problem,'lmz.schedule.SectionReturnTimingProblem')
@@ -1152,8 +1312,38 @@ classdef AppController < handle
                     result.FeasibilityReport.Classification);
                 return
             end
-            result=lmz.services.SolveService().solve(problem,obj.State.WorkingSolution,options,obj.Context);
-            obj.State.SolveResult=result;obj.State.SolvedSolution=result.Solution;obj.State.WorkingSolution=result.Solution;obj.State.WorkingEvaluation=result.Evaluation;obj.State.Status='Solve complete';
+            if obj.Context.Cancellation.IsCancellationRequested
+                obj.Context=lmz.api.RunContext.synchronous( ...
+                    obj.Context.RandomSeed);
+            end
+            if ~isstruct(options)||~isscalar(options)
+                error('lmz:GUI:SolveOptions', ...
+                    'GUI solve options must be a scalar struct.');
+            end
+            userCallbacks=lmz.solvers.SolveCallbacks( ...
+                fieldOr(options,'Callbacks',[]));
+            progress=lmz.data.SolveProgress();
+            options.Progress=progress;
+            options.Callbacks=lmz.solvers.SolveCallbacks( ...
+                @(eventName,snapshot)obj.solveProgressUpdate( ...
+                eventName,snapshot,userCallbacks));
+            obj.State.SolveProgress=progress;
+            obj.State.CurrentRun=struct('Kind','solve','Context',obj.Context);
+            obj.Context.Pause.resume();
+            clear presentationUpdate
+            cleanup=onCleanup(@()obj.finishCurrentRun());
+            if obj.workflowSessionOwnsWorkingSolution()
+                result=obj.State.WorkflowSession.solve(options);
+            else
+                result=lmz.services.SolveService().solve(problem, ...
+                    obj.State.WorkingSolution,options,obj.Context);
+            end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.State.SolveResult=result;obj.State.SolveProgress=result.Progress;
+            obj.State.SolvedSolution=result.Solution;
+            obj.State.WorkingSolution=result.Solution;
+            obj.State.WorkingEvaluation=result.Evaluation;
+            obj.State.Status='Solve complete';clear cleanup
         end
         function solution=perturbWorkingSolution(obj,magnitude,mode,seed)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
@@ -1165,15 +1355,26 @@ classdef AppController < handle
         end
         function pair=makeAdjacentSeedPair(obj,direction,options)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.assertWorkflowAllows( ...
+                {'seed_pair','seeds','continuation'},'seed construction');
             if nargin<2,direction=1;end;if nargin<3,options=struct();end
-            dataset=obj.findDataset(obj.State.LockedSelection.DatasetId);
-            problem=obj.problem(dataset.Branch.ProblemId);
-            pair=lmz.services.SeedService().adjacentBranchPair(problem,dataset.Branch, ...
-                obj.State.LockedSelection.PointIndex,direction,options,obj.Context);
+            if obj.hasActiveWorkflowSession()
+                pair=obj.State.WorkflowSession.makeAdjacentSeedPair( ...
+                    direction,options);
+            else
+                dataset=obj.findDataset(obj.State.LockedSelection.DatasetId);
+                problem=obj.problem(dataset.Branch.ProblemId);
+                pair=lmz.services.SeedService().adjacentBranchPair( ...
+                    problem,dataset.Branch, ...
+                    obj.State.LockedSelection.PointIndex,direction, ...
+                    options,obj.Context);
+            end
             obj.State.SeedPair=pair;obj.State.Status='Adjacent RoadMap seed pair ready';
         end
         function pair=makeManualSeedPair(obj,firstIndex,secondIndex,options)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.assertWorkflowAllows( ...
+                {'seed_pair','seeds','continuation'},'seed construction');
             if nargin<4,options=struct();end
             dataset=obj.activeDataset();problem=obj.problem(dataset.Branch.ProblemId);
             pair=lmz.services.SeedService().branchPair(problem,dataset.Branch,firstIndex,secondIndex,options,obj.Context);
@@ -1181,16 +1382,39 @@ classdef AppController < handle
         end
         function pair=makeSecondSeed(obj,radius)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
-            problem=obj.problem(obj.State.WorkingSolution.ProblemId);
-            pair=lmz.services.SeedService().makeSecondSeed(problem,obj.State.WorkingSolution,radius,struct(),obj.Context);obj.State.SeedPair=pair;
+            obj.assertWorkflowAllows( ...
+                {'seed_pair','seeds','continuation'},'seed construction');
+            if nargin<2||isempty(radius),radius=obj.generatedSeedRadius();end
+            if obj.workflowSessionOwnsWorkingSolution()
+                pair=obj.State.WorkflowSession.makeSecondSeed( ...
+                    radius,struct());
+            else
+                problem=obj.problem(obj.State.WorkingSolution.ProblemId);
+                pair=lmz.services.SeedService().makeSecondSeed( ...
+                    problem,obj.State.WorkingSolution,radius,struct(),obj.Context);
+            end
+            obj.State.SeedPair=pair;
         end
         function result=runContinuation(obj,options)
+            obj.assertWorkflowAllows( ...
+                {'continuation','continue'},'continuation');
+            if nargin<2||isempty(options),options=struct();end
             if isempty(obj.State.SeedPair),obj.makeAdjacentSeedPair(1,struct());end
             if obj.Context.Cancellation.IsCancellationRequested,obj.Context=lmz.api.RunContext.synchronous(obj.Context.RandomSeed);end
+            options=mergeOptions(obj.continuationDefaultOptions(),options);
             options=obj.wrapContinuationCallbacks(options);
             obj.Context.Pause.resume();problem=obj.problem(obj.State.SeedPair.First.ProblemId);obj.State.CurrentRun=struct('Kind','continuation','Context',obj.Context);
             cleanup=onCleanup(@()obj.finishCurrentRun());
-            result=lmz.services.ContinuationService().run(problem,obj.State.SeedPair,options,obj.Context);
+            if obj.workflowSessionOwnsSeedPair()
+                sessionOptions=options;
+                sessionOptions.DirectionMode= ...
+                    obj.State.ContinuationDirectionMode;
+                result=obj.State.WorkflowSession.continueBranch( ...
+                    sessionOptions);
+            else
+                result=lmz.services.ContinuationService().run( ...
+                    problem,obj.State.SeedPair,options,obj.Context);
+            end
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
             obj.State.ContinuationResult=result;obj.State.Status='Continuation complete';clear cleanup
         end
@@ -1221,26 +1445,70 @@ classdef AppController < handle
         end
         function result=resumeCheckpoint(obj,path,options)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.assertWorkflowAllows( ...
+                {'continuation','continue'},'checkpoint resume');
             if nargin<3,options=struct();end
             if obj.Context.Cancellation.IsCancellationRequested,obj.Context=lmz.api.RunContext.synchronous(obj.Context.RandomSeed);end
-            problem=obj.problem('periodic_apex');result=lmz.services.ContinuationService().resumeCheckpoint(problem,path,options,obj.Context);
+            problem=obj.problem(obj.State.ProblemId);result=lmz.services.ContinuationService().resumeCheckpoint(problem,path,options,obj.Context);
             obj.State.ContinuationResult=result;obj.State.Status='Checkpoint resumed';
         end
         function result=runParameterHomotopy(obj,parameterName,targets,options)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.assertWorkflowAllows( ...
+                {'parameter_homotopy','homotopy'},'parameter homotopy');
             if nargin<4,options=struct();end
+            if obj.Context.Cancellation.IsCancellationRequested
+                obj.Context=lmz.api.RunContext.synchronous( ...
+                    obj.Context.RandomSeed);
+            end
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
-            result=lmz.services.ContinuationService().parameterHomotopy(problem,obj.State.WorkingSolution,parameterName,targets,options,obj.Context);
-            obj.State.ContinuationResult=result;obj.State.Status='Parameter homotopy complete';
+            obj.Context.Pause.resume();
+            obj.State.CurrentRun=struct( ...
+                'Kind','parameter_homotopy','Context',obj.Context);
+            clear presentationUpdate
+            cleanup=onCleanup(@()obj.finishCurrentRun());
+            if obj.workflowSessionOwnsWorkingSolution()
+                result=obj.State.WorkflowSession.parameterHomotopy( ...
+                    parameterName,targets,options);
+            else
+                result=lmz.services.ContinuationService().parameterHomotopy( ...
+                    problem,obj.State.WorkingSolution,parameterName,targets, ...
+                    options,obj.Context);
+            end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.State.HomotopyResult=result;
+            obj.State.Status='Parameter homotopy complete';clear cleanup
         end
         function report=runBranchFamilyScan(obj,parameterName,targets,options)
             presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.assertWorkflowAllows( ...
+                {'branch_family','family_scan'},'branch-family scan');
             if nargin<4,options=struct();end
+            if obj.Context.Cancellation.IsCancellationRequested
+                obj.Context=lmz.api.RunContext.synchronous( ...
+                    obj.Context.RandomSeed);
+            end
             problem=obj.problem(obj.State.WorkingSolution.ProblemId);
-            report=lmz.services.ContinuationService().branchFamilyScan(problem,obj.State.WorkingSolution,parameterName,targets,options,obj.Context);
-            obj.State.Status='Branch-family scan complete';
+            obj.Context.Pause.resume();
+            obj.State.CurrentRun=struct( ...
+                'Kind','branch_family','Context',obj.Context);
+            clear presentationUpdate
+            cleanup=onCleanup(@()obj.finishCurrentRun());
+            if obj.workflowSessionOwnsWorkingSolution()
+                report=obj.State.WorkflowSession.branchFamilyScan( ...
+                    parameterName,targets,options);
+            else
+                report=lmz.services.ContinuationService().branchFamilyScan( ...
+                    problem,obj.State.WorkingSolution,parameterName,targets, ...
+                    options,obj.Context);
+            end
+            presentationUpdate=obj.Events.beginTransaction(); %#ok<NASGU>
+            obj.State.FamilyScanResult=report;
+            obj.State.Status='Branch-family scan complete';clear cleanup
         end
         function result=runOptimization(obj,options)
+            obj.assertWorkflowAllows( ...
+                {'optimize','optimization'},'optimization');
             if nargin<2,options=struct();end
             id=obj.State.ProblemId;
             capabilities=obj.problemCapabilities(id);
@@ -1339,9 +1607,49 @@ classdef AppController < handle
         end
     end
     methods (Access=private)
+        function [source,provider]=registeredSourceForDataset(obj,datasetId)
+            sources=obj.Workflows.listDataSources(obj.State.ModelId);
+            order=1:numel(sources);
+            if ~isempty(obj.State.DataSourceId)
+                preferred=find(arrayfun(@(item)strcmp( ...
+                    item.Id,obj.State.DataSourceId),sources),1);
+                if ~isempty(preferred)
+                    order=[preferred order(order~=preferred)];
+                end
+            end
+            for sourceIndex=order
+                candidate=sources(sourceIndex);
+                candidateProvider=candidate.createProvider();
+                records=providerRecords(candidateProvider.list( ...
+                    candidate,obj.Registry));
+                matched=cellfun(@(record)providerRecordMatches( ...
+                    record,datasetId),records);
+                if any(matched)|| ...
+                        strcmp(datasetId,candidate.DefaultDatasetId)
+                    source=candidate;provider=candidateProvider;return
+                end
+            end
+            error('lmz:GUI:UnknownRegisteredDataset', ...
+                'No registered data source provides %s.',datasetId);
+        end
+
+        function applyRegisteredAxisPreset(obj,source)
+            contribution=obj.workbenchContribution();
+            id=fieldOr(source.Metadata,'axisPresetId','');
+            if ~isempty(id)&&contribution.hasAxisPreset(id)
+                names=contribution.axisPreset(id).coordinateNames();
+                obj.State.AxisVariables=completeAxisNames(names);
+            end
+        end
+
         function observeState(obj)
             mappings={ ...
                 'ModelId',lmz.gui.PresentationEvents.ModelChanged; ...
+                'WorkflowId',lmz.gui.PresentationEvents.WorkflowChanged; ...
+                'WorkflowSession',lmz.gui.PresentationEvents.WorkflowChanged; ...
+                'DataSourceId',lmz.gui.PresentationEvents.DatasetsChanged; ...
+                'LayoutProfileId',lmz.gui.PresentationEvents.LayoutChanged; ...
+                'WorkbenchContribution',lmz.gui.PresentationEvents.LayoutChanged; ...
                 'ProblemId',lmz.gui.PresentationEvents.ProblemChanged; ...
                 'ProblemConfiguration', ...
                     lmz.gui.PresentationEvents.ProblemConfigurationChanged; ...
@@ -1359,6 +1667,7 @@ classdef AppController < handle
                 'CandidateSimulation',lmz.gui.PresentationEvents.SimulationChanged; ...
                 'SolvedSolution',lmz.gui.PresentationEvents.SolveResultChanged; ...
                 'SolveResult',lmz.gui.PresentationEvents.SolveResultChanged; ...
+                'SolveProgress',lmz.gui.PresentationEvents.SolveProgressChanged; ...
                 'ShootingResult',lmz.gui.PresentationEvents.SolveResultChanged; ...
                 'TimingResult',lmz.gui.PresentationEvents.SolveResultChanged; ...
                 'SectionTransferResult', ...
@@ -1366,6 +1675,11 @@ classdef AppController < handle
                 'SeedPair',lmz.gui.PresentationEvents.SeedPairChanged; ...
                 'ContinuationPreview',lmz.gui.PresentationEvents.ContinuationChanged; ...
                 'ContinuationResult',lmz.gui.PresentationEvents.ContinuationChanged; ...
+                'HomotopyResult',lmz.gui.PresentationEvents.ContinuationChanged; ...
+                'FamilyScanResult',lmz.gui.PresentationEvents.ContinuationChanged; ...
+                'ContinuationDirectionMode', ...
+                    lmz.gui.PresentationEvents.ContinuationChanged; ...
+                'OverlayState',lmz.gui.PresentationEvents.OverlayChanged; ...
                 'OptimizationResult',lmz.gui.PresentationEvents.OptimizationChanged; ...
                 'RequestedStrideCount',lmz.gui.PresentationEvents.StridePlanChanged; ...
                 'StridePlan',lmz.gui.PresentationEvents.StridePlanChanged; ...
@@ -1393,6 +1707,7 @@ classdef AppController < handle
         end
 
         function configuration=defaultProblemConfiguration(obj,modelId,problemId)
+            catalog=[];
             try
                 catalog=obj.Registry.getPoincareSectionRegistry(modelId);
                 defaults=catalog.DefaultSectionByProblem;
@@ -1405,7 +1720,7 @@ classdef AppController < handle
                 end
                 if strcmp(problemId,'section_transition')
                     [startId,stopId]=defaultTransitionSections( ...
-                        modelId,catalog,sectionId);
+                        catalog,sectionId);
                     start=catalog.descriptor(startId);
                     stop=catalog.descriptor(stopId);
                     configuration=completeSectionConfiguration(struct( ...
@@ -1438,16 +1753,17 @@ classdef AppController < handle
                 configuration.InterfaceStateMask=true;
                 configuration.ControlFreeMask=false;
                 configuration.EnergyWorkMode='diagnostic_only';
-                if strcmp(modelId,'slip_quad_load')&& ...
-                        strcmp(problemId,'multiple_shooting_horizon')
+                if strcmp(problemId,'multiple_shooting_horizon')
                     configuration.EnergyWorkMode='energy_neutral';
                 end
                 configuration.ResidualTolerance=1e-7;
                 configuration.HorizonLength=horizonLength;
                 configuration.TemplateInitializer='schema_defaults';
+                model=obj.Registry.createModel(modelId);
+                hasTransition=any(strcmp( ...
+                    model.listProblems(),'section_transition'));
                 if strcmp(problemId,'multiple_shooting')&& ...
-                        any(strcmp(modelId, ...
-                        {'slip_quadruped','slip_biped'}))
+                        hasTransition&&~isempty(catalog)
                     descriptor=catalog.descriptor( ...
                         configuration.StartSectionId);
                     coordinateCount=numel(descriptor.CoordinateNames);
@@ -1500,11 +1816,12 @@ classdef AppController < handle
                     'diagnostic_only');
                 initializer=fieldOr(value,'TemplateInitializer', ...
                     'schema_defaults');
-                [value.TemplateId,value.InitializationStrategy, ...
+                [templateId,value.InitializationStrategy, ...
                     value.UseTemplateControls]=loadInitializer(initializer);
+                if ~isempty(templateId),value.TemplateId=templateId;end
             elseif strcmp(problemId,'multiple_shooting')&& ...
-                    any(strcmp(obj.State.ModelId, ...
-                    {'slip_quadruped','slip_biped'}))
+                    any(strcmp(obj.Registry.createModel( ...
+                    obj.State.ModelId).listProblems(),'section_transition'))
                 count=fieldOr(value,'HorizonLength',2);
                 catalog=obj.Registry.getPoincareSectionRegistry( ...
                     obj.State.ModelId);
@@ -1537,7 +1854,8 @@ classdef AppController < handle
             if ~isempty(obj.State.StridePlan)
                 value.StridePlan=obj.State.StridePlan;
             elseif ~isempty(obj.State.WorkingSolution)&& ...
-                    strcmp(obj.State.ModelId,'slip_quad_load')&& ...
+                    strcmp(obj.State.WorkingSolution.ProblemId, ...
+                    'multi_stride_fit')&& ...
                     numel(obj.State.WorkingSolution.DecisionValues)>=44
                 value.InitialDecision=obj.State.WorkingSolution.DecisionValues;
             end
@@ -1640,12 +1958,30 @@ classdef AppController < handle
             if isa(userCallback,'function_handle'),userCallback(state);end
         end
 
+        function stop=solveProgressUpdate(obj,eventName,snapshot, ...
+                userCallbacks)
+            overlay=obj.State.OverlayState;
+            if ~isstruct(overlay)||~isscalar(overlay),overlay=struct();end
+            overlay.Solve=struct('Event',eventName, ...
+                'Snapshot',snapshot.toStruct());
+            obj.State.OverlayState=overlay;
+            obj.State.Status=solveStageText(eventName,snapshot);
+            obj.Events.publish( ...
+                lmz.gui.PresentationEvents.SolveProgressChanged, ...
+                struct('Event',eventName,'Snapshot',snapshot.toStruct()));
+            drawnow limitrate
+            stop=userCallbacks.notify(eventName,snapshot);
+        end
+
         function invalidateDerived(obj)
             obj.State.WorkingEvaluation=[];obj.State.CandidateSimulation=[];obj.State.Simulation=[];
-            obj.State.SolvedSolution=[];obj.State.SolveResult=[];obj.State.SeedPair=[];
+            obj.State.SolvedSolution=[];obj.State.SolveResult=[];
+            obj.State.SolveProgress=[];obj.State.SeedPair=[];
             obj.State.ShootingResult=[];obj.State.TimingResult=[];
             obj.State.SectionTransferResult=[];
-            obj.State.ContinuationPreview=[];obj.State.ContinuationResult=[];obj.State.OptimizationResult=[];
+            obj.State.ContinuationPreview=[];obj.State.ContinuationResult=[];
+            obj.State.HomotopyResult=[];obj.State.FamilyScanResult=[];
+            obj.State.OptimizationResult=[];
         end
         function applyEvaluation(obj,problem,evaluation)
             original=obj.State.WorkingSolution;
@@ -1656,6 +1992,51 @@ classdef AppController < handle
         function finishCurrentRun(obj)
             wasCancelled=obj.Context.Cancellation.IsCancellationRequested;seed=obj.Context.RandomSeed;obj.State.CurrentRun=[];
             if wasCancelled,obj.Context=lmz.api.RunContext.synchronous(seed);end
+        end
+        function value=hasActiveWorkflowSession(obj)
+            value=~isempty(obj.State.WorkflowId)&& ...
+                isa(obj.State.WorkflowSession,'lmz.workflow.WorkflowSession')&& ...
+                strcmp(obj.State.WorkflowSession.Descriptor.ModelId, ...
+                obj.State.ModelId)&& ...
+                ~isempty(obj.State.LockedSelection)&& ...
+                strcmp(obj.State.LockedSelection.DatasetId, ...
+                obj.State.WorkflowSession.Dataset.Id)&& ...
+                obj.State.LockedSelection.PointIndex== ...
+                obj.State.WorkflowSession.SeedIndex&& ...
+                ~isempty(obj.State.WorkingSolution)&& ...
+                strcmp(obj.State.WorkflowSession.Problem.Id, ...
+                obj.State.WorkingSolution.ProblemId);
+        end
+        function value=workflowSessionOwnsWorkingSolution(obj)
+            value=obj.hasActiveWorkflowSession()&& ...
+                sameRunContext(obj.State.WorkflowSession.Context,obj.Context)&& ...
+                sameSolutionValues(obj.State.WorkflowSession.WorkingSolution, ...
+                obj.State.WorkingSolution);
+        end
+        function value=workflowSessionOwnsSeedPair(obj)
+            value=obj.hasActiveWorkflowSession()&& ...
+                sameRunContext(obj.State.WorkflowSession.Context,obj.Context)&& ...
+                sameSolutionPairValues(obj.State.WorkflowSession.SeedPair, ...
+                obj.State.SeedPair);
+        end
+        function assertWorkflowAllows(obj,aliases,operation)
+            descriptor=obj.activeWorkflowDescriptor();
+            if isempty(descriptor)||workflowAllowsAny(descriptor,aliases)
+                return
+            end
+            error('lmz:GUI:WorkflowStepUnavailable', ...
+                'Registered workflow %s does not allow %s.', ...
+                descriptor.Id,operation);
+        end
+        function value=activeWorkflowDescriptor(obj)
+            value=[];
+            if isempty(obj.State.WorkflowId),return,end
+            try
+                value=obj.Workflows.get( ...
+                    obj.State.ModelId,obj.State.WorkflowId);
+            catch
+                value=[];
+            end
         end
         function finishRecording(obj),obj.State.RecordingState=struct('Active',false);end
         function dataset=findDataset(obj,id)
@@ -1699,7 +2080,26 @@ classdef AppController < handle
                 end
             end
             if isempty(dataset),return,end
-            if ~isempty(dataset.SourcePath)&&~isempty(obj.State.RoadMapCatalog)&& ...
+            resolved=false;
+            datasetId=fieldOr(dataset.Metadata,'DatasetId','');
+            if ~isempty(datasetId)
+                try
+                    [source,provider]=obj.registeredSourceForDataset(datasetId);
+                    if strcmp(source.ProblemId,problemId)
+                        index=provider.recommendedPoint(source,dataset);
+                        resolved=true;
+                    end
+                catch
+                    % User and historical datasets need not be registered.
+                end
+            end
+            if ~resolved&&isstruct(dataset.Metadata)&& ...
+                    isfield(dataset.Metadata,'RecommendedPointIndex')
+                index=dataset.Metadata.RecommendedPointIndex;
+                resolved=true;
+            end
+            if ~resolved&&~isempty(dataset.SourcePath)&& ...
+                    ~isempty(obj.State.RoadMapCatalog)&& ...
                     ismethod(obj.State.RoadMapCatalog,'recommendedSeedIndex')
                 try
                     index=obj.State.RoadMapCatalog.recommendedSeedIndex( ...
@@ -1859,13 +2259,7 @@ end
 end
 
 function [templateId,strategy,useTemplateControls]=loadInitializer(source)
-useTemplateControls=false;
-knownIds={'individual_1_tr_single','individual_1_tr_to_rl', ...
-    'individual_1_identical_tr_to_rl','individual_1_tr_to_tl'};
-if any(strcmp(source,knownIds))
-    templateId=source;strategy='exact_source_horizon';return
-end
-templateId='individual_1_tr_to_rl';
+useTemplateControls=false;templateId='';
 switch source
     case {'schema_defaults','exact_source_horizon'}
         strategy='exact_source_horizon';
@@ -1875,8 +2269,12 @@ switch source
     case 'phase_compatible_repeat'
         strategy='phase_compatible_repeat';
     otherwise
-        error('lmz:GUI:LoadShootingInitializer', ...
-            'Unknown load shooting initializer %s.',source);
+        if ~ischar(source)||isempty(regexp(source, ...
+                '^[A-Za-z][A-Za-z0-9_]*$','once'))
+            error('lmz:GUI:ShootingInitializer', ...
+                'A registered shooting initializer ID is required.');
+        end
+        templateId=source;strategy='exact_source_horizon';
 end
 end
 
@@ -1891,18 +2289,20 @@ function value=scientificTransitionKind(kind)
 value=any(strcmp(kind,{'named_event','state_plane','composite'}));
 end
 
-function [startId,stopId]=defaultTransitionSections(modelId,catalog,startId)
-switch modelId
-    case 'slip_quadruped'
-        stopId='descending_y_0_9';
-    case 'slip_biped'
-        stopId='descending_y_0_95';
-    otherwise
-        error('lmz:GUI:TransitionModel', ...
-            'section_transition is unavailable for %s.',modelId);
+function [startId,stopId]=defaultTransitionSections(catalog,startId)
+stopId='';ids=catalog.listSections();
+for index=1:numel(ids)
+    descriptor=catalog.descriptor(ids{index});
+    if ~strcmp(descriptor.Id,startId)&& ...
+            strcmp(descriptor.Kind,'state_plane')&& ...
+            strcmp(descriptor.StateName,'y')&& ...
+            descriptor.CrossingDirection<0&& ...
+            any(strcmp(descriptor.ValidationStatus, ...
+            {'tested','source-equivalent'}))
+        stopId=descriptor.Id;break
+    end
 end
-if ~catalog.hasSection(startId)||~catalog.hasSection(stopId)|| ...
-        strcmp(startId,stopId)
+if ~catalog.hasSection(startId)||isempty(stopId)
     error('lmz:GUI:TransitionDefaults', ...
         'The catalog does not provide distinct tested transition defaults.');
 end
@@ -1938,37 +2338,14 @@ else
 end
 end
 
-function [value,qualification]=scientificTransitionSupport( ...
-        modelId,startId,stopId)
-if strcmp(modelId,'slip_quadruped')
-    validated={ ...
-        'back_left_touchdown','descending_y_0_9','low'; ...
-        'descending_y_0_9','back_left_touchdown','candidate'; ...
-        'back_left_touchdown','front_left_touchdown','low'; ...
-        'back_left_touchdown_descending','front_left_touchdown','low'; ...
-        'back_left_touchdown','back_left_touchdown_descending','low'};
+function [value,qualification]=scientificTransitionSupport(~,stop)
+value='validated';
+if strcmp(stop.kind,'state_plane')
+    qualification=['tolerance-satisfying transition seed; ' ...
+        'no periodic-root claim'];
 else
-    validated={ ...
-        'left_touchdown','descending_y_0_95','low'; ...
-        'descending_y_0_95','right_touchdown','candidate'; ...
-        'left_touchdown','right_touchdown','candidate'; ...
-        'left_touchdown_descending','right_touchdown','candidate'; ...
-        'left_touchdown','left_touchdown_descending','low'};
-end
-match=find(strcmp(startId,validated(:,1))& ...
-    strcmp(stopId,validated(:,2)),1);
-if ~isempty(match)
-    value='validated';
-    if strcmp(validated{match,3},'low')
-        qualification=['tolerance-satisfying transition seed; ' ...
-            'no periodic-root claim'];
-    else
-        qualification=['accepted-crossing candidate with a nonzero contact ' ...
-            'residual; no root or periodic claim'];
-    end
-else
-    value='experimental';
-    qualification='';
+    qualification=['accepted-crossing candidate with a nonzero contact ' ...
+        'residual; no root or periodic claim'];
 end
 end
 
@@ -2035,16 +2412,155 @@ if isempty(details),value=reason;else
 end
 end
 
+function values=providerRecords(source)
+if isempty(source),values={}; ...
+elseif iscell(source),values=reshape(source,1,[]); ...
+elseif isstruct(source),values=num2cell(reshape(source,1,[])); ...
+elseif ischar(source),values={source}; ...
+else
+    error('lmz:GUI:ProviderRecords', ...
+        'Registered provider records must be structs or text.');
+end
+end
+
+function value=providerRecordField(source,names,fallback)
+value=fallback;
+if ischar(source)
+    if any(strcmp(names,'id'))||any(strcmp(names,'name')),value=source;end
+    return
+end
+for index=1:numel(names)
+    if isstruct(source)&&isfield(source,names{index})
+        value=source.(names{index});return
+    end
+end
+end
+
+function valid=providerRecordMatches(record,requested)
+fields={'id','Id','name','label','path','sourcePath','Path'};
+values=cell(1,numel(fields));
+for index=1:numel(fields)
+    values{index}=providerRecordField(record,fields(index),'');
+end
+[~,requestedBase,requestedExtension]=fileparts(requested);
+requestedFile=[requestedBase requestedExtension];
+valid=false;
+for index=1:numel(values)
+    value=values{index};
+    if ~ischar(value),continue,end
+    [~,base,extension]=fileparts(value);file=[base extension];
+    if strcmp(requested,value)||strcmp(requested,file)|| ...
+            (~isempty(requestedFile)&&strcmp(requestedFile,file))
+        valid=true;return
+    end
+end
+end
+
+function values=completeAxisNames(values)
+if isstring(values),values=cellstr(values);end
+values=reshape(values,1,[]);
+if numel(values)<2
+    error('lmz:GUI:AxisPreset', ...
+        'A registered axis preset must provide at least two coordinates.');
+end
+if numel(values)<3,values{3}='';else,values=values(1:3);end
+end
+
+function value=axisLimitText(source)
+if isempty(source),value='auto';else,value=mat2str(source,17);end
+end
+
+function value=mergeOptions(defaults,overrides)
+if ~isstruct(defaults)||~isscalar(defaults)|| ...
+        ~isstruct(overrides)||~isscalar(overrides)
+    error('lmz:GUI:Options','Registered options must be scalar structs.');
+end
+value=defaults;names=fieldnames(overrides);
+for index=1:numel(names),value.(names{index})=overrides.(names{index});end
+end
+
+function capabilities=restrictWorkflowCapabilities(capabilities,descriptor)
+mappings={ ...
+    'simulate',{'simulate','simulation'}; ...
+    'solve',{'solve','root_solve'}; ...
+    'continue',{'continuation','continue'}; ...
+    'optimize',{'optimize','optimization'}; ...
+    'visualize',{'analysis','visualize','simulation','simulate'}; ...
+    'animate',{'analysis','visualize','simulation','simulate'}; ...
+    'parameterHomotopy',{'parameter_homotopy','homotopy'}; ...
+    'branchFamilyScan',{'branch_family','family_scan'}};
+for index=1:size(mappings,1)
+    name=mappings{index,1};
+    if isfield(capabilities,name)
+        capabilities.(name)=logical(capabilities.(name))&& ...
+            workflowAllowsAny(descriptor,mappings{index,2});
+    end
+end
+end
+
+function value=workflowAllowsAny(descriptor,aliases)
+if ischar(aliases),aliases={aliases};end
+value=false;
+for index=1:numel(aliases)
+    if descriptor.allows(aliases{index}),value=true;return,end
+end
+end
+
+function value=sameRunContext(first,second)
+value=isa(first,'lmz.api.RunContext')&& ...
+    isa(second,'lmz.api.RunContext')&& ...
+    isequal(first.Cancellation,second.Cancellation)&& ...
+    isequal(first.Pause,second.Pause);
+end
+
+function value=sameSolutionValues(first,second)
+value=isa(first,'lmz.data.Solution')&& ...
+    isa(second,'lmz.data.Solution')&& ...
+    strcmp(first.ModelId,second.ModelId)&& ...
+    strcmp(first.ProblemId,second.ProblemId)&& ...
+    isequaln(first.DecisionValues,second.DecisionValues)&& ...
+    isequaln(first.ParameterValues,second.ParameterValues);
+end
+
+function value=sameSolutionPairValues(first,second)
+value=isa(first,'lmz.data.SolutionPair')&& ...
+    isa(second,'lmz.data.SolutionPair')&& ...
+    sameSolutionValues(first.First,second.First)&& ...
+    sameSolutionValues(first.Second,second.Second);
+end
+
+function pair=reverseSolutionPair(source)
+pair=lmz.data.SolutionPair(source.Second,source.First, ...
+    source.RequestedRadius,source.AchievedRadius,source.Diagnostics);
+end
+
+function restoreSeedPair(controller,pair)
+if isvalid(controller),controller.State.SeedPair=pair;end
+end
+
+function value=solveStageText(eventName,snapshot)
+switch eventName
+    case 'seed_selected',value='Solve seed selected.';
+    case 'seed_evaluated'
+        value=sprintf('Seed residual %.3g.',snapshot.ScaledResidual);
+    case 'projection_started',value='Projecting the solve seed.';
+    case 'projection_completed',value='Seed projection complete.';
+    case 'solve_started',value='Root solve started.';
+    case 'iteration'
+        value=sprintf('Solve iteration %g; residual %.3g.', ...
+            snapshot.Iteration,snapshot.ScaledResidual);
+    case 'step_accepted',value='Solver step accepted.';
+    case 'solve_completed',value='Root solve complete.';
+    case 'solve_failed',value='Root solve did not converge.';
+    case 'controlled_stop',value='Root solve stopped with partial progress.';
+    otherwise,value=snapshot.Message;
+end
+end
+
 function value=fieldOr(source,name,fallback)
-if isfield(source,name),value=source.(name);else,value=fallback;end
+if isstruct(source)&&isfield(source,name),value=source.(name);else,value=fallback;end
 end
 function value=onOff(condition),if condition,value='on';else,value='off';end,end
-function value=linesColor(index)
-colors=[0.0000 0.4470 0.7410;0.8500 0.3250 0.0980; ...
-    0.9290 0.6940 0.1250;0.4940 0.1840 0.5560; ...
-    0.4660 0.6740 0.1880;0.3010 0.7450 0.9330];
-value=colors(1+mod(index-1,size(colors,1)),:);
-end
 function values=objectiveValues(terms)
 names=fieldnames(terms);values=zeros(numel(names),1);
 for index=1:numel(names)

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "classic_tabs",
+  "label": "Analytic Plugin Workbench",
+  "layoutProfileId": "classic_tabs",
+  "centralViews": ["branch_state", "run_overlay"],
+  "sidebarPanels": ["info_selection", "visualization", "solve_seeds", "continuation", "oscillator_analysis"],
+  "axisPresets": [
+    {
+      "id": "analytic_branch",
+      "label": "Exact analytic branch",
+      "x": "horizontal_speed",
+      "y": "stride_length",
+      "z": "apex_height",
+      "dimension": "2-D",
+      "azimuth": 0,
+      "elevation": 90,
+      "xLimits": [0.5, 1.5],
+      "yLimits": [0.4, 1.4],
+      "zLimits": [0.8, 1.2]
+    }
+  ],
+  "directionLabels": {
+    "backward": "decreasing horizontal speed",
+    "forward": "increasing horizontal speed"
+  },
+  "defaultSolveOptions": {
+    "FunctionTolerance": 1e-10,
+    "StepTolerance": 1e-10,
+    "MaxIterations": 100,
+    "MaxFunctionEvaluations": 500,
+    "Display": "off"
+  },
+  "defaultContinuationOptions": {
+    "InitialStep": 0.02,
+    "MinimumStep": 0.0001,
+    "MaximumStep": 0.05,
+    "MaximumPoints": 6,
+    "CorrectorTolerance": 1e-9,
+    "BothDirections": true,
+    "RequireFeasible": true
+  }
+}

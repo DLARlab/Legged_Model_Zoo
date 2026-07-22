@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0.0",
+  "dataSources": [
+    {
+      "id": "gaitmap",
+      "label": "Scientific jerboa GaitMap branches",
+      "modelId": "slip_biped",
+      "problemId": "periodic_apex",
+      "kind": "branch_catalog",
+      "providerClass": "lmzmodels.slip_biped.GaitMapDataSourceProvider",
+      "defaultDatasetId": "W1",
+      "metadata": {
+        "axisPresetId": "gaitmap_top",
+        "recommendedPointIndex": 30,
+        "sourceVariable": "results",
+        "sourceRowCount": 14,
+        "readOnly": true
+      }
+    }
+  ]
+}

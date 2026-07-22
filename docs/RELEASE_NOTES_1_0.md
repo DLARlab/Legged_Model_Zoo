@@ -1,5 +1,57 @@
 # Legged Model Zoo 1.0 release-candidate notes
 
+## 1.0.0-rc.3
+
+Round 11 advances the prerelease version for provisional registered-workflow,
+data-provider, workbench-contribution, solve-progress, and GUI layout-profile
+APIs. Artifact and catalog schemas remain `1.0.0`; workflow, data-source, and
+workbench documents also use schema `1.0.0`. This is an additive framework
+version change, not a persistent-format reset.
+
+Highlights:
+
+- Optional model-manifest bindings for declarative data sources, workbench
+  contributions, and complete scientific workflow descriptors, with
+  path-containment, provider-namespace, capability, reference, and frozen-hash
+  validation.
+- A registry/runner/session boundary that selects existing generic solve,
+  seed, continuation, checkpoint, homotopy, family-scan, and artifact services
+  without embedding algorithms in JSON.
+- Three quadruped descriptors: RoadMap exploration, the validated
+  `roadmap_root_continuation` reference, and a tested experimental touchdown-
+  section transfer/root/continuation route.
+- A public registered quadruped example covering RoadMap load, point 267,
+  accepted root, adjacent seeds, both-direction continuation, and native
+  artifact round trip.
+- An external analytic-hopper data/workbench/workflow contribution proving
+  registration, execution, trust containment, generic fallback, and clean
+  removal without core model-ID edits.
+- Selectable `scientific_workbench` and `classic_tabs` placement profiles. The
+  source-inspired workbench keeps branch/data and status/progress visible while
+  scrollable task panels change; classic tabs retain the established shell.
+- Shared locked-selection, seed, prediction, corrected-solution, seed-pair,
+  predictor, rejected, and incrementally updated accepted-continuation state;
+  the terminal result replaces the accepted layer in place with the final or
+  stopped partial branch.
+- GUI-independent typed solve lifecycle/iteration snapshots retained by
+  `SolveProgress` and `SolveResult`, including a truthful zero-iteration
+  accepted-existing-seed lifecycle.
+- Forward/backward/both GUI continuation with registered direction labels; the
+  quadruped reference defaults to both directions.
+- Detailed workflow, authoring, layout, source-parity, usage, migration, and
+  API documentation.
+
+The unchanged Round 10 suite passed 544/544 as the pre-edit baseline at
+committed HEAD `5c6a6c100f752ea6ed1fd20114f84800f9b52070`.
+`ROUND11_LOCAL_AUTOMATION_PASSED` records 631/631 final tests, all 55 public
+examples, clean-copy isolation, `23,614/29,755` covered statements with every
+stable floor passing, zero quality/architecture/R2019b-static violations, and
+zero median budget overruns in both three-repetition performance reports.
+Technical core/scientific ZIP and toolbox installs passed without retaining an
+unauthorized artifact. Remote CI, human desktop QA, R2019b runtime, and
+redistribution authority remain separate external gates. No public package or
+release is authorized by rc.3.
+
 ## 1.0.0-rc.2
 
 Round 10 advances the prerelease version for substantial provisional timing,

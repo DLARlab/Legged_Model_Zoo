@@ -333,3 +333,55 @@ round trip, and reproduction hash. See
 [multiple-shooting.md](multiple-shooting.md), and
 [horizon-feasibility.md](horizon-feasibility.md); use
 `tutorial_hopper/multiple_shooting` as the small executable reference.
+
+## 17. Register an optional scientific branch workflow
+
+The default generator route is `minimal_simulation`; it intentionally stops at
+the compact model/problem/scene contract. If the new model has a real periodic
+branch source and continuation evidence, generate the scientific route from
+the start:
+
+```matlab
+report = new_model('my_hopper', pluginRoot, ...
+    'AuthoringRoute','scientific_periodic_branch');
+```
+
+This adds:
+
+```text
+catalog/my_hopper/data_sources.lmz.json
+catalog/my_hopper/workbench.lmz.json
+catalog/my_hopper/workflows/periodic_branch_workflow.json
+models/+lmzmodels/+my_hopper/BranchCatalogProvider.m
+models/+lmzmodels/+my_hopper/LegacyAdapterProvider.m
+examples/demo_my_hopper_registered_workflow.m
+```
+
+The generated provider returns a small analytic branch and the manifest binds
+the optional resources. Replace the branch with reviewed, contained data;
+record its digest/provenance; implement exact legacy conversion only if one is
+needed; and keep every provider inside the plugin package. Update maturity and
+`source-equivalent` only after an immutable scientific comparison exists.
+
+Test the same route a user will run:
+
+```matlab
+pluginRegistry = lmz.registry.ModelRegistry.discoverWithPlugins( ...
+    pluginRoot,'IncludeBuiltIns',false);
+workflows = lmz.workflow.WorkflowRegistry.fromModelRegistry(pluginRegistry);
+descriptor = workflows.get('my_hopper','periodic_branch_workflow');
+session = lmz.workflow.WorkflowRunner().initialize( ...
+    descriptor,lmz.api.RunContext.synchronous(42));
+solved = session.solve(struct());
+pair = session.makeAdjacentSeedPair(+1,struct());
+continued = session.continueBranch(struct( ...
+    'DirectionMode','both','MaximumPoints',4, ...
+    'InitialStep',pair.AchievedRadius));
+```
+
+Also test an omitted-registration fallback, provider namespace/root rejection,
+catalog digest changes after discovery, malformed references, artifact round
+trip, and registry deletion/path cleanup. Workbench and workflow JSON select
+existing services and layouts; they never contain numerical callbacks. See
+[registered-workflows.md](registered-workflows.md) and
+[gui-layout-profiles.md](gui-layout-profiles.md).

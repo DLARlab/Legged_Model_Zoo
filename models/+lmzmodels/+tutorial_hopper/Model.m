@@ -96,6 +96,10 @@ classdef Model < lmz.api.LeggedModel
                 'label', {'Hopper trajectory','Hopper states'});
         end
 
+        function value=getMultiStrideProvider(~)
+            value=lmzmodels.internal.BuiltInMultiStrideSimulationProvider();
+        end
+
         function value = getVisualizationPlugin(obj)
             manifest = obj.registeredManifest();
             if isempty(manifest)

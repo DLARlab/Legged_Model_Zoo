@@ -108,6 +108,9 @@ classdef Model < lmz.api.LeggedModel
                     fullfile(manifest.catalogDirectory, 'scene.lmz.json'));
             end
         end
+        function value=getMultiStrideProvider(~)
+            value=lmzmodels.internal.BuiltInMultiStrideSimulationProvider();
+        end
     end
     methods (Access=private)
         function result = simulateDemo(~,request,context)

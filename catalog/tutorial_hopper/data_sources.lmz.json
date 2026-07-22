@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0.0",
+  "dataSources": [
+    {
+      "id": "generated_tutorial",
+      "label": "Generated exact hop family",
+      "modelId": "tutorial_hopper",
+      "problemId": "periodic_hop",
+      "kind": "generated_tutorial",
+      "providerClass": "lmzmodels.tutorial_hopper.TutorialDataSourceProvider",
+      "defaultDatasetId": "exact_hop_family",
+      "metadata": {
+        "axisPresetId": "tutorial_branch",
+        "recommendedPointIndex": 2,
+        "readOnly": true
+      }
+    }
+  ]
+}

@@ -9,6 +9,7 @@ classdef BaseTab < handle
         RefreshCount = 0
         IsBusy = false
         Capabilities = struct()
+        HostMode = 'classic_tabs'
     end
     properties (Access=protected)
         ErrorHandler = []
@@ -62,6 +63,7 @@ classdef BaseTab < handle
         function hooks = testHooks(obj)
             hooks = struct('Id',obj.Id,'Root',obj.Root, ...
                 'RefreshCount',obj.RefreshCount,'IsBusy',obj.IsBusy, ...
+                'HostMode',obj.HostMode, ...
                 'SubscriptionCount',numel(obj.Subscriptions), ...
                 'Controls',obj.controlMap());
         end
@@ -87,6 +89,10 @@ classdef BaseTab < handle
 
     methods (Access=protected)
         function subscribe(obj,topics)
+            workflowTopic=lmz.gui.PresentationEvents.WorkflowChanged;
+            if ~any(strcmp(topics,workflowTopic))
+                topics{end+1}=workflowTopic;
+            end
             token = obj.EventBus.subscribe(topics,@(batch)obj.receiveEvents(batch));
             obj.Subscriptions{end+1} = token;
         end
@@ -104,8 +110,12 @@ classdef BaseTab < handle
                 obj.setBusy(busy,payload);
             end
             if any(ismember(names,{lmz.gui.PresentationEvents.ModelChanged, ...
+                    lmz.gui.PresentationEvents.WorkflowChanged, ...
                     lmz.gui.PresentationEvents.ProblemChanged}))
-                try, obj.setCapabilities(obj.Controller.capabilities()); catch, end
+                try
+                    obj.setCapabilities(obj.Controller.capabilities());
+                catch
+                end
             end
             obj.onPresentationEvents(batch);
         end

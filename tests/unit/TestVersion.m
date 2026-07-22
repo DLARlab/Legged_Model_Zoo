@@ -3,7 +3,7 @@ classdef TestVersion < matlab.unittest.TestCase
         function currentMatchesVersionFile(testCase)
             expected=strtrim(fileread(fullfile(lmz.util.ProjectPaths.root(),'VERSION')));
             testCase.verifyEqual(lmz.util.Version.current(),expected);
-            testCase.verifyEqual(expected,'1.0.0-rc.2');
+            testCase.verifyEqual(expected,'1.0.0-rc.3');
         end
 
         function parsesSemanticVersion(testCase)
@@ -16,7 +16,7 @@ classdef TestVersion < matlab.unittest.TestCase
         function comparesSemanticPrecedence(testCase)
             ordered={'1.0.0-alpha','1.0.0-alpha.1','1.0.0-alpha.beta', ...
                 '1.0.0-beta','1.0.0-beta.2','1.0.0-beta.11', ...
-                '1.0.0-rc.1','1.0.0-rc.2','1.0.0'};
+                '1.0.0-rc.1','1.0.0-rc.2','1.0.0-rc.3','1.0.0'};
             for index=1:numel(ordered)-1
                 testCase.verifyLessThan(lmz.util.Version.compare( ...
                     ordered{index},ordered{index+1}),0);

@@ -1,7 +1,7 @@
 classdef Accessibility
     %ACCESSIBILITY Shared GUI accessibility and layout helpers.
     properties (Constant)
-        MinimumWindowSize = [1100 700]
+        MinimumWindowSize = [900 650]
     end
     methods (Static)
         function tag(control,value,tooltip)

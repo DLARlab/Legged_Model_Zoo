@@ -87,6 +87,9 @@ classdef Model < lmz.api.LeggedModel
                 'label',{'Body and legs','State trajectories','Ground reaction force', ...
                 'Footfall phases','Energy and gait'});
         end
+        function value=getMultiStrideProvider(~)
+            value=lmzmodels.internal.BuiltInMultiStrideSimulationProvider();
+        end
         function plotSimulation(~,axesMap,simulation,profile)
             %PLOTSIMULATION Route model-specific research plots without GUI
             % knowledge of the biped state or force channel ordering.

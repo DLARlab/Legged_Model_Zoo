@@ -1,5 +1,54 @@
 # Changelog
 
+## 1.0.0-rc.3 — Round 11 registered workflows and adaptive workbench
+
+- Advanced the framework prerelease version to `1.0.0-rc.3` while retaining
+  artifact, catalog, workflow, data-source, and workbench schema `1.0.0`.
+  Historical schema-1.0 artifacts remain on the additive compatibility line.
+- Added declarative, hash-frozen model-manifest bindings for data sources,
+  workbench contributions, and complete workflows, plus provider containment,
+  capability/reference validation, clean generic fallback, and scoped external
+  plugin registration/removal.
+- Added generic workflow descriptors, registry, runner, session/result, seed,
+  continuation, axis, data-source, branch-catalog, legacy-adapter, and
+  workbench contracts. Generic GUI/data/service/workflow code consumes these
+  provider contracts instead of selecting a canonical built-in model by ID.
+- Registered the quadruped RoadMap explore, validated apex-root continuation,
+  and tested experimental touchdown-section workflows. The reference binds
+  `PK_20_2` point 267, source-style axes/graphics, accepted root, adjacent or
+  generated seed, checkpointing, active-parameter tools, and both-direction
+  continuation.
+- Added an external analytic-hopper branch provider and root-continuation
+  workflow proof that requires no built-in catalog or `src/+lmz` edit.
+- Added selectable `scientific_workbench` and `classic_tabs` profiles. The
+  source-inspired profile preserves the three-row/two-column hierarchy and
+  nominal `3.35:1.85` ratio, keeps branch/data and status/progress visible,
+  hosts dense task panels in scrollable viewports, and expands at larger
+  window sizes. The classic six-tab shell remains available.
+- Split branch presentation into host-neutral data/navigation/canvas/
+  interaction/overlay components, with shared layers for selection, seeds,
+  prediction, corrected solution, seed pair, live continuation, and the final
+  or stopped partial branch. Accepted points update one layer incrementally;
+  the terminal result replaces that same layer in place.
+- Added typed, GUI-independent solve lifecycle/iteration snapshots and retained
+  progress in solve results/artifacts. GUI continuation exposes forward,
+  backward, and both directions; the registered quadruped workflow defaults to
+  both.
+- Added a public registered-workflow example, workflow/layout/source-parity
+  guides, detailed README usage, two model-authoring routes, configuration and
+  service documentation, migration status, and rc.3 compatibility contracts.
+- The unchanged committed Round 10 suite passed 544/544 as the Round 11
+  pre-edit baseline at HEAD
+  `5c6a6c100f752ea6ed1fd20114f84800f9b52070`.
+  `ROUND11_LOCAL_AUTOMATION_PASSED`: the final sequential R2025b suite passed
+  631/631; all 55 public examples and clean-copy isolation passed; coverage was
+  23,614/29,755 statements across 375 files/34 packages with all stable floors
+  passing; quality/architecture/R2019b static scans were clean; both
+  three-repetition performance reports had zero median overruns; and temporary
+  core/scientific ZIP/toolbox installs passed while unauthorized and
+  unretained. Remote CI, human desktop QA, R2019b runtime, and redistribution
+  authority remain external gates; rc.3 is not an authorized public release.
+
 ## 1.0.0-rc.2 — Round 10 rank-aware timing and multiple shooting
 
 - Advanced the framework prerelease version to `1.0.0-rc.2` while retaining
@@ -54,15 +103,20 @@
   README usage path, and added public examples for rectangular timing, timing
   families, analytic multiple shooting, heterogeneous plans, scientific
   sections, and quad-load horizon workflows.
-- `ROUND10_LOCAL_AUTOMATION_PASSED`: the final R2025b suite passed 544/544,
-  all 54 public examples and clean-copy isolation passed, coverage reached
+- Round 10 is committed at public HEAD
+  `5c6a6c100f752ea6ed1fd20114f84800f9b52070`.
+  `ROUND10_LOCAL_AUTOMATION_PASSED`: the locally executed final R2025b suite
+  passed 544/544, all 54 public examples and clean-copy isolation passed, and
+  coverage reached
   19,973/25,363 statements (78.74857075267121%) with every stable floor green,
   quality/architecture/R2019b static checks reported zero violations, and the
   29-workflow × 3 performance matrix had zero overruns. The 932-file inventory
   retains 917 blockers; temporary core/scientific ZIP and toolbox clean installs
   passed but remained unauthorized, unretained, and `NOT_FOR_REDISTRIBUTION`.
   Remote CI, human desktop QA, R2019b runtime, and redistribution authority
-  remain open external gates.
+  remain open external gates. These local results are not remote-CI,
+  human-desktop, R2019b-runtime, redistribution-authority, or public-release
+  evidence.
 
 ## 1.0.0-rc.1 — Round 9 configurable sections and N-stride workflows
 

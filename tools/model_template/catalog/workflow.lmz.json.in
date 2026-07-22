@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "periodic_branch_workflow",
+  "label": "Generated periodic-branch solve and continuation",
+  "modelId": "{{MODEL_ID}}",
+  "problemId": "periodic_orbit",
+  "maturity": "experimental",
+  "validationStatus": "tested",
+  "dataSourceId": "generated_branch",
+  "defaultDatasetId": "generated_periodic_family",
+  "defaultPointIndex": 2,
+  "axisPresetId": "periodic_branch",
+  "visualizationProfileId": "clean_generic",
+  "layoutProfileId": "scientific_workbench",
+  "allowedSteps": ["load_data", "select_point", "simulate", "solve", "seed_pair", "continuation", "analysis"],
+  "seedPreset": {
+    "firstSeed": "locked_generated_branch_point",
+    "secondSeedOptions": ["adjacent_next", "adjacent_previous", "generated_corrected"],
+    "defaultSecondSeed": "adjacent_next",
+    "generatedRadius": 0.05,
+    "options": {
+      "sourceDatasetId": "generated_periodic_family",
+      "sourcePointIndex": 2,
+      "lockFirstSeed": true
+    }
+  },
+  "solveOptions": {
+    "FunctionTolerance": 1e-10,
+    "StepTolerance": 1e-10,
+    "MaxIterations": 100,
+    "MaxFunctionEvaluations": 500,
+    "Display": "off"
+  },
+  "continuationPreset": {
+    "directionMode": "both",
+    "directionLabels": {
+      "backward": "decreasing speed",
+      "forward": "increasing speed"
+    },
+    "checkpointEnabled": true,
+    "options": {
+      "InitialStep": 0.05,
+      "MinimumStep": 0.0001,
+      "MaximumStep": 0.1,
+      "MaximumPoints": 6,
+      "CorrectorTolerance": 1e-9,
+      "RequireFeasible": true
+    }
+  },
+  "homotopyPreset": {
+    "id": "disabled_homotopy",
+    "label": "Homotopy unavailable",
+    "values": {
+      "enabled": false
+    }
+  },
+  "familyScanPreset": {
+    "id": "disabled_family_scan",
+    "label": "Family scan unavailable",
+    "values": {
+      "enabled": false
+    }
+  },
+  "analysisViews": ["physical_simulation", "trajectory", "states"],
+  "provenance": {
+    "source": "new_model scientific periodic-branch template",
+    "construction": "deterministic generated branch",
+    "scientificClaim": false
+  }
+}

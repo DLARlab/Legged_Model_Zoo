@@ -18,16 +18,36 @@ classdef BranchTab < lmz.gui.tabs.BaseTab
         ZLimitsField
         IndexSpinner
         PercentSlider
+        FixedParameterDropDown
+        FixedValueDropDown
+        VaryingParameterDropDown
+        VaryingValueDropDown
+        DataToolbar
+        ParameterFilterPanel
+        BranchCanvas
+        AxisControlPanel
+        DatasetPanel
+        BranchNavigationPanel
+        OverlayController
     end
     properties (Access=private)
         IsRefreshing = false
         Palette
+        InteractionController = []
+        OwnsOverlayController = false
+        Placement = struct()
     end
 
     methods
         function obj=BranchTab(parent,controller,eventBus,preferences,varargin)
-            tab=uitab(parent,'Title','Scientific Branches','Tag','lmz-tab-branches');
-            obj@lmz.gui.tabs.BaseTab(tab,controller,eventBus,preferences,varargin{:});
+            [root,hostOptions,baseArguments]= ...
+                lmz.gui.layout.ComponentHost.create(parent, ...
+                'Scientific Branches','lmz-tab-branches',varargin{:});
+            obj@lmz.gui.tabs.BaseTab(root,controller,eventBus,preferences, ...
+                baseArguments{:});
+            obj.HostMode=hostOptions.HostMode;
+            obj.OverlayController=hostOptions.OverlayController;
+            obj.Placement=hostOptions.Placement;
             obj.Id='branches';obj.Palette=lmz.gui.Palette.named(preferences.palette());obj.build();
             obj.subscribe({lmz.gui.PresentationEvents.ModelChanged, ...
                 lmz.gui.PresentationEvents.ProblemChanged, ...
@@ -35,10 +55,19 @@ classdef BranchTab < lmz.gui.tabs.BaseTab
                 lmz.gui.PresentationEvents.SelectionChanged, ...
                 lmz.gui.PresentationEvents.BranchViewChanged, ...
                 lmz.gui.PresentationEvents.RunStateChanged});
+            if isempty(obj.OverlayController)
+                obj.OverlayController= ...
+                    lmz.gui.branch.BranchOverlayController(obj.Axes);
+                obj.OwnsOverlayController=true;
+            else
+                obj.OverlayController.attachAxes(obj.Axes);
+            end
             figureHandle=ancestor(obj.Root,'figure');
             if ~isempty(figureHandle)
-                figureHandle.WindowButtonMotionFcn=@(~,~)obj.hover();
-                figureHandle.KeyPressFcn=@(~,event)obj.navigate(event);
+                obj.InteractionController= ...
+                    lmz.gui.branch.BranchInteractionController( ...
+                    figureHandle,@(~,~)obj.hover(), ...
+                    @(~,event)obj.navigate(event));
             end
             obj.setCapabilities(controller.capabilities());obj.refresh();
         end
@@ -46,92 +75,114 @@ classdef BranchTab < lmz.gui.tabs.BaseTab
         function build(obj)
             rootGrid=uigridlayout(obj.Root,[3 2]);
             rootGrid.RowHeight={84,'1x',116};rootGrid.ColumnWidth={'1x',315};
-            buttons=uigridlayout(rootGrid,[2 9]);place(buttons,1,[1 2]);
-            buttons.ColumnWidth={165,95,85,92,105,90,105,105,'1x'};
-            obj.CatalogDropDown=uidropdown(buttons,'Tag','lmz-branch-catalog', ...
-                'Tooltip','Choose a built-in scientific branch or dataset.');place(obj.CatalogDropDown,1,1);
-            controls={ ...
-                makeButton(buttons,'Load selected','load-selected',@()obj.loadSelected()), ...
-                makeButton(buttons,'Load all','load-all',@()obj.loadAll()), ...
-                makeButton(buttons,'Open folder…','open-folder',@()obj.openFolder()), ...
-                makeButton(buttons,'Open MAT/artifact…','open-file',@()obj.openFile()), ...
-                makeButton(buttons,'Reload','reload',@()obj.reload()), ...
-                makeButton(buttons,'Remove selected','remove',@()obj.remove()), ...
-                makeButton(buttons,'Save native…','save',@()obj.save()), ...
-                makeButton(buttons,'Export legacy…','export-legacy',@()obj.exportLegacy())};
-            for index=1:numel(controls),place(controls{index},1,index+1);end
-            lowerButtons={ ...
-                makeButton(buttons,'Plot selected','plot-selected',@()obj.plotSelected()), ...
-                makeButton(buttons,'Plot all','plot-all',@()obj.plotAll()), ...
-                makeButton(buttons,'Clear plot','clear-plot',@()obj.clearPlot()), ...
-                makeButton(buttons,'RoadMap preset','preset',@()obj.preset()), ...
-                makeButton(buttons,'Export plot…','export-plot',@()obj.exportPlot())};
-            for index=1:numel(lowerButtons),place(lowerButtons{index},2,index);end
-            obj.ActionControls=[controls lowerButtons {obj.CatalogDropDown}];
-            obj.Axes=uiaxes(rootGrid,'Tag','lmz-branch-axes');place(obj.Axes,2,1);
-            obj.Axes.XGrid='on';obj.Axes.YGrid='on';title(obj.Axes,'Scientific branches');
-            side=uigridlayout(rootGrid,[4 1]);place(side,2,2);side.RowHeight={24,'1x',28,112};
-            uilabel(side,'Text','Datasets (active selection)','FontWeight','bold');
-            obj.DatasetList=uilistbox(side,'Tag','lmz-branch-datasets', ...
-                'Tooltip','Select the active scientific dataset.', ...
-                'ValueChangedFcn',@(~,~)obj.datasetChanged());
-            obj.VisibilityCheckBox=uicheckbox(side,'Text','Visible','Value',true, ...
-                'Tag','lmz-branch-visible','ValueChangedFcn',@(~,~)obj.visibilityChanged());
-            obj.MetadataArea=uitextarea(side,'Editable','off','Value',{'No dataset'}, ...
-                'Tag','lmz-branch-metadata','Tooltip','Copyable source and dataset metadata.');
-            axisControls=uigridlayout(rootGrid,[3 10]);place(axisControls,3,[1 2]);
-            axisControls.ColumnWidth={24,'1x',24,'1x',24,'1x',64,52,62,92};
-            label=uilabel(axisControls,'Text','X');place(label,1,1);
-            obj.XDropDown=axisDropDown(axisControls,'x',@()obj.axesChanged());place(obj.XDropDown,1,2);
-            label=uilabel(axisControls,'Text','Y');place(label,1,3);
-            obj.YDropDown=axisDropDown(axisControls,'y',@()obj.axesChanged());place(obj.YDropDown,1,4);
-            label=uilabel(axisControls,'Text','Z');place(label,1,5);
-            obj.ZDropDown=axisDropDown(axisControls,'z',@()obj.axesChanged());place(obj.ZDropDown,1,6);
-            obj.DimensionDropDown=uidropdown(axisControls,'Items',{'2-D','3-D'}, ...
-                'Tag','lmz-branch-dimension','Tooltip','Switch between 2-D and 3-D branch views.', ...
-                'ValueChangedFcn',@(~,~)obj.axesChanged());place(obj.DimensionDropDown,1,7);
-            label=uilabel(axisControls,'Text','Index');place(label,1,8);
-            obj.IndexSpinner=uispinner(axisControls,'Limits',[1 Inf],'Step',1, ...
-                'RoundFractionalValues','on','Tag','lmz-branch-index', ...
-                'ValueChangedFcn',@(~,~)obj.indexChanged());place(obj.IndexSpinner,1,9);
-            obj.PercentSlider=uislider(axisControls,'Limits',[0 100], ...
-                'Tag','lmz-branch-percent','Tooltip','Navigate by percentage along the active branch.', ...
-                'ValueChangedFcn',@(~,~)obj.percentChanged());place(obj.PercentSlider,1,10);
-            label=uilabel(axisControls,'Text','Az');place(label,2,1);
-            obj.AzimuthSpinner=uispinner(axisControls,'Limits',[-180 180],'Value',0, ...
-                'Tag','lmz-branch-azimuth','ValueChangedFcn',@(~,~)obj.viewChanged());place(obj.AzimuthSpinner,2,2);
-            label=uilabel(axisControls,'Text','El');place(label,2,3);
-            obj.ElevationSpinner=uispinner(axisControls,'Limits',[-90 90],'Value',90, ...
-                'Tag','lmz-branch-elevation','ValueChangedFcn',@(~,~)obj.viewChanged());place(obj.ElevationSpinner,2,4);
-            label=uilabel(axisControls,'Text','Aspect');place(label,2,5);
-            obj.AspectDropDown=uidropdown(axisControls,'Items',{'auto','equal'}, ...
-                'Value','auto','Tag','lmz-branch-aspect', ...
-                'ValueChangedFcn',@(~,~)obj.viewChanged());place(obj.AspectDropDown,2,6);
-            label=uilabel(axisControls,'Text','Branch %');place(label,2,8);
-            label=uilabel(axisControls,'Text','X lim');place(label,3,1);
-            obj.XLimitsField=limitField(axisControls,'x',@()obj.applyLimits());place(obj.XLimitsField,3,2);
-            label=uilabel(axisControls,'Text','Y lim');place(label,3,3);
-            obj.YLimitsField=limitField(axisControls,'y',@()obj.applyLimits());place(obj.YLimitsField,3,4);
-            label=uilabel(axisControls,'Text','Z lim');place(label,3,5);
-            obj.ZLimitsField=limitField(axisControls,'z',@()obj.applyLimits());place(obj.ZLimitsField,3,6);
-            label=uilabel(axisControls,'Text','Use [min max] or auto');place(label,3,[8 10]);
-            obj.ActionControls=[obj.ActionControls {obj.DatasetList obj.VisibilityCheckBox ...
+            toolbarCallbacks=struct( ...
+                'LoadSelected',@()obj.loadSelected(), ...
+                'LoadAll',@()obj.loadAll(), ...
+                'OpenFolder',@()obj.openFolder(), ...
+                'OpenFile',@()obj.openFile(), ...
+                'Reload',@()obj.reload(), ...
+                'Remove',@()obj.remove(), ...
+                'Save',@()obj.save(), ...
+                'ExportLegacy',@()obj.exportLegacy(), ...
+                'PlotSelected',@()obj.plotSelected(), ...
+                'PlotAll',@()obj.plotAll(), ...
+                'ClearPlot',@()obj.clearPlot(), ...
+                'Preset',@()obj.preset(), ...
+                'ExportPlot',@()obj.exportPlot());
+            obj.DataToolbar=lmz.gui.branch.DataToolbar( ...
+                rootGrid,toolbarCallbacks);
+            buttons=obj.DataToolbar.Root;place(buttons,1,[1 2]);
+            toolbarControls=obj.DataToolbar.Controls;
+            obj.CatalogDropDown=toolbarControls.CatalogDropDown;
+            controls=toolbarControls.Buttons;
+            lowerButtons=toolbarControls.PlotButtons;
+
+            filterCallbacks=struct( ...
+                'FilterChanged',@()obj.parameterFilterChanged(), ...
+                'VaryingValueChanged',@()obj.varyingValueChanged());
+            obj.ParameterFilterPanel= ...
+                lmz.gui.branch.ParameterFilterPanel( ...
+                buttons,filterCallbacks);
+            place(obj.ParameterFilterPanel.Root,2,[6 9]);
+            filterControls=obj.ParameterFilterPanel.Controls;
+            obj.FixedParameterDropDown=filterControls.FixedParameter;
+            obj.FixedValueDropDown=filterControls.FixedValue;
+            obj.VaryingParameterDropDown=filterControls.VaryingParameter;
+            obj.VaryingValueDropDown=filterControls.VaryingValue;
+
+            obj.BranchCanvas=lmz.gui.branch.BranchCanvas(rootGrid);
+            place(obj.BranchCanvas.Root,2,1);
+            obj.Axes=obj.BranchCanvas.Controls.Axes;
+
+            datasetCallbacks=struct( ...
+                'DatasetChanged',@()obj.datasetChanged(), ...
+                'VisibilityChanged',@()obj.visibilityChanged());
+            obj.DatasetPanel=lmz.gui.branch.DatasetPanel( ...
+                rootGrid,datasetCallbacks);
+            side=obj.DatasetPanel.Root;place(side,2,2);
+            datasetControls=obj.DatasetPanel.Controls;
+            obj.DatasetList=datasetControls.List;
+            obj.VisibilityCheckBox=datasetControls.Visible;
+            obj.MetadataArea=datasetControls.Metadata;
+
+            axisCallbacks=struct( ...
+                'AxesChanged',@()obj.axesChanged(), ...
+                'ViewChanged',@()obj.viewChanged(), ...
+                'ApplyLimits',@()obj.applyLimits());
+            obj.AxisControlPanel=lmz.gui.branch.AxisControlPanel( ...
+                rootGrid,axisCallbacks);
+            axisControls=obj.AxisControlPanel.Root;
+            place(axisControls,3,[1 2]);
+            axisWidgets=obj.AxisControlPanel.Controls;
+            obj.XDropDown=axisWidgets.X;
+            obj.YDropDown=axisWidgets.Y;
+            obj.ZDropDown=axisWidgets.Z;
+            obj.DimensionDropDown=axisWidgets.Dimension;
+            obj.AzimuthSpinner=axisWidgets.Azimuth;
+            obj.ElevationSpinner=axisWidgets.Elevation;
+            obj.AspectDropDown=axisWidgets.Aspect;
+            obj.XLimitsField=axisWidgets.XLimits;
+            obj.YLimitsField=axisWidgets.YLimits;
+            obj.ZLimitsField=axisWidgets.ZLimits;
+
+            navigationCallbacks=struct( ...
+                'IndexChanged',@()obj.indexChanged(), ...
+                'PercentChanged',@()obj.percentChanged());
+            obj.BranchNavigationPanel= ...
+                lmz.gui.branch.BranchNavigationPanel( ...
+                axisControls,navigationCallbacks);
+            place(obj.BranchNavigationPanel.Root,[1 2],[8 10]);
+            navigation=obj.BranchNavigationPanel.Controls;
+            obj.IndexSpinner=navigation.Index;
+            obj.PercentSlider=navigation.Percentage;
+
+            obj.ActionControls=[controls lowerButtons ...
+                {obj.CatalogDropDown obj.DatasetList obj.VisibilityCheckBox ...
                 obj.XDropDown obj.YDropDown obj.ZDropDown obj.DimensionDropDown ...
                 obj.AzimuthSpinner obj.ElevationSpinner obj.AspectDropDown ...
                 obj.XLimitsField obj.YLimitsField obj.ZLimitsField ...
                 obj.IndexSpinner obj.PercentSlider}];
+            obj.ActionControls=[obj.ActionControls {obj.FixedParameterDropDown ...
+                obj.FixedValueDropDown obj.VaryingParameterDropDown ...
+                obj.VaryingValueDropDown}];
+            obj.applyWorkspacePlacement(rootGrid,buttons,side);
         end
 
         function refresh(obj,varargin)
             if obj.IsRefreshing,return,end
             obj.IsRefreshing=true;cleanup=onCleanup(@()obj.finishRefresh());
-            refresh@lmz.gui.tabs.BaseTab(obj);obj.refreshCatalog();obj.refreshDatasets();obj.render();
+            refresh@lmz.gui.tabs.BaseTab(obj);obj.refreshCatalog(); ...
+                obj.refreshDatasets();obj.refreshParameterFilters();obj.render();
             clear cleanup
         end
 
         function setPalette(obj,value)
             if ischar(value)||isstring(value),value=lmz.gui.Palette.named(value);end
-            obj.Palette=value;obj.render();
+            obj.Palette=value;
+            if ~isempty(obj.OverlayController)&&isvalid(obj.OverlayController)
+                obj.OverlayController.setPalette(value);
+            end
+            obj.render();
         end
 
         function hooks=testHooks(obj)
@@ -149,49 +200,115 @@ classdef BranchTab < lmz.gui.tabs.BaseTab
     end
 
     methods (Access=protected)
+        function onPresentationEvents(obj,batch)
+            names={batch.Name};
+            if any(ismember(names,{lmz.gui.PresentationEvents.ModelChanged, ...
+                    lmz.gui.PresentationEvents.WorkflowChanged, ...
+                    lmz.gui.PresentationEvents.ProblemChanged}))&& ...
+                    ~isempty(obj.OverlayController)
+                obj.OverlayController.clearRunLayers();
+                obj.OverlayController.clearLayer('hover_point');
+            end
+            obj.refresh(batch);
+        end
+
         function controls=controlMap(obj)
             controls=struct('Axes',obj.Axes,'CatalogDropDown',obj.CatalogDropDown, ...
                 'DatasetList',obj.DatasetList,'VisibilityCheckBox',obj.VisibilityCheckBox, ...
                 'MetadataArea',obj.MetadataArea,'XDropDown',obj.XDropDown, ...
                 'YDropDown',obj.YDropDown,'ZDropDown',obj.ZDropDown, ...
                 'DimensionDropDown',obj.DimensionDropDown,'IndexSpinner',obj.IndexSpinner, ...
-                'PercentSlider',obj.PercentSlider);
+                'PercentSlider',obj.PercentSlider, ...
+                'FixedParameterDropDown',obj.FixedParameterDropDown, ...
+                'FixedValueDropDown',obj.FixedValueDropDown, ...
+                'VaryingParameterDropDown',obj.VaryingParameterDropDown, ...
+                'VaryingValueDropDown',obj.VaryingValueDropDown);
         end
 
         function beforeDelete(obj)
-            figureHandle=[];
-            if ~isempty(obj.Root)&&isvalid(obj.Root),figureHandle=ancestor(obj.Root,'figure');end
-            if ~isempty(figureHandle)&&isvalid(figureHandle)
-                figureHandle.WindowButtonMotionFcn=[];figureHandle.KeyPressFcn=[];
+            if ~isempty(obj.InteractionController)&& ...
+                    isvalid(obj.InteractionController)
+                delete(obj.InteractionController);
             end
+            obj.InteractionController=[];
+            if obj.OwnsOverlayController&&~isempty(obj.OverlayController)&& ...
+                    isvalid(obj.OverlayController)
+                delete(obj.OverlayController);
+            end
+            obj.OverlayController=[];
+            components={obj.ParameterFilterPanel,obj.DataToolbar, ...
+                obj.BranchNavigationPanel,obj.AxisControlPanel, ...
+                obj.DatasetPanel,obj.BranchCanvas};
+            for index=1:numel(components)
+                component=components{index};
+                if ~isempty(component)&&isvalid(component),delete(component);end
+            end
+            obj.ParameterFilterPanel=[];obj.DataToolbar=[];
+            obj.BranchNavigationPanel=[];obj.AxisControlPanel=[];
+            obj.DatasetPanel=[];obj.BranchCanvas=[];
         end
     end
 
     methods (Access=private)
+        function applyWorkspacePlacement(obj,rootGrid,buttons,side)
+            if ~strcmp(obj.HostMode,'workspace')||isempty(fieldnames(obj.Placement))
+                return
+            end
+            buttons.ColumnWidth={120,65,58,68,74,60,70,70,'1x'};
+            if ~isempty(obj.ParameterFilterPanel)&& ...
+                    isvalid(obj.ParameterFilterPanel)&& ...
+                    ~isempty(obj.ParameterFilterPanel.Root)&& ...
+                    isvalid(obj.ParameterFilterPanel.Root)
+                obj.ParameterFilterPanel.Root.ColumnWidth= ...
+                    {60,70,70,'1x'};
+            end
+            if isfield(obj.Placement,'DataParent')&& ...
+                    ~isempty(obj.Placement.DataParent)&& ...
+                    isvalid(obj.Placement.DataParent)
+                buttons.Parent=obj.Placement.DataParent;
+                buttons.Layout.Row=1;buttons.Layout.Column=1;
+                rootGrid.RowHeight={0,'1x',116};
+            end
+            if isfield(obj.Placement,'InfoParent')&& ...
+                    ~isempty(obj.Placement.InfoParent)&& ...
+                    isvalid(obj.Placement.InfoParent)
+                side.Parent=obj.Placement.InfoParent;
+                side.Layout.Row=1;side.Layout.Column=1;
+                rootGrid.ColumnWidth={'1x',0};
+            end
+        end
+
         function finishRefresh(obj),obj.IsRefreshing=false;end
         function refreshCatalog(obj)
-            switch obj.Controller.State.ModelId
-                case 'slip_quadruped'
-                    catalog=lmzmodels.slip_quadruped.RoadMapCatalog.default();
-                    files=catalog.listBranches();defaultPath=catalog.defaultBranchPath();
-                    title(obj.Axes,'SLIP quadruped RoadMap');
-                case 'slip_biped'
-                    catalog=lmzmodels.slip_biped.GaitMapCatalog.default();
-                    files=catalog.listBranches();defaultPath=catalog.defaultBranchPath();
-                    title(obj.Axes,'SLIP biped GaitMap');
-                case 'slip_quad_load'
-                    catalog=lmzmodels.slip_quad_load.ScientificDatasetCatalog.default();
-                    records=catalog.records();files=cell(1,numel(records));
-                    for index=1:numel(records),files{index}=catalog.pathFor(records(index).id);end
-                    defaultPath=catalog.defaultMultiPath();title(obj.Axes,'SLIP quadruped-with-load datasets');
-                otherwise
-                    obj.CatalogDropDown.Items={'No built-in scientific dataset'};
-                    obj.CatalogDropDown.ItemsData={''};obj.CatalogDropDown.Value='';return
+            if ismethod(obj.Controller,'dataSourceDescriptors')
+                descriptors=obj.Controller.dataSourceDescriptors();
+                files=cell(1,numel(descriptors));labels=files;defaultPath='';
+                for index=1:numel(descriptors)
+                    files{index}=descriptorField(descriptors(index),'id','');
+                    labels{index}=descriptorField(descriptors(index),'label',files{index});
+                    if descriptorField(descriptors(index),'isDefault',false)
+                        defaultPath=files{index};
+                    end
+                end
+            else
+                datasets=obj.Controller.State.Datasets;
+                files=cell(1,numel(datasets));labels=files;
+                for index=1:numel(datasets)
+                    files{index}=datasets{index}.SourcePath;
+                    labels{index}=datasets{index}.Name;
+                end
+                defaultPath='';
             end
-            labels=cell(size(files));
-            for index=1:numel(files),[~,name,extension]=fileparts(files{index});labels{index}=[name extension];end
+            if isempty(files)
+                obj.CatalogDropDown.Items={'No registered scientific dataset'};
+                obj.CatalogDropDown.ItemsData={''};obj.CatalogDropDown.Value='';return
+            end
             obj.CatalogDropDown.Items=labels;obj.CatalogDropDown.ItemsData=files;
-            if any(strcmp(defaultPath,files)),obj.CatalogDropDown.Value=defaultPath;end
+            if any(strcmp(defaultPath,files))
+                obj.CatalogDropDown.Value=defaultPath;
+            elseif ~any(strcmp(obj.CatalogDropDown.Value,files))
+                obj.CatalogDropDown.Value=files{1};
+            end
         end
         function refreshDatasets(obj)
             datasets=obj.Controller.State.Datasets;items=cell(1,numel(datasets));ids=cell(1,numel(datasets));
@@ -237,60 +354,100 @@ classdef BranchTab < lmz.gui.tabs.BaseTab
         function loadSelected(obj)
             if isempty(obj.CatalogDropDown.Value),return,end
             try
-                switch obj.Controller.State.ModelId
-                    case 'slip_quadruped',obj.Controller.loadRoadMap(obj.CatalogDropDown.Value);
-                    case 'slip_biped',obj.Controller.loadGaitMap(obj.CatalogDropDown.Value);
-                    case 'slip_quad_load',obj.Controller.loadScientificLoadDataset(obj.CatalogDropDown.Value);
+                if ismethod(obj.Controller,'loadDataSource')
+                    obj.Controller.loadDataSource(obj.CatalogDropDown.Value);
+                else
+                    obj.Controller.openBranch(obj.CatalogDropDown.Value);
                 end
-            catch exception,obj.reportError(exception);end
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function loadAll(obj)
             try
-                switch obj.Controller.State.ModelId
-                    case 'slip_quadruped',obj.Controller.loadAllRoadMapBranches();
-                    case 'slip_biped',obj.Controller.loadAllGaitMapBranches();
-                    case 'slip_quad_load',obj.Controller.loadAllScientificLoadDatasets();
+                if ismethod(obj.Controller,'loadAllDataSources')
+                    obj.Controller.loadAllDataSources();
+                elseif ~isempty(obj.Controller.State.RoadMapCatalog)
+                    obj.Controller.loadAllRoadMapBranches();
                 end
-            catch exception,obj.reportError(exception);end
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function openFolder(obj)
             start=obj.Preferences.recentDataFolder(pwd);
             folder=uigetdir(start,'Open folder containing MAT/artifact branches');
             if isequal(folder,0),return,end
-            try,obj.Controller.openBranchFolder(folder);obj.Preferences.rememberDataFolder(folder); ...
-            catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.openBranchFolder(folder);
+                obj.Preferences.rememberDataFolder(folder);
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function openFile(obj)
             start=obj.Preferences.recentDataFolder(pwd);
             [file,path]=uigetfile(fullfile(start,'*.mat'),'Open branch');if isequal(file,0),return,end
-            try,obj.Controller.openBranch(fullfile(path,file));obj.Preferences.rememberDataFolder(path); ...
-            catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.openBranch(fullfile(path,file));
+                obj.Preferences.rememberDataFolder(path);
+            catch exception
+                obj.reportError(exception);
+            end
         end
-        function reload(obj),try,obj.Controller.reloadActiveDataset();catch exception,obj.reportError(exception);end,end
+        function reload(obj)
+            try
+                obj.Controller.reloadActiveDataset();
+            catch exception
+                obj.reportError(exception);
+            end
+        end
         function remove(obj)
             if isempty(obj.Controller.State.Datasets),return,end
-            try,obj.Controller.removeDataset(obj.Controller.State.ActiveDatasetId);catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.removeDataset(obj.Controller.State.ActiveDatasetId);
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function datasetChanged(obj)
-            try,obj.Controller.setActiveDataset(obj.DatasetList.Value);catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.setActiveDataset(obj.DatasetList.Value);
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function visibilityChanged(obj)
-            try,obj.Controller.setDatasetVisibility(obj.Controller.State.ActiveDatasetId, ...
-                    obj.VisibilityCheckBox.Value);catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.setDatasetVisibility( ...
+                    obj.Controller.State.ActiveDatasetId, ...
+                    obj.VisibilityCheckBox.Value);
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function plotSelected(obj),obj.Controller.showOnlyActiveDataset();end
         function plotAll(obj),obj.Controller.setAllDatasetsVisible(true);end
         function clearPlot(obj),obj.Controller.setAllDatasetsVisible(false);end
         function axesChanged(obj)
-            try,obj.Controller.setAxisVariables(obj.XDropDown.Value,obj.YDropDown.Value, ...
-                    obj.ZDropDown.Value);obj.render();catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.setAxisVariables(obj.XDropDown.Value, ...
+                    obj.YDropDown.Value,obj.ZDropDown.Value);
+                obj.render();
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function preset(obj)
-            switch obj.Controller.State.ModelId
-                case 'slip_quadruped',names={'dx','dphi','y'};limits={'[0 10]','[-0.05 0.15]','[0.6 1.2]'};
-                case 'slip_biped',names={'dx','alphaL','y'};limits={'auto','auto','auto'};
-                case 'slip_quad_load',names={'quad_dx','tAPEX','tugline_stiffness'};limits={'auto','auto','auto'};
-                otherwise,return
+            if ismethod(obj.Controller,'axisPreset')
+                preset=obj.Controller.axisPreset();names=preset.Coordinates;
+                limits=preset.Limits;
+            elseif ~isempty(obj.Controller.State.Datasets)
+                names=obj.Controller.activeDataset().Branch.coordinateNames();
+                if numel(names)<3,return,end
+                names=names(1:3);limits={'auto','auto','auto'};
+            else
+                return
             end
             obj.XDropDown.Value=names{1};obj.YDropDown.Value=names{2};obj.ZDropDown.Value=names{3};
             obj.DimensionDropDown.Value='2-D';obj.AzimuthSpinner.Value=0;obj.ElevationSpinner.Value=90;
@@ -300,20 +457,42 @@ classdef BranchTab < lmz.gui.tabs.BaseTab
         function viewChanged(obj)
             if strcmp(obj.DimensionDropDown.Value,'3-D')
                 view(obj.Axes,obj.AzimuthSpinner.Value,obj.ElevationSpinner.Value);
-            else,view(obj.Axes,2);end
+            else
+                view(obj.Axes,2);
+            end
             if strcmp(obj.AspectDropDown.Value,'equal'),axis(obj.Axes,'equal');else,axis(obj.Axes,'normal');end
         end
         function applyLimits(obj)
-            try,applyLimit(obj.Axes,'x',obj.XLimitsField.Value);applyLimit(obj.Axes,'y',obj.YLimitsField.Value);applyLimit(obj.Axes,'z',obj.ZLimitsField.Value);catch exception,obj.reportError(exception);end
+            try
+                applyLimit(obj.Axes,'x',obj.XLimitsField.Value);
+                applyLimit(obj.Axes,'y',obj.YLimitsField.Value);
+                applyLimit(obj.Axes,'z',obj.ZLimitsField.Value);
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function render(obj)
             if isempty(obj.Axes)||~isgraphics(obj.Axes),return,end
-            cla(obj.Axes);if isempty(obj.Controller.State.Datasets),return,end
+            clearBranchContent(obj.Axes);
+            if isempty(obj.Controller.State.Datasets)
+                if ~isempty(obj.OverlayController)
+                    obj.OverlayController.clearLayer('source_branches');
+                    obj.OverlayController.clearLayer('locked_point');
+                    obj.OverlayController.clearLayer('hover_point');
+                end
+                return
+            end
             hold(obj.Axes,'on');names=obj.Controller.State.AxisVariables;
             is3=strcmp(obj.DimensionDropDown.Value,'3-D');datasets=obj.Controller.State.Datasets;
+            active=obj.Controller.activeDataset();shownDatasets=0;shownPoints=0;
             for index=1:numel(datasets)
                 dataset=datasets{index};if ~dataset.Visible,continue,end
-                x=dataset.Branch.coordinate(names{1});y=dataset.Branch.coordinate(names{2});
+                if strcmp(dataset.Id,active.Id),continue,end
+                if ~obj.datasetPassesFixedFilter(dataset),continue,end
+                mask=obj.pointFilterMask(dataset.Branch);
+                if ~any(mask),continue,end
+                x=dataset.Branch.coordinate(names{1});x=x(mask);
+                y=dataset.Branch.coordinate(names{2});y=y(mask);
                 color=styleField(dataset.DisplayStyle,'Color',lineColor(index));
                 lineStyle=styleField(dataset.DisplayStyle,'LineStyle','-');
                 marker=styleField(dataset.DisplayStyle,'Marker','none');
@@ -321,7 +500,8 @@ classdef BranchTab < lmz.gui.tabs.BaseTab
                     marker=markerFor(index);
                 end
                 if is3
-                    z=dataset.Branch.coordinate(names{3});lineHandle=plot3(obj.Axes,x,y,z, ...
+                    z=dataset.Branch.coordinate(names{3});z=z(mask);
+                    lineHandle=plot3(obj.Axes,x,y,z, ...
                         'Color',color,'LineStyle',lineStyle,'Marker',marker,'LineWidth',1.8);
                 else
                     lineHandle=plot(obj.Axes,x,y,'Color',color,'LineStyle',lineStyle, ...
@@ -329,23 +509,53 @@ classdef BranchTab < lmz.gui.tabs.BaseTab
                 end
                 lineHandle.UserData=dataset.Id;
                 lineHandle.ButtonDownFcn=@(~,event)obj.clicked(dataset.Id,event);
+                shownDatasets=shownDatasets+1;shownPoints=shownPoints+sum(mask);
             end
-            obj.plotLocked();hold(obj.Axes,'off');grid(obj.Axes,'on');
+            hold(obj.Axes,'off');grid(obj.Axes,'on');
             xlabel(obj.Axes,names{1},'Interpreter','none');ylabel(obj.Axes,names{2},'Interpreter','none');
             if is3,zlabel(obj.Axes,names{3},'Interpreter','none');end
             obj.viewChanged();obj.applyLimits();
-        end
-        function plotLocked(obj)
-            selection=obj.Controller.State.LockedSelection;if isempty(selection),return,end
-            try,dataset=obj.Controller.activeDataset();catch,return,end
-            if ~strcmp(selection.DatasetId,dataset.Id)||~dataset.Visible,return,end
-            names=obj.Controller.State.AxisVariables;index=selection.PointIndex;
-            x=dataset.Branch.coordinate(names{1});y=dataset.Branch.coordinate(names{2});
-            args={'Color','k','Marker',obj.Palette.LockedMarker,'MarkerFaceColor', ...
-                obj.Palette.LockedColor,'MarkerSize',12,'LineStyle','none','Tag','LockedPoint'};
-            if strcmp(obj.DimensionDropDown.Value,'3-D')
-                z=dataset.Branch.coordinate(names{3});plot3(obj.Axes,x(index),y(index),z(index),args{:});
-            else,plot(obj.Axes,x(index),y(index),args{:});end
+            obj.OverlayController.attachAxes(obj.Axes);
+            obj.OverlayController.setAxisContext(names,is3);
+            if active.Visible&&obj.datasetPassesFixedFilter(active)
+                mask=obj.pointFilterMask(active.Branch);
+                if any(mask)
+                    coordinates=nan(numel(names),sum(mask));
+                    for nameIndex=1:numel(names)
+                        values=active.Branch.coordinate(names{nameIndex});
+                        coordinates(nameIndex,:)=values(mask);
+                    end
+                    obj.OverlayController.setCoordinates('source_branches', ...
+                        coordinates);
+                    sourceHandle=obj.OverlayController.layerHandle( ...
+                        'source_branches');
+                    if ~isempty(sourceHandle)&&isgraphics(sourceHandle)
+                        sourceHandle.UserData=active.Id;
+                        sourceHandle.ButtonDownFcn= ...
+                            @(~,event)obj.clicked(active.Id,event);
+                    end
+                    shownDatasets=shownDatasets+1;
+                    shownPoints=shownPoints+sum(mask);
+                else
+                    obj.OverlayController.clearLayer('source_branches');
+                end
+            else
+                obj.OverlayController.clearLayer('source_branches');
+            end
+            obj.OverlayController.axesWasCleared();
+            title(obj.Axes,sprintf( ...
+                'Scientific branches — %d datasets, %d visible points', ...
+                shownDatasets,shownPoints));
+            selection=obj.Controller.State.LockedSelection;
+            if isempty(selection)||~obj.selectionPassesFilters(selection)
+                obj.OverlayController.clearLayer('locked_point');
+            else
+                try
+                    obj.OverlayController.setSolution('locked_point', ...
+                        obj.Controller.lockedSolution());
+                catch
+                end
+            end
         end
         function hover(obj)
             if isempty(obj.Axes)||~isgraphics(obj.Axes)||isempty(obj.Controller.State.Datasets),return,end
@@ -358,16 +568,13 @@ classdef BranchTab < lmz.gui.tabs.BaseTab
                 coordinates=obj.Controller.State.AxisVariables(1:dimensions);
                 [selection,details]=obj.Controller.hoverNearestVisiblePoint( ...
                     coordinates,point(1,1:dimensions));
-                delete(findobj(obj.Axes,'Tag','HoverPoint'));delete(findobj(obj.Axes,'Tag','HoverDataTip'));
+                delete(findobj(obj.Axes,'Tag','HoverDataTip'));
                 holdState=ishold(obj.Axes);hold(obj.Axes,'on');values=cell2mat(details.Values);
-                args={'Color','k','Marker',obj.Palette.HoverMarker,'MarkerFaceColor', ...
-                    obj.Palette.HoverColor,'MarkerSize',7,'LineStyle','none','Tag','HoverPoint'};
+                obj.OverlayController.setCoordinates('hover_point',values(:));
                 if dimensions==3
-                    plot3(obj.Axes,values(1),values(2),values(3),args{:});
                     tip=text(obj.Axes,values(1),values(2),values(3),hoverText(details,selection), ...
                         'BackgroundColor',obj.Palette.HoverColor,'Margin',3,'Tag','HoverDataTip','Interpreter','none');
                 else
-                    plot(obj.Axes,values(1),values(2),args{:});
                     tip=text(obj.Axes,values(1),values(2),hoverText(details,selection), ...
                         'BackgroundColor',obj.Palette.HoverColor,'Margin',3,'Tag','HoverDataTip','Interpreter','none');
                 end
@@ -377,13 +584,18 @@ classdef BranchTab < lmz.gui.tabs.BaseTab
         end
         function clicked(obj,datasetId,event)
             try
-                if isprop(event,'IntersectionPoint'),target=event.IntersectionPoint; ...
-                else,point=obj.Axes.CurrentPoint;target=point(1,:);end
+                if isprop(event,'IntersectionPoint')
+                    target=event.IntersectionPoint;
+                else
+                    point=obj.Axes.CurrentPoint;target=point(1,:);
+                end
                 dimensions=2;if strcmp(obj.DimensionDropDown.Value,'3-D'),dimensions=3;end
                 coordinates=obj.Controller.State.AxisVariables(1:dimensions);
                 selection=obj.Controller.hoverNearestPoint(datasetId,coordinates,target(1:dimensions));
                 obj.Controller.lockBranchPoint(datasetId,selection.PointIndex);
-            catch exception,obj.reportError(exception);end
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function navigate(obj,event)
             if ~obj.isSelectedTab()||isempty(obj.Controller.State.LockedSelection),return,end
@@ -399,41 +611,207 @@ classdef BranchTab < lmz.gui.tabs.BaseTab
         function result=isSelectedTab(obj)
             group=obj.Root.Parent;result=~isprop(group,'SelectedTab')||isequal(group.SelectedTab,obj.Root);
         end
-        function indexChanged(obj),try,obj.Controller.selectByIndex(obj.IndexSpinner.Value);catch exception,obj.reportError(exception);end,end
-        function percentChanged(obj),try,obj.Controller.selectByPercentage(obj.PercentSlider.Value);catch exception,obj.reportError(exception);end,end
+        function indexChanged(obj)
+            try
+                obj.Controller.selectByIndex(obj.IndexSpinner.Value);
+            catch exception
+                obj.reportError(exception);
+            end
+        end
+        function percentChanged(obj)
+            try
+                obj.Controller.selectByPercentage(obj.PercentSlider.Value);
+            catch exception
+                obj.reportError(exception);
+            end
+        end
         function save(obj)
             if isempty(obj.Controller.State.Datasets),return,end
             start=obj.Preferences.recentOutputFolder(pwd);
             [file,path]=uiputfile(fullfile(start,'*.lmz.mat'),'Save native branch');if isequal(file,0),return,end
-            try,obj.Controller.saveBranch(fullfile(path,file),obj.Controller.activeDataset().Branch);obj.Preferences.rememberOutputFolder(path);catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.saveBranch(fullfile(path,file), ...
+                    obj.Controller.activeDataset().Branch);
+                obj.Preferences.rememberOutputFolder(path);
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function exportLegacy(obj)
             if isempty(obj.Controller.State.Datasets),return,end
             start=obj.Preferences.recentOutputFolder(pwd);
             [file,path]=uiputfile(fullfile(start,'*.mat'),'Export legacy branch');if isequal(file,0),return,end
-            try,obj.Controller.exportLegacyBranch(fullfile(path,file),obj.Controller.activeDataset().Branch);obj.Preferences.rememberOutputFolder(path);catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.exportLegacyBranch(fullfile(path,file), ...
+                    obj.Controller.activeDataset().Branch);
+                obj.Preferences.rememberOutputFolder(path);
+            catch exception
+                obj.reportError(exception);
+            end
         end
         function exportPlot(obj)
             start=obj.Preferences.recentOutputFolder(pwd);
             [file,path]=uiputfile({'*.png';'*.pdf'},'Export branch plot',start);if isequal(file,0),return,end
-            try,obj.Controller.exportPlot(obj.Axes,fullfile(path,file));obj.Preferences.rememberOutputFolder(path);catch exception,obj.reportError(exception);end
+            try
+                obj.Controller.exportPlot(obj.Axes,fullfile(path,file));
+                obj.Preferences.rememberOutputFolder(path);
+            catch exception
+                obj.reportError(exception);
+            end
+        end
+
+        function refreshParameterFilters(obj)
+            if isempty(obj.Controller.State.Datasets)
+                obj.FixedParameterDropDown.Items={'<none>'};
+                obj.VaryingParameterDropDown.Items={'<none>'};
+                obj.FixedValueDropDown.Items={'<all>'};
+                obj.VaryingValueDropDown.Items={'<all>'};
+                return
+            end
+            branch=obj.Controller.activeDataset().Branch;
+            names=reshape(branch.ParameterSchema.names(),1,[]);
+            varying=obj.providerVaryingNames(branch);
+            configured=obj.ContributionParameterFilters();
+            configuredFixed=filterMetadataNames(configured, ...
+                {'fixedParameters','fixed','fixedParameterNames'});
+            configuredVarying=filterMetadataNames(configured, ...
+                {'varyingParameters','varying','varyingParameterNames'});
+            if ~isempty(configuredVarying)
+                varying=intersect(names,configuredVarying,'stable');
+            end
+            fixed=setdiff(names,varying,'stable');
+            if ~isempty(configuredFixed)
+                fixed=intersect(names,configuredFixed,'stable');
+            end
+            restoreDropDown(obj.FixedParameterDropDown, ...
+                [{'<none>'} fixed]);
+            restoreDropDown(obj.VaryingParameterDropDown, ...
+                [{'<none>'} varying]);
+            obj.parameterFilterChanged();
+        end
+
+        function parameterFilterChanged(obj)
+            restoreDropDown(obj.FixedValueDropDown,parameterValues( ...
+                obj.Controller,obj.FixedParameterDropDown.Value,true));
+            restoreDropDown(obj.VaryingValueDropDown,parameterValues( ...
+                obj.Controller,obj.VaryingParameterDropDown.Value,false));
+            if ~obj.IsRefreshing,obj.render();end
+        end
+
+        function varyingValueChanged(obj)
+            name=obj.VaryingParameterDropDown.Value;
+            value=obj.VaryingValueDropDown.Value;
+            obj.render();
+            if strcmp(name,'<none>')||strcmp(value,'<all>'),return,end
+            try
+                branch=obj.Controller.activeDataset().Branch;
+                values=branch.parameter(name);target=str2double(value);
+                [~,index]=min(abs(values-target));obj.Controller.selectByIndex(index);
+            catch exception
+                obj.reportError(exception);
+            end
+        end
+
+        function names=providerVaryingNames(obj,branch)
+            provider=obj.filterProvider();
+            try
+                if ~isempty(provider)&&ismethod(provider, ...
+                        'identifyVaryingParameter')
+                    names=provider.identifyVaryingParameter(branch);
+                else
+                    names=lmz.services.BranchService(). ...
+                        identifyVaryingParameter(branch);
+                end
+            catch
+                names={};
+            end
+            names=reshape(names,1,[]);
+        end
+
+        function value=ContributionParameterFilters(obj)
+            value=struct();
+            try
+                contribution=obj.Controller.workbenchContribution();
+                if isa(contribution,'lmz.workflow.WorkbenchContribution')
+                    value=contribution.ParameterFilters;
+                end
+            catch
+            end
+        end
+
+        function provider=filterProvider(obj)
+            provider=[];
+            try
+                sourceId=obj.Controller.State.DataSourceId;
+                if isempty(sourceId)
+                    descriptor=obj.Controller.Workflows.defaultDataSource( ...
+                        obj.Controller.State.ModelId);
+                else
+                    descriptor=obj.Controller.Workflows.getDataSource( ...
+                        obj.Controller.State.ModelId,sourceId);
+                end
+                provider=descriptor.createProvider();
+            catch
+            end
+        end
+
+        function result=datasetPassesFixedFilter(obj,dataset)
+            result=true;name=obj.FixedParameterDropDown.Value;
+            value=obj.FixedValueDropDown.Value;
+            if strcmp(name,'<none>')||strcmp(value,'<all>'),return,end
+            target=str2double(value);
+            if ~isfinite(target),return,end
+            try
+                provider=obj.filterProvider();
+                if ~isempty(provider)&&ismethod(provider, ...
+                        'filterByFixedParameters')
+                    matches=provider.filterByFixedParameters( ...
+                        {dataset.Branch},name,target,1e-9);
+                else
+                    matches=lmz.services.BranchService(). ...
+                        filterByFixedParameters( ...
+                        {dataset.Branch},name,target,1e-9);
+                end
+                result=logical(matches(1));
+            catch
+                result=false;
+            end
+        end
+
+        function mask=pointFilterMask(obj,branch)
+            mask=true(1,branch.pointCount());
+            name=obj.VaryingParameterDropDown.Value;
+            value=obj.VaryingValueDropDown.Value;
+            if strcmp(name,'<none>')||strcmp(value,'<all>'),return,end
+            try
+                values=branch.parameter(name);target=str2double(value);
+                tolerance=1e-9*max(1,abs(target));
+                mask=abs(values-target)<=tolerance;
+                if ~any(mask)&&isfinite(target)
+                    [~,index]=min(abs(values-target));mask(index)=true;
+                end
+            catch
+                mask=false(1,branch.pointCount());
+            end
+        end
+
+        function result=selectionPassesFilters(obj,selection)
+            result=false;datasets=obj.Controller.State.Datasets;
+            for index=1:numel(datasets)
+                dataset=datasets{index};
+                if ~strcmp(dataset.Id,selection.DatasetId),continue,end
+                if ~dataset.Visible||~obj.datasetPassesFixedFilter(dataset)
+                    return
+                end
+                mask=obj.pointFilterMask(dataset.Branch);
+                pointIndex=selection.PointIndex;
+                result=pointIndex>=1&&pointIndex<=numel(mask)&&mask(pointIndex);
+                return
+            end
         end
     end
 end
 
-function button=makeButton(parent,label,tag,callback)
-button=uibutton(parent,'Text',label,'Tag',['lmz-branch-' tag], ...
-    'Tooltip',label,'ButtonPushedFcn',@(~,~)callback());
-end
-function control=axisDropDown(parent,axisName,callback)
-control=uidropdown(parent,'Tag',['lmz-branch-' axisName], ...
-    'Tooltip',['Coordinate shown on the ' upper(axisName) ' axis.'], ...
-    'ValueChangedFcn',@(~,~)callback());
-end
-function control=limitField(parent,axisName,callback)
-control=uieditfield(parent,'text','Value','auto','Tag',['lmz-branch-' axisName '-limits'], ...
-    'Tooltip','Enter auto or [minimum maximum].','ValueChangedFcn',@(~,~)callback());
-end
 function place(control,row,column),control.Layout.Row=row;control.Layout.Column=column;end
 function value=onOff(condition),if condition,value='on';else,value='off';end,end
 function value=metadataField(metadata,name,fallback),if isstruct(metadata)&&isfield(metadata,name),value=metadata.(name);else,value=fallback;end;if isnumeric(value),value=mat2str(value,4);end,end
@@ -453,6 +831,57 @@ function value=styleField(style,name,fallback),if isstruct(style)&&isfield(style
 function value=lineColor(index),colors=lines(7);value=colors(1+mod(index-1,size(colors,1)),:);end
 function value=markerFor(index),values={'o','s','d','^','v','>','<','p','h'};value=values{1+mod(index-1,numel(values))};end
 function value=displayValue(source),if isnumeric(source),value=mat2str(source,4);elseif ischar(source),value=source;elseif isstring(source),value=char(source);else,value=class(source);end,end
+function clearBranchContent(axesHandle)
+children=axesHandle.Children;
+for index=1:numel(children)
+    child=children(index);tag='';
+    if isprop(child,'Tag'),tag=child.Tag;end
+    if isstring(tag)&&isscalar(tag),tag=char(tag);end
+    if ischar(tag)&&strncmp(tag,'lmz-overlay-',12),continue,end
+    if isvalid(child),delete(child);end
+end
+end
+function value=descriptorField(source,name,fallback)
+value=fallback;
+if isstruct(source)&&isfield(source,name),value=source.(name);end
+if isstring(value)&&isscalar(value),value=char(value);end
+end
+function items=parameterValues(controller,name,allDatasets)
+items={'<all>'};
+if strcmp(name,'<none>')||isempty(controller.State.Datasets),return,end
+try
+    if allDatasets
+        datasets=controller.State.Datasets;values=[];
+        for datasetIndex=1:numel(datasets)
+            values=[values datasets{datasetIndex}.Branch.parameter(name)]; %#ok<AGROW>
+        end
+    else
+        values=controller.activeDataset().Branch.parameter(name);
+    end
+    values=unique(values(isfinite(values)),'stable');
+    for index=1:numel(values)
+        items{end+1}=sprintf('%.9g',values(index)); %#ok<AGROW>
+    end
+catch
+end
+end
+function restoreDropDown(control,items)
+previous=control.Value;control.Items=items;
+if any(strcmp(previous,items)),control.Value=previous;else,control.Value=items{1};end
+end
+function values=filterMetadataNames(metadata,fields)
+values={};
+if ~isstruct(metadata)||~isscalar(metadata),return,end
+for index=1:numel(fields)
+    if ~isfield(metadata,fields{index}),continue,end
+    candidate=metadata.(fields{index});
+    if ischar(candidate),candidate={candidate};end
+    if isstring(candidate),candidate=cellstr(candidate);end
+    if iscell(candidate)&&all(cellfun(@ischar,candidate))
+        values=reshape(candidate,1,[]);return
+    end
+end
+end
 function textValue=hoverText(details,selection)
 solution=details.Solution;coordinates=cell(1,numel(details.Coordinates));for index=1:numel(coordinates),coordinates{index}=sprintf('%s=%.5g',details.Coordinates{index},details.Values{index});end
 parameters=solution.ParameterSchema.names();parts=cell(1,min(4,numel(parameters)));for index=1:numel(parts),parts{index}=sprintf('%s=%.4g',parameters{index},solution.ParameterValues(index));end

@@ -174,11 +174,24 @@ classdef ModelRegistry < handle
         end
 
         function descriptor = getProblemDescriptor(obj, modelId, problemId)
+            context = obj.getEntryContext(modelId);
+            descriptor = context.problemDescriptor(problemId);
+        end
+
+        function context = getEntryContext(obj, modelId)
             manifest = obj.getManifest(modelId);
             context = lmz.registry.RegistryEntryContext(manifest, ...
                 manifest.catalogDirectory, manifest.trustedCodeRoot, ...
                 manifest.external);
-            descriptor = context.problemDescriptor(problemId);
+        end
+
+        function provider = createProvider(obj, modelId, className, ...
+                expectedClass, varargin)
+            %CREATEPROVIDER Instantiate a trusted model-owned provider.
+            if nargin < 4, expectedClass = ''; end
+            context = obj.getEntryContext(modelId);
+            provider = context.createProvider(className, expectedClass, ...
+                varargin{:});
         end
 
         function capabilities = getCapabilities(obj, modelId)
@@ -328,6 +341,9 @@ classdef ModelRegistry < handle
             end
             lmz.registry.ModelRegistry.assertResolvedClass( ...
                 manifest.implementationClass, info.CodeRoot);
+
+            manifest = lmz.registry.ModelRegistry.resolveOptionalCatalogs( ...
+                manifest, catalogDirectory);
 
             if ~isfield(manifest,'poincareSections')
                 manifest.poincareSections='';
@@ -594,6 +610,61 @@ classdef ModelRegistry < handle
                 error('lmz:Registry:InvalidStringList', ...
                     '%s must be a string list.', fieldName);
             end
+        end
+
+        function manifest = resolveOptionalCatalogs(manifest, catalogDirectory)
+            names = {'dataSources','workbench'};
+            pathNames = {'dataSourcesPath','workbenchPath'};
+            hashNames = {'dataSourcesHash','workbenchHash'};
+            for index = 1:numel(names)
+                name = names{index};
+                if ~isfield(manifest, name), manifest.(name) = ''; end
+                manifest.(pathNames{index}) = '';
+                manifest.(hashNames{index}) = '';
+                relative = manifest.(name);
+                if isempty(relative), continue, end
+                lmz.registry.ModelRegistry.validateCatalogReference( ...
+                    relative, name);
+                path = lmz.util.PathGuard.resolveWithin( ...
+                    catalogDirectory, relative, true);
+                manifest.(pathNames{index}) = path;
+                manifest.(hashNames{index}) = lmz.util.FileHash.sha256(path);
+            end
+            if ~isfield(manifest, 'workflows'), manifest.workflows = {}; end
+            if isempty(manifest.workflows)
+                references = {};
+            else
+                references = lmz.registry.ModelRegistry.cellstrValue( ...
+                    manifest.workflows, 'workflows');
+            end
+            if numel(unique(references)) ~= numel(references)
+                error('lmz:Registry:DuplicateWorkflowReference', ...
+                    'Workflow catalog references must be unique.');
+            end
+            manifest.workflows = reshape(references, 1, []);
+            manifest.workflowPaths = cell(size(references));
+            manifest.workflowHashes = cell(size(references));
+            for index = 1:numel(references)
+                relative = references{index};
+                lmz.registry.ModelRegistry.validateCatalogReference( ...
+                    relative, 'workflow');
+                path = lmz.util.PathGuard.resolveWithin( ...
+                    catalogDirectory, relative, true);
+                manifest.workflowPaths{index} = path;
+                manifest.workflowHashes{index} = ...
+                    lmz.util.FileHash.sha256(path);
+            end
+        end
+
+        function validateCatalogReference(value, description)
+            if ~ischar(value) || isempty(value) || ...
+                    isempty(regexp(value, ...
+                    '^[A-Za-z0-9_.-]+(?:[/\\][A-Za-z0-9_.-]+)*\.json$', ...
+                    'once'))
+                error('lmz:Registry:CatalogReference', ...
+                    '%s must be a safe relative JSON path.', description);
+            end
+            lmz.util.PathGuard.validateRelative(value);
         end
 
         function contract=validateVisualizationContract(value)

@@ -15,7 +15,7 @@ replacement-data decision, or removal requirement before release.
 
 | Material | Source owner | Source repository | Existing license / notice | User authorization recorded | Public redistribution status | Release action required |
 |---|---|---|---|---|---|---|
-| Framework, tutorials, documentation, tests, and release tooling | Project owner/authorized licensor is not identified by a signed record | `https://github.com/DLARlab/Legged_Model_Zoo.git` | No root `LICENSE` or owner-supplied redistribution grant is present | Yes—Rounds 1–10 request local implementation work; that is not a public copyright license | **Not authorized / pending owner review** | Obtain an owner-supplied project license or grant covering framework code, tutorials, documentation, tests, and tooling before retaining a public core archive |
+| Framework, tutorials, documentation, tests, and release tooling | Project owner/authorized licensor is not identified by a signed record | `https://github.com/DLARlab/Legged_Model_Zoo.git` | No root `LICENSE` or owner-supplied redistribution grant is present | Yes—Rounds 1–11 request local implementation work; that is not a public copyright license | **Not authorized / pending owner review** | Obtain an owner-supplied project license or grant covering framework code, tutorials, documentation, tests, and tooling before retaining a public core archive |
 | Quadruped source code | Repository owner/maintainer: DLARlab; copyright ownership is not stated in the repository | `https://github.com/DLARlab/SLIP_Model_Zoo.git`, commit `2c106101383ecee1b2a9d695efe09fbd72d5718a` | No `LICENSE`, `COPYING`, `NOTICE`, or redistribution grant found | Yes—Round 5 requested the local migration and adaptation | **Not authorized / pending owner review** | Obtain a written code redistribution and modification grant, including attribution and license text, or exclude adapted code from a public package |
 | Quadruped RoadMap data and reference figures | Repository owner/maintainer: DLARlab; data copyright ownership is not stated | Same repository/commit; `SLIP_Quadruped/.../1_Roadmap` | No explicit data license or notice found | Yes—Round 5 explicitly requested copying the RoadMap for the local migration | **Not authorized / pending owner review** | Obtain a written data/figure redistribution grant defining permitted files and attribution, or replace/remove them from a public package |
 | Biped source code and gait-map data | Repository owner/maintainer: DLARlab; individual copyright ownership is not stated | `https://github.com/DLARlab/2022_A_Template_Model_Explains_Jerboa_Gait_Transitions.git`, commit `4595146c5881a5313bc8fe92de85099193ef9be9` | `READMEDing2021JerboaFrontier.txt` states CC BY-NC 4.0; the checkout has no standalone `LICENSE`, `COPYING`, or `NOTICE` file clarifying the precise code/data scope | Yes—Round 6 requests scientific migration and copying of required branch assets | **Noncommercial notice recorded; packaging scope pending owner review** | Preserve CC BY-NC attribution/noncommercial terms and obtain written confirmation that the notice covers the adapted equations, regression fixtures, and gait branches before public packaging |
@@ -51,6 +51,20 @@ pixels or encoded image payloads. They explicitly record
 does not authorize redistribution of the underlying source render or convert
 automated evidence into human approval.
 
+## Round 11 automated workbench captures
+
+Eight deterministic PNGs under `docs/images/round11/` show the registered
+quadruped RoadMap workflow in the scientific workbench and classic fallback.
+They contain RoadMap points and, for the physical view, source-derived research
+geometry. The inventory therefore classifies every PNG as
+`scientific-quadruped-derived`, records the RoadMap manifest as its source, and
+excludes it from both core release roles. The captures remain blocked by the
+quadruped owner decision and are not human desktop or visual-approval evidence.
+
+This does not change the Round 8 statement above: no Round 8 source recapture,
+side-by-side comparison, golden, or difference raster is committed. It also
+does not authorize the Round 11 automated captures for public release.
+
 ## Decision controls
 
 - Preserve source filenames, commit IDs, hashes, citations, and adaptation notes
@@ -59,9 +73,9 @@ automated evidence into human approval.
   otherwise openly licensed without an explicit owner-supplied grant.
 - Derived native MAT artifacts and numerical baselines remain derived from the
   same upstream data and are covered by the same pending decision.
-- Source-derived graphics providers/styles, geometry fixtures, and any local
-  source/difference rasters remain covered by their pinned source decision;
-  non-raster batch metrics do not override that decision.
+- Source-derived graphics providers/styles, geometry fixtures, and local
+  scientific GUI/source/difference rasters remain covered by their pinned
+  source decision; non-raster batch metrics do not override that decision.
 - Re-run the release inventory after any owner decision so generated archives
   cannot include a disallowed source, fixture, cache, or screenshot.
 - Update this record and `THIRD_PARTY_NOTICES.md` together when a decision is
@@ -82,5 +96,14 @@ profile remain blocking. This larger, clean inventory is evidence that the
 new graphics/configuration/tests/docs are classified; it does not change any
 owner decision or authorize a package.
 
-Status recorded: 2026-07-19. This is an engineering release gate, not legal
+The closing Round 11 refresh contains 1,080 inventoried files and 1,065 files
+selected by at least one release profile, all blocking while the project
+decision is unresolved. Structural violations, stale hashes, missing files,
+and unlisted files are all zero. The eight Round 11 PNGs are
+`scientific-quadruped-derived`, scientific-profile-only, nonredistributable,
+and linked to the RoadMap manifest and pinned quadruped source commit. Core and
+scientific technical ZIP/toolbox clean-install tests remain engineering
+evidence only; no artifact was authorized or retained.
+
+Status recorded: 2026-07-21. This is an engineering release gate, not legal
 advice.

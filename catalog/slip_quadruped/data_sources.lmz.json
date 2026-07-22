@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0.0",
+  "dataSources": [
+    {
+      "id": "roadmap",
+      "label": "Scientific RoadMap branches",
+      "modelId": "slip_quadruped",
+      "problemId": "periodic_apex",
+      "kind": "branch_catalog",
+      "providerClass": "lmzmodels.slip_quadruped.RoadMapDataSourceProvider",
+      "defaultDatasetId": "PK_20_2",
+      "metadata": {
+        "axisPresetId": "roadmap_top",
+        "recommendedPointIndex": 267,
+        "sourceVariable": "results",
+        "sourceRowCount": 29,
+        "readOnly": true
+      }
+    }
+  ]
+}
